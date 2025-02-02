@@ -36,11 +36,11 @@ Project compiles using ESP-IDF rather than Arduino framework in ESPHome.
 
 Fork is tailored for the needs of my system and shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein.
 
-Please no judegement on quality of code or approach.  I am merely a self-learned c++ hobbyist!
+Please no judgement on quality of code or approach.  I am merely a self-learned c++ hobbyist!
 
 Key differences from original project:
 - Arduino dependency removed and refactored for ESP-IDF.
-- Refactored to support workflow associated with Vistabus class using FreeRTOS tasks.
+- Refactored to support workflow associated with Vistabus class using FreeRTOS tasks and Queues.
 - Only targeted towards ESPHome API.  MQTT is removed in this version.
 - Expander emulation and relay emulation are not present / enabled. May be added back in future.
 - Limited testing of expanded functionality such as AUI traffic handling.  My panel does not

@@ -49,7 +49,7 @@ bool VistaBus::stop()
 
     //vTaskDelete(this->uart_evt_task_Handle);
 
-    //monitor_rx_task must be shutdown first and is potentially parked at xQueueRecieve.
+    //monitor_rx_task must be shutdown first and is potentially parked at uartreadbytes.
     //send an FF byte to wake so it shuts down. Must shut down gracefully to free(data).
     char tmp[1];
     tmp[0] = 0xFF;
@@ -169,7 +169,7 @@ static bool validChksum(const char * cbuf, int start, int len)
     return false;
 }
 
-/*static void emit_Packet(const char * cbuf, int len, const char * tag)  //Task for monitoring for UART break/framing error/parity events from TX/RX UART.
+/*static void emit_Packet(const char * cbuf, int len, const char * tag)  
 {
     char s[256];
     memset(s,'\0',sizeof(s));
@@ -443,7 +443,6 @@ void VistaBus::monitor_rx_task(void * args)
     char tempbuff[13];
     int tempbuff_fill = 0;
 
-
     while (1) 
     {
         if(this->stop_requested)
@@ -452,7 +451,7 @@ void VistaBus::monitor_rx_task(void * args)
         }
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, portMAX_DELAY);
         if (val == 0)
-            xTaskNotifyWait(0xFFFFFFFF,0,&val,0);  //data of interest coming according to other Task
+            xTaskNotifyWait(0xFFFFFFFF,0,&val,0);  //data of interest incoming according to RX_TX Task
         if (rxBytes > 0) 
         {
             data[rxBytes] = 0;
@@ -506,7 +505,7 @@ void VistaBus::monitor_rx_task(void * args)
     vTaskDelete(NULL);
 }
 
-/*void VistaBus::uart_evt_task(void * args)
+/*void VistaBus::uart_evt_task(void * args) //Task for monitoring for UART break/framing error/parity events from TX/RX UART.
 {
     uart_event_t event;
     while (1)

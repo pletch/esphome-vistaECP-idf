@@ -14,10 +14,6 @@
 #include "LRRstrings.h"
 #include <string>
 #include "paneltext.h"
-//#include "Regexp.h"
-//#include <regex.h>
-//#include <sys/time.h>
-//#include <time.h>
 
 // for documentation see project at https://github.com/Dilbert66/esphome-vistaecp
 
@@ -432,10 +428,6 @@ class vistaECPHome : public api::CustomAPIDevice, public time::RealTimeClock
       void AUIsendZoneRequest();
       void AUIprocessF2(char * cbuf);
       void loadZones();
-      //void loadZones(int zone, std::string &&name, uint8_t zonetype, uint8_t devicetype);
-      //void getZoneCount();
-      //void getZoneRecord();
-      //void processZoneInfo(char *list);
 
     public:
       partitionStateType *partitionStates;
