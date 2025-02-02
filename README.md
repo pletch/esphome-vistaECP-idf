@@ -34,7 +34,7 @@
   
 Project compiles using ESP-IDF rather than Arduino framework in ESPHome.
 
-This version tailored for my needs and shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein.
+This version is tailored for the needs of my system and shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein.
 
 Please no judegement on quality of code or approach.  I am merely a self-learned c++ hobbyist!
 
