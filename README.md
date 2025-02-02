@@ -29,9 +29,25 @@
 - [Report issue](#report-issue)
 - [References](#references)
 - [Author & Contributors](#author---contributors)
+- 
+**This version is a highly modified FORK of this project!!**
+This Fork withs with ESP-IDF rather than Arduino framework in ESPHome.
+
+This version tailored for my needs and shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein.
+
+Please no judegement on quality of code or approach.  I am merely a self-learned c++ hobbyist!
+
+Key differences from original project:
+- Arduino dependency removed and tailed for ESP-IDF.
+- Refactored to support workflow associated with Vistabus class.
+- Only targeted towards ESPHome API.  MQTT is removed in this version.
+- Expander emulation and relay emulation are not present / enabled. May be added back in future.
+- Limited testing of expanded functionality such as AUI traffic handling.  My panel does not
+    seem to respond to AUI commands from either original project or this forked version.
+- Web panel interface not integrated enabled.
 
 ## About the project
-
+Original Project README
 This project allows you to monitor and control you old vista alarm panel over the internet through a cheap ESP device and an home automation platform Home Assistant or any other automation platform supporting MQTT protocol.<br>
 
 If you like this project and wish to supplement my coffee intake, please click the button below to donate! Thank you!
