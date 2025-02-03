@@ -60,7 +60,8 @@ vista_alarm_panel:
 # see here for more info: https://esphome.io/components/external_components    
 external_components:
   #- source: github://Dilbert66/esphome-components@dev #uncomment to use github repository
-  - source:  components #uncomment to use local directory  
+  - source: github://pletch/esphome-vistaECP-idf
+  #- source:  components #uncomment to use local directory  
     components: [vista_alarm_panel] 
     refresh: 10min
 
