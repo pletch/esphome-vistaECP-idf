@@ -147,6 +147,7 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     {
         ESP_ERROR_CHECK(uart_set_rx_full_threshold(u_n, 6));
         ESP_ERROR_CHECK(uart_set_line_inverse(u_n, UART_SIGNAL_RXD_INV));
+        
     } 
     else 
     {
@@ -516,19 +517,19 @@ void VistaBus::monitor_rx_task(void * args)
             {
             case UART_PARITY_ERR:
                 //uart_clear_intr_status(static_cast<uart_port_t>(this->extuartNum), UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT);
-                uart_flush(static_cast<uart_port_t>(this->extuartNum));
+                //uart_flush(static_cast<uart_port_t>(this->extuartNum));
                 ESP_LOGI("", "uart rx parity error");
                 break;
             //Event of UART frame error
             case UART_FRAME_ERR:
                 //uart_clear_intr_status(static_cast<uart_port_t>(this->extuartNum), UART_INTR_RXFIFO_FULL| UART_INTR_RXFIFO_TOUT);
-                uart_flush(static_cast<uart_port_t>(this->extuartNum));
+                //uart_flush(static_cast<uart_port_t>(this->extuartNum));
                 ESP_LOGI("", "uart rx frame error");
                 break;
             //Event of UART RX break detected
             case UART_BREAK:
                 //uart_clear_intr_status(static_cast<uart_port_t>(this->extuartNum), UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT);
-                uart_flush(static_cast<uart_port_t>(this->extuartNum));
+                //uart_flush(static_cast<uart_port_t>(this->extuartNum));
                 ESP_LOGI("", "uart rx break");
                 break;
             default:

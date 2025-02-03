@@ -24,6 +24,7 @@ Date: 2-Feb-2025
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
+#include "hal/uart_ll.h"
 
 
 #define MONITORTX
@@ -84,7 +85,7 @@ protected:
     //static void uart_evt_task_start(void *args);
     TaskHandle_t rx_tx_task_Handle;
     TaskHandle_t monitor_rx_task_Handle;
-    TaskHandle_t uart_evt_task_Handle;
+    //TaskHandle_t uart_evt_task_Handle;
     QueueHandle_t receiveQueue;
     QueueHandle_t sendQueue;
     //QueueHandle_t uartevtQueue;

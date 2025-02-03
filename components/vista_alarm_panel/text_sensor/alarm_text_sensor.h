@@ -1,28 +1,34 @@
-#pragma once
+#ifndef __ALARM_TEXT_SENSOR_H__
+#define __ALARM_TEXT_SENSOR_H__
 
 #include "esphome/core/component.h"
 #include "esphome/core/automation.h"
 #include "esphome/components/text_sensor/text_sensor.h"
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome 
+{
+  namespace alarm_panel 
+  {
 
-class AlarmTextSensor : public text_sensor::TextSensor, public PollingComponent {
- public:
-  void set_template(std::function<optional<std::string>()> &&f);
+    class AlarmTextSensor : public text_sensor::TextSensor, public PollingComponent 
+    {
+      public:
+      void set_template(std::function<optional<std::string>()> &&f);
 
-  void update() override;
+      void update() override;
 
-  float get_setup_priority() const override;
+      float get_setup_priority() const override;
 
-  void dump_config() override;
+      void dump_config() override;
   
  
- private:
- protected:
-  optional<std::function<optional<std::string>()>> f_{};
+      private:
+      protected:
+      optional<std::function<optional<std::string>()>> f_{};
    
-};
+    };
 
-}  // namespace alarm_panel
+  }  // namespace alarm_panel
 }  // namespace esphome
+
+#endif //guard
