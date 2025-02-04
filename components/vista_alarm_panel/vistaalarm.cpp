@@ -157,65 +157,11 @@ namespace esphome
     {
       for (auto obj : bMap)
       {
-        /*char id[5];
-        memset(id,'\0',sizeof(id));
-        char z_text[4];
-        memset(z_text,'\0',sizeof(z_text));
-        int start = 0;
-        int len = 0;
-        bool z_found = false;
-        strncpy(id,(char *)obj->get_object_id().c_str(),5);
-        for (int i = 0; i < 5; i++)
-        {
-          if(id[i] == 0x5A || id[i] == 0x7A)
-          {
-            start = i+1;
-            z_found = true;
-          }
-          if(id[i] >= 0x30 && id[i] <= 0x39) 
-          {
-            len++;
-          }
-        }
-        if (z_found && len > 0)
-        {
-          strncpy(z_text,id+start,len);
-          int z = toInt(z_text, 10);
-          createZone(z);
-        }*/
         createZoneFromId(obj->get_object_id().c_str());
       }
 
       for (auto obj : tMap)
       {
-        /*char id[5];
-        memset(id,'\0',sizeof(id));
-        char z_text[4];
-        memset(z_text,'\0',sizeof(z_text));
-        int start = 0;
-        int len = 0;
-        bool z_found = false;
-        strncpy(id,(char *)obj->get_object_id().c_str(),5);
-        for (int i = 0; i < 5; i++)
-        {
-          if(id[i] == 0x5A || id[i] == 0x7A)
-          {
-            start = i+1;
-            z_found = true;
-          }
-          if(id[i] >= 0x30 && id[i] <= 0x39 && z_found) 
-          {
-            len++;
-          }
-          if((id[i] < 0x30 || id[i] > 0x39) && z_found)
-            break;
-        }
-        if (z_found && len > 0)
-        {
-          strncpy(z_text,id+start,len);
-          int z = toInt(z_text, 10);
-          createZone(z);
-        }*/
         createZoneFromId(obj->get_object_id().c_str());
       }
     }
@@ -380,6 +326,7 @@ namespace esphome
       statusChangeCallback(sac, true, 1);
 
       vistabus.begin(uart1, rxPin, txPin, uart2, monitorPin);
+      vistabus.emulateLRR(lrrSupervisor);
 
       // Disabling this for now.
       // set addresses of expander emulators
@@ -962,10 +909,12 @@ namespace esphome
       {
         if (debug > 0 && type == 0)
         {
-          if (payload[0] == 0xF2 || payload[0] == 0xF9)
-            printPacket("CMD", payload, size);
-          else
+          if (payload[0] == 0xF7)
             printPacket("CMD", payload, 13);
+          else if ((size == 4) && (payload[0] == (payload[0]+payload[1]+payload[2]+payload[3]))) //1 byte response
+            printPacket("CMD", payload, 1);
+          else
+            printPacket("CMD", payload, size);
         }
 
         if (debug > 0 && type == 1)
@@ -1031,7 +980,6 @@ namespace esphome
                 qual = (q == 1) ? " is Restored" : "";
               if (c)
               {
-              //String lrrString = String(statusText(c));
                 const char * lrrString = lrr_msg_lookup(c);
                 std::string zn = std::to_string(z);
                 std::string uf = "by user";
@@ -1046,7 +994,7 @@ namespace esphome
                 lrrMsgChangeCallback(msg);
                 return;
                 //refreshLrrTime = esp_timer_get_time();
-            }
+              }
             }
           }
         }

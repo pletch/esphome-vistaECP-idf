@@ -72,6 +72,7 @@ public:
     bool writedirect(const char * hex_data_to_write, int size, int keypadaddress);
     bool connected();
     bool read_packet(char * data, int &len, int &type);
+    void emulateLRR(bool enabled);
 
 protected:
     int rxPin, txPin;
@@ -80,6 +81,7 @@ protected:
     int monitorPin;
     bool panel_connected;
     bool stop_requested;
+    bool LRRemulation;
     static void rx_tx_task_start(void *args );
     static void monitor_rx_task_start(void *args);
     //static void uart_evt_task_start(void *args);

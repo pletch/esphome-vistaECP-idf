@@ -27,6 +27,7 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
     this->txPin = txpin;
     this->extuartNum = extuartnum;
     this->monitorPin = monitorpin;
+    this->LRRemulation = false;
 
     init_uart(static_cast<uart_port_t>(this->uartNum),static_cast<gpio_num_t>(this->rxPin), static_cast<gpio_num_t>(this->txPin));
     if (extuartNum > 0) 
@@ -94,6 +95,11 @@ bool VistaBus::writedirect(const char * hex_data_to_write, int size, int keypada
 bool VistaBus::connected() 
 {
     return this->panel_connected;
+}
+
+void VistaBus::emulateLRR(bool enabled) 
+{
+    LRRemulation = enabled;
 }
 
 bool VistaBus::read_packet(char * data, int &len, int &type) 
@@ -230,6 +236,8 @@ void VistaBus::rx_tx_task(void * args)
     SendPacket pkt_to_send;
     int send_retries = 0;
     int sequence = 0;
+    char tempbuff[13];
+    int tempbuff_fill = 0;
     while (1) 
     {
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
@@ -301,135 +309,179 @@ void VistaBus::rx_tx_task(void * args)
             data[rxBytes] = 0;
             memset(received_packet.payload,'\0',sizeof(received_packet.payload));
             received_packet.payload[0] = data[0];
-                if ( data[0] == 0xF6) //SEND ACK Received
-                {                 
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //Get Address
-                    if(data[0] != 0)
-                    {
-                        uint32_t val = 0xF6 << 8 | data[0];
-                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
-                    }
-                    if(req_to_send && data[0] == pkt_to_send.keypadaddress) //ACK was for us.  Try to send.
-                    { 
-                            char outbuffer[24];
-                            memset(outbuffer,'\0',sizeof(outbuffer));
-                            data[rxBytes] = 0;
-                            char keys_to_send[24];
-                            outbuffer[0] = (((++sequence<<6) & 0xc0) ^ 0xc0) | (pkt_to_send.keypadaddress & 0x3F);
-                            outbuffer[1] = pkt_to_send.size+1;
-                            int checksum = 0;
-                            for (int i=2; i < pkt_to_send.size+2; i++)
-                            {
-                                if (pkt_to_send.type == 0) //write direct as hex
-                                {
-                                    outbuffer[i] = pkt_to_send.payload[i-2];
-                                }
-                                else //translate from ascii before write
-                                {
-                                    if (pkt_to_send.payload[i-2] >= 0x30 && pkt_to_send.payload[i-2] <= 0x39)
-                                        outbuffer[i] = (pkt_to_send.payload[i-2] - 0x30);
-                                    else if (pkt_to_send.payload[i-2] == 0x23)
-                                        outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0B);
-                                    else if (pkt_to_send.payload[i-2] == 0x2A)
-                                        outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0A);
-                                    else if (pkt_to_send.payload[i-2] == 0x46)
-                                        outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0C);
-                                    else if (pkt_to_send.payload[i-2] == 0x4D)
-                                        outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0D);
-                                    else if (pkt_to_send.payload[i-2] == 0x50)
-                                        outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0E);
-                                    else if (pkt_to_send.payload[i-2] == 0x47)
-                                        outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0F);
-                                    else if (pkt_to_send.payload[i-2] >= 0x41 && pkt_to_send.payload[i-2] <= 0x44)
-                                        outbuffer[i] = (pkt_to_send.payload[i-2] - 0x25);
-                                }
-                                checksum += outbuffer[i];
-                            }
-                            outbuffer[pkt_to_send.size+2] = (0x100 - outbuffer[0] - (pkt_to_send.size + 1) - checksum ) & 0xff;
-                            uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
-
-                            send_retries++;
-                            get_Packet(&received_packet,data, 0, 2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(150)); 
-
-                            if(received_packet.payload[1] == outbuffer[0]) 
-                            {
-                                req_to_send = false;
-                                send_retries = 0;
-                            }
-                            else if (send_retries == 3)
-                            {
-                                req_to_send = false;
-                                send_retries = 0;
-                            };  
-
-                    } 
-                    else //ACK was for another device.
-                    {        
-
-                    }
-                }
-                else if ( data[0] == 0xF7) //DISPLAY
+            if ( data[0] == 0xF6) //SEND ACK Received
+            {                 
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //Get Address
+                if(data[0] != 0)
                 {
-                    get_Packet(&received_packet,data,1,F7_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY));
-                    if(validChksum(received_packet.payload,0,45))
-                    {
-                        xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
-                    }
+                    uint32_t val = 0xF6 << 8 | data[0];
+                    xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 }
-                else if ( data[0] == 0xF2) //AUI
+                if(req_to_send && data[0] == pkt_to_send.keypadaddress) //ACK was for us.  Try to send.
+                { 
+                    char outbuffer[24];
+                    memset(outbuffer,'\0',sizeof(outbuffer));
+                    data[rxBytes] = 0;
+                    char keys_to_send[24];
+                    outbuffer[0] = (((++sequence<<6) & 0xc0) ^ 0xc0) | (pkt_to_send.keypadaddress & 0x3F);
+                    outbuffer[1] = pkt_to_send.size+1;
+                    int checksum = 0;
+                    for (int i=2; i < pkt_to_send.size+2; i++)
+                    {
+                        if (pkt_to_send.type == 0) //write direct as hex
+                        {
+                            outbuffer[i] = pkt_to_send.payload[i-2];
+                        }
+                        else //translate from ascii before write
+                        {
+                            if (pkt_to_send.payload[i-2] >= 0x30 && pkt_to_send.payload[i-2] <= 0x39)
+                                outbuffer[i] = (pkt_to_send.payload[i-2] - 0x30);
+                            else if (pkt_to_send.payload[i-2] == 0x23)
+                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0B);
+                            else if (pkt_to_send.payload[i-2] == 0x2A)
+                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0A);
+                            else if (pkt_to_send.payload[i-2] == 0x46)
+                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0C);
+                            else if (pkt_to_send.payload[i-2] == 0x4D)
+                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0D);
+                            else if (pkt_to_send.payload[i-2] == 0x50)
+                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0E);
+                            else if (pkt_to_send.payload[i-2] == 0x47)
+                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0F);
+                            else if (pkt_to_send.payload[i-2] >= 0x41 && pkt_to_send.payload[i-2] <= 0x44)
+                                outbuffer[i] = (pkt_to_send.payload[i-2] - 0x25);
+                        }
+                        checksum += outbuffer[i];
+                    }
+                    outbuffer[pkt_to_send.size+2] = (0x100 - outbuffer[0] - (pkt_to_send.size + 1) - checksum ) & 0xff;
+                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
+
+                    send_retries++;
+                    get_Packet(&received_packet,data, 0, 2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(150)); 
+
+                    if(received_packet.payload[1] == outbuffer[0]) 
+                    {
+                        req_to_send = false;
+                        send_retries = 0;
+                    }
+                    else if (send_retries == 3)
+                    {
+                        req_to_send = false;
+                        send_retries = 0;
+                    };  
+
+                } 
+                else //ACK was for another device.
+                {        
+
+                }
+            }
+            else if ( data[0] == 0xF7) //DISPLAY
+            {
+                get_Packet(&received_packet,data,1,F7_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY));
+                if(validChksum(received_packet.payload,0,45))
                 {
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
-                    received_packet.payload[1] = data[0];
-                    get_Packet(&received_packet,data,2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
-                    if (validChksum(received_packet.payload,0,static_cast<int>(received_packet.payload[1])+2)) 
-                    {
-                        xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                    }
+                    xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                 }
-                else if ( data[0] == 0xFA ) //EXP
-                {                    
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 4, pdMS_TO_TICKS(UART_DELAY));
-                    if (rxBytes != 4)
-                        continue;
-                    for (int i=1; i<5; i++) {
-                        received_packet.payload[i] = data[i-1]; // 01? / dev id or len code if &1 / seq / type
-                    }
-                    if (received_packet.payload[2] & 1) // byte 2 = 01 if extended addressing for relay boards 14,15 so packet longer by 1 byte
-                    {
-                        uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //extra byte
-                        received_packet.payload[5] = data[0];
-                        received_packet.size = 7;
-                    }
-                    else if (received_packet.payload[4] == 0x00 || received_packet.payload[4] == 0x0D) // 00 cmds use an extra byte
-                    {
-                        uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); 
-                        received_packet.payload[5] = data[0];
-                        received_packet.size = 7;
-                    }
-                    else
-                    {
-                        received_packet.size = 6;
-                    }
-                    uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //checksum
-                    received_packet.payload[received_packet.size - 1] = data[0];
-                    xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));          
-                }
-                else if ( data[0] == 0xF9 ) //LRR
-                {   
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 2, pdMS_TO_TICKS(UART_DELAY));
-                    received_packet.payload[1] = data[0];
-                    received_packet.payload[2] = data[1];
-                    get_Packet(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
-                    if (received_packet.payload[3] == 0x53)
-                    {
-                        uint32_t val = 0xF9 << 8 | (received_packet.payload[1] + 0x40);
-                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
-                    }  
+            }
+            else if ( data[0] == 0xF2) //AUI
+            {
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
+                received_packet.payload[1] = data[0];
+                get_Packet(&received_packet,data,2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                if (validChksum(received_packet.payload,0,static_cast<int>(received_packet.payload[1])+2)) 
+                {
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
-                else if ( data[0] == 0x00) 
+            }
+            else if ( data[0] == 0xFA ) //EXP
+            {                    
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 4, pdMS_TO_TICKS(UART_DELAY));
+                if (rxBytes != 4)
+                    continue;
+                for (int i=1; i<5; i++) 
                 {
+                    received_packet.payload[i] = data[i-1]; // 01? / dev id or len code if &1 / seq / type
                 }
+                if (received_packet.payload[2] & 1) // byte 2 = 01 if extended addressing for relay boards 14,15 so packet longer by 1 byte
+                {
+                    uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //extra byte
+                    received_packet.payload[5] = data[0];
+                    received_packet.size = 7;
+                }
+                else if (received_packet.payload[4] == 0x00 || received_packet.payload[4] == 0x0D) // 00 cmds use an extra byte
+                {
+                    uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); 
+                    received_packet.payload[5] = data[0];
+                    received_packet.size = 7;
+                }
+                else
+                {
+                    received_packet.size = 6;
+                }
+                uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //checksum
+                received_packet.payload[received_packet.size - 1] = data[0];
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));          
+            }
+            else if ( data[0] == 0xF9 ) //LRR
+            {   
+                char response[6];
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 2, pdMS_TO_TICKS(UART_DELAY));
+                received_packet.payload[1] = data[0];
+                received_packet.payload[2] = data[1];
+                get_Packet(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                if (received_packet.payload[3] == 0x53)
+                {
+                    uint32_t val = 0xF9 << 8 | (received_packet.payload[1] + 0x40);
+                    xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                    if (LRRemulation)
+                    {
+                        response[0] = received_packet.payload[1] + 0x40;
+                        response[1] = 0x04;
+                        response[2] = 0;
+                        response[3] = 0;
+                        response[4] = 0;
+                        response[5] = (((0x0F - (response[0] >> 4)) & 0x0F) << 4) | 0x09;
+                        uart_write_bytes(static_cast<uart_port_t>(this->uartNum),response, 6);
+                    }
+                }
+                else if (LRRemulation && (received_packet.payload[3] == 0x48 || received_packet.payload[3] == 0x52 || received_packet.payload[3] == 0x58))
+                {
+                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum),&received_packet.payload[1], 1);
+                }
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+            }
+            else if ( data[0] == 0x9E ) //5881EN traffic on Vista 20p (address 0)??
+            {   
+                get_Packet(&received_packet,data,1,3,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                uint32_t val = 0x9E << 8 | (received_packet.payload[3]);
+                xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+            }
+            /*else if ( data[0] == 0x00) 
+            {
+            }*/
+            else
+            {
+                if (tempbuff_fill == 0 && data[0] == 0) 
+                {
+                    //don't accumulate leading zeros
+                }
+                else
+                {
+                    tempbuff[tempbuff_fill] = data[0];
+                    tempbuff_fill++;
+                }
+            
+                if (tempbuff_fill == 4)
+                {
+                    memcpy(received_packet.payload, tempbuff,tempbuff_fill);
+                    received_packet.size = tempbuff_fill;
+                    xQueueSend(this->receiveQueue, &received_packet,pdMS_TO_TICKS(20));
+                    tempbuff_fill = 0;
+                }
+            }
+
         }
     }
     free(data);
@@ -471,7 +523,7 @@ void VistaBus::monitor_rx_task(void * args)
                 tempbuff_fill = 0;
                 //emit_Packet(rcvd_extPkt.payload,rcvd_extPkt.size,TASK_TAG);
             }
-            else if(val >> 8 == 0xF6) //next byte will be header
+            else if(val >> 8 == 0xF6) //next byte will be header of sending sequence
             {
                 rcvd_extPkt.payload[0]=0xF6;
                 rcvd_extPkt.payload[1]=data[0] & (val & 0xFF);
@@ -484,7 +536,7 @@ void VistaBus::monitor_rx_task(void * args)
                 memset(tempbuff,'\0', sizeof(tempbuff));
                 tempbuff_fill = 0;
             }
-            else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //next byte is expected response
+            else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //expect response
             {
                 get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
@@ -492,10 +544,11 @@ void VistaBus::monitor_rx_task(void * args)
                 memset(tempbuff,'\0', sizeof(tempbuff));
                 tempbuff_fill = 0;
             }
-            else if(data[0] == 0x21 || data[0] == 0x24)  //unassigned sequences taht repeat
+            else if(val >> 8 == 0x9E && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to 9E command
             {
-                get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
+                get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
+                val = 0;
                 memset(tempbuff,'\0', sizeof(tempbuff));
                 tempbuff_fill = 0;
             }
@@ -523,7 +576,7 @@ void VistaBus::monitor_rx_task(void * args)
                     tempbuff_fill++;
                 }
             }
-            if (tempbuff_fill == 1)
+            if (tempbuff_fill == 4)
             {
                 memcpy(rcvd_extPkt.payload, tempbuff,tempbuff_fill);
                 rcvd_extPkt.size = tempbuff_fill;
