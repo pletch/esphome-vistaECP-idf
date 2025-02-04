@@ -415,11 +415,16 @@ void VistaBus::rx_tx_task(void * args)
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));          
                 }
                 else if ( data[0] == 0xF9 ) //LRR
-                {                    
+                {   
                     rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 2, pdMS_TO_TICKS(UART_DELAY));
                     received_packet.payload[1] = data[0];
                     received_packet.payload[2] = data[1];
                     get_Packet(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                    if (received_packet.payload[3] == 0x53)
+                    {
+                        uint32_t val = 0xF9 << 8 | (received_packet.payload[1] + 0x40);
+                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                    }  
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
                 else if ( data[0] == 0x00) 
@@ -468,16 +473,31 @@ void VistaBus::monitor_rx_task(void * args)
             }
             else if(val >> 8 == 0xF6) //next byte will be header
             {
-                    rcvd_extPkt.payload[0]=0xF6;
-                    rcvd_extPkt.payload[1]=data[0] & (val & 0xFF);
-                    rcvd_extPkt.payload[2]=data[0];
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(125));
-                    rcvd_extPkt.payload[3] = data[0]; //length
-                    get_Packet(&rcvd_extPkt, data, 4, rcvd_extPkt.payload[3], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
-                    xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
-                    val = 0;
-                    memset(tempbuff,'\0', sizeof(tempbuff));
-                    tempbuff_fill = 0;
+                rcvd_extPkt.payload[0]=0xF6;
+                rcvd_extPkt.payload[1]=data[0] & (val & 0xFF);
+                rcvd_extPkt.payload[2]=data[0];
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(125));
+                rcvd_extPkt.payload[3] = data[0]; //length
+                get_Packet(&rcvd_extPkt, data, 4, rcvd_extPkt.payload[3], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
+                xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
+                val = 0;
+                memset(tempbuff,'\0', sizeof(tempbuff));
+                tempbuff_fill = 0;
+            }
+            else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //next byte is expected response
+            {
+                get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
+                xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
+                val = 0;
+                memset(tempbuff,'\0', sizeof(tempbuff));
+                tempbuff_fill = 0;
+            }
+            else if(data[0] == 0x21 || data[0] == 0x24)  //unassigned sequences taht repeat
+            {
+                get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
+                xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
+                memset(tempbuff,'\0', sizeof(tempbuff));
+                tempbuff_fill = 0;
             }
             else if (val == 0) //put byte in temp buffer to emit to log
             {
@@ -491,7 +511,19 @@ void VistaBus::monitor_rx_task(void * args)
                     tempbuff_fill++;
                 }
             }
-            if (tempbuff_fill == 13)
+            else if (val == 0) //put byte in temp buffer to emit to log
+            {
+                if (tempbuff_fill == 0 && data[0] == 0) 
+                {
+                    //don't accumulate leading zeros
+                }
+                else
+                {
+                    tempbuff[tempbuff_fill] = data[0];
+                    tempbuff_fill++;
+                }
+            }
+            if (tempbuff_fill == 1)
             {
                 memcpy(rcvd_extPkt.payload, tempbuff,tempbuff_fill);
                 rcvd_extPkt.size = tempbuff_fill;
