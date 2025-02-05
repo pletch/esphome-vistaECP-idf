@@ -895,8 +895,8 @@ namespace esphome
         last_refresh = esp_timer_get_time();
         return;
       }
-
-      AUIprocessQueue();
+      if (auiAddr)
+        AUIprocessQueue();
 
       //static unsigned long long refreshLrrTime, refreshRfTime;   <--Not used right now
   
@@ -904,6 +904,7 @@ namespace esphome
       int size;
       int type;
       memset(payload,'\0',sizeof(payload));
+      bool F7_no_change = true;
 
       if (vistabus.read_packet(payload,size,type)) 
       {
@@ -912,7 +913,10 @@ namespace esphome
           if (payload[0] == 0xF7)
             printPacket("CMD", payload, 13);
           else if ((size == 4) && (payload[0] == (payload[0]+payload[1]+payload[2]+payload[3]))) //1 byte response
+          {
             printPacket("CMD", payload, 1);
+            return;
+          }
           else
             printPacket("CMD", payload, size);
         }
@@ -926,7 +930,20 @@ namespace esphome
         {
           if (payload[0]==0xF7)
           {
-            refreshStatusFlags(payload, &statusFlags);
+            F7_no_change = areEqual(payload, last_F7, size);
+            
+            if (!F7_no_change)
+            {
+              memcpy(last_F7,payload,size);
+              refreshStatusFlags(payload, &statusFlags);
+              forceRefreshGlobal = true;
+            }
+
+            if ((esp_timer_get_time() - last_refresh) > 60*1000*1000)
+            {
+              forceRefreshGlobal = true;
+            }
+
             getPartitionsFromMask();
             for (uint8_t partition = 1; partition <= maxPartitions; partition++)
             {
@@ -953,18 +970,18 @@ namespace esphome
             ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
             //forceRefreshZones = true;
           }
-          if (payload[0]==0xF2 && auiAddr)
+          if (payload[0]==0xF2)
           {
-            AUIprocessF2(payload);
+            if (auiAddr)
+              AUIprocessF2(payload);
             return;
           }
           else if ((payload[0] == 0xf9))
-          { 
-            
-            refreshLRRStatusFlags(payload, &lrrstatusFlags);
-            // we show all lrr messages with type 58
+          {         
+            // we process all lrr messages with type 58
             if (payload[3] == 0x58)
             {
+              refreshLRRStatusFlags(payload, &lrrstatusFlags);
               int c = lrrstatusFlags.code;
               int q = lrrstatusFlags.qual;
               int z = lrrstatusFlags.data; //can be zone or user
@@ -1097,16 +1114,11 @@ namespace esphome
 
             */
         }
-
+      }
         // done other cmd processing.  Process f7 now
-        if (payload[0] != 0xf7)
+        if (!forceRefreshGlobal)
           return;
-        bool F7_no_change = areEqual(payload, last_F7, size);
-        memcpy(last_F7,payload,size);
-        if ((F7_no_change && (esp_timer_get_time() - last_refresh) < 30*1000*1000) && !forceRefreshGlobal)  //only process F7 if changed, if last update > 30sec, or if forced via globalrefresh or refreshzones
-        {
-          return;
-        }
+        
         last_refresh = esp_timer_get_time();
 
         currentSystemState = sunavailable;
@@ -1235,7 +1247,8 @@ namespace esphome
           zt->time = esp_timer_get_time();
         }
         // zone bypass status
-        if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.bypass && !statusFlags.alarm && !(statusFlags.instant || statusFlags.armedAway || statusFlags.armedStay || statusFlags.night))
+        if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.bypass && !statusFlags.alarm && 
+                !(statusFlags.instant || statusFlags.armedAway || statusFlags.armedStay || statusFlags.night))
         {
           if (payload[5] > 0x90)
             getZoneFromPrompt(statusFlags.prompt1);
@@ -1266,7 +1279,8 @@ namespace esphome
           currentLightState.bat = true;
           lowBatteryTime = esp_timer_get_time();
         }
-        // ESP_LOGE(TAG,"ac=%d,batt status = %d,systemflag=%d,lightbat status=%d,trouble=%d", currentLightState.ac,statusFlags.lowBattery,statusFlags.systemFlag,currentLightState.bat,currentLightState.trouble);
+        // ESP_LOGE(TAG,"ac=%d,batt status = %d,systemflag=%d,lightbat status=%d,trouble=%d", 
+            //currentLightState.ac,statusFlags.lowBattery,statusFlags.systemFlag,currentLightState.bat,currentLightState.trouble);
 
         if (statusFlags.fire)
         {
@@ -1509,7 +1523,7 @@ namespace esphome
         //firstRun = false;
         //forceRefreshZones = false;
         forceRefreshGlobal = false;
-      }
+      
     }
   }
 } // namespaces

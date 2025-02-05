@@ -4,7 +4,7 @@
 
 VistaBus::VistaBus()
 {
-    this->receiveQueue = xQueueCreate(18,sizeof(ReceivedPacket)); 
+    this->receiveQueue = xQueueCreate(20,sizeof(ReceivedPacket)); 
     this->sendQueue = xQueueCreate(6, sizeof(SendPacket));
     this->panel_connected=false;
     this->stop_requested=false;
@@ -29,6 +29,10 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
     this->monitorPin = monitorpin;
     this->LRRemulation = false;
 
+    if (this->receiveQueue == NULL || this->sendQeueu == NULL)
+        ESPI_LOGE("VistaBus", "Memory for task queues was not allocated.  Aborting!");
+        return;
+
     init_uart(static_cast<uart_port_t>(this->uartNum),static_cast<gpio_num_t>(this->rxPin), static_cast<gpio_num_t>(this->txPin));
     if (extuartNum > 0) 
     {
@@ -36,7 +40,7 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
     }
 
     //xTaskCreate(uart_evt_task_start, "uart_evt_task", UART_EVT_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-12, &this->uart_evt_task_Handle);
-    xTaskCreate(rx_tx_task_start, "uart_rx_tx_task", UART_RX_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-1, &this->rx_tx_task_Handle);
+    xTaskCreate(rx_tx_task_start, "uart_rx_tx_task", UART_RX_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-9, &this->rx_tx_task_Handle);
     if (monitorPin != -1)
     {
         xTaskCreate(monitor_rx_task_start, "uart_monitor_rx_task", UART_RX_EXT_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-10, &this->monitor_rx_task_Handle);
@@ -56,8 +60,8 @@ bool VistaBus::stop()
     tmp[0] = 0xFF;
     while (monitor_rx_task_Handle != NULL) //wait for task to terminate
     {
-        writedirect(tmp,1,17);
-        vTaskDelay(pdMS_TO_TICKS(250));
+        uartwritebytes(static_cast<uart_port_t>(this->uartNum),tmp,1);
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
     while(rx_tx_task_Handle != NULL) //wait for task to terminate
     {
@@ -195,12 +199,13 @@ static bool validChksum(const char * cbuf, int start, int len)
     ESP_LOGI("", "Timestamp: %s  Packet: %s",strftime_buf,s);    
 }*/
 
-static void get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout)
+static int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout)
 {
         const int rxBytes = uart_read_bytes(uart_num, rxbuf, len, timeout);
         memcpy(received_packet->payload+start,rxbuf,rxBytes);
         received_packet->payload[rxBytes+start] = '\0';
         received_packet->size = rxBytes+start;
+        return rxBytes;
 }
 
 
@@ -238,6 +243,7 @@ void VistaBus::rx_tx_task(void * args)
     int sequence = 0;
     char tempbuff[13];
     int tempbuff_fill = 0;
+    int cksum = 0;
     while (1) 
     {
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
@@ -301,7 +307,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             gpio_isr_handler_remove(static_cast<gpio_num_t>(this->rxPin));
         }
-        int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); 
+        int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(250)); 
         if (rxBytes > 0) 
         {
             this->panel_connected = true;
@@ -458,6 +464,11 @@ void VistaBus::rx_tx_task(void * args)
                 xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
+            else if ( data[0] == 0xF8 ) //Unknown Command
+            {
+                get_Packet(&received_packet,data,1,7,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+            }
             /*else if ( data[0] == 0x00) 
             {
             }*/
@@ -471,17 +482,21 @@ void VistaBus::rx_tx_task(void * args)
                 {
                     tempbuff[tempbuff_fill] = data[0];
                     tempbuff_fill++;
+                    cksum += data[0];
                 }
             
-                if (tempbuff_fill == 4)
+                if (tempbuff_fill == 4) 
                 {
-                    memcpy(received_packet.payload, tempbuff,tempbuff_fill);
-                    received_packet.size = tempbuff_fill;
-                    xQueueSend(this->receiveQueue, &received_packet,pdMS_TO_TICKS(20));
+                    if (tempbuff[0] != cksum) //don't clutter queue with 1 byte sequences
+                    {
+                        memcpy(received_packet.payload, tempbuff,tempbuff_fill);
+                        received_packet.size = tempbuff_fill;
+                        xQueueSend(this->receiveQueue, &received_packet,pdMS_TO_TICKS(20));
+                    }
                     tempbuff_fill = 0;
+                    cksum = 0;
                 }
             }
-
         }
     }
     free(data);
@@ -500,6 +515,7 @@ void VistaBus::monitor_rx_task(void * args)
     uint32_t val = 0;
     char tempbuff[13];
     int tempbuff_fill = 0;
+    int cksum = 0;
 
     while (1) 
     {
@@ -517,8 +533,9 @@ void VistaBus::monitor_rx_task(void * args)
             rcvd_extPkt.payload[0] = data[0];
             if (data[0]==0xFE) //Send known packets immediately
             {
-                get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125)); //do not set delay to less than 125ms
-                xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
+                int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
+                if (res > 0)
+                    xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
                 memset(tempbuff,'\0', sizeof(tempbuff));
                 tempbuff_fill = 0;
                 //emit_Packet(rcvd_extPkt.payload,rcvd_extPkt.size,TASK_TAG);
@@ -530,7 +547,7 @@ void VistaBus::monitor_rx_task(void * args)
                 rcvd_extPkt.payload[2]=data[0];
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(125));
                 rcvd_extPkt.payload[3] = data[0]; //length
-                get_Packet(&rcvd_extPkt, data, 4, rcvd_extPkt.payload[3], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
+                get_Packet(&rcvd_extPkt, data, 4, rcvd_extPkt.payload[3], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
                 memset(tempbuff,'\0', sizeof(tempbuff));
@@ -538,7 +555,7 @@ void VistaBus::monitor_rx_task(void * args)
             }
             else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //expect response
             {
-                get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
+                get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
                 memset(tempbuff,'\0', sizeof(tempbuff));
@@ -546,7 +563,7 @@ void VistaBus::monitor_rx_task(void * args)
             }
             else if(val >> 8 == 0x9E && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to 9E command
             {
-                get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
+                get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
                 memset(tempbuff,'\0', sizeof(tempbuff));
@@ -574,14 +591,19 @@ void VistaBus::monitor_rx_task(void * args)
                 {
                     tempbuff[tempbuff_fill] = data[0];
                     tempbuff_fill++;
+                    cksum += data[0];
                 }
             }
-            if (tempbuff_fill == 4)
+            if (tempbuff_fill == 4)  //don't clutter queue with 1 byte sequences
             {
-                memcpy(rcvd_extPkt.payload, tempbuff,tempbuff_fill);
-                rcvd_extPkt.size = tempbuff_fill;
-                xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(20));
+                if (tempbuff[0] != cksum)
+                {
+                    memcpy(rcvd_extPkt.payload, tempbuff,tempbuff_fill);
+                    rcvd_extPkt.size = tempbuff_fill;
+                    xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(20));
+                }
                 tempbuff_fill = 0;
+                cksum = 0;
             }
         }
     }
