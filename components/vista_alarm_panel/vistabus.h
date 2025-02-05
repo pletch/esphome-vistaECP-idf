@@ -71,7 +71,7 @@ public:
     bool write(const char * data_to_write, int size, int keypadaddress);
     bool writedirect(const char * hex_data_to_write, int size, int keypadaddress);
     bool connected();
-    bool read_packet(char * data, int &len, int &type);
+    bool read_packet(char * data, int &len, int &type, bool with_delay = false);
     void emulateLRR(bool enabled);
 
 protected:

@@ -254,6 +254,9 @@ class vistaECPHome : public api::CustomAPIDevice, public time::RealTimeClock
       bool AUIsendTime();
       char auiSeq = 8;
       void AUIprocessQueue();
+      void processReceiveQueue(void *args);
+      static void processReceiveQueue_task_start(void *args);
+      TaskHandle_t processReceiveQHandle;
 
       struct auiCmdType
       {

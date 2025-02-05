@@ -29,9 +29,11 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
     this->monitorPin = monitorpin;
     this->LRRemulation = false;
 
-    if (this->receiveQueue == NULL || this->sendQeueu == NULL)
-        ESPI_LOGE("VistaBus", "Memory for task queues was not allocated.  Aborting!");
+    if (this->receiveQueue == NULL || this->sendQueue == NULL)
+    {
+        ESP_LOGE("VistaBus", "Memory for task queues was not allocated. Aborting!");
         return;
+    }
 
     init_uart(static_cast<uart_port_t>(this->uartNum),static_cast<gpio_num_t>(this->rxPin), static_cast<gpio_num_t>(this->txPin));
     if (extuartNum > 0) 
@@ -60,7 +62,7 @@ bool VistaBus::stop()
     tmp[0] = 0xFF;
     while (monitor_rx_task_Handle != NULL) //wait for task to terminate
     {
-        uartwritebytes(static_cast<uart_port_t>(this->uartNum),tmp,1);
+        uart_write_bytes(static_cast<uart_port_t>(this->uartNum),tmp,1);
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     while(rx_tx_task_Handle != NULL) //wait for task to terminate
@@ -106,16 +108,20 @@ void VistaBus::emulateLRR(bool enabled)
     LRRemulation = enabled;
 }
 
-bool VistaBus::read_packet(char * data, int &len, int &type) 
+bool VistaBus::read_packet(char * data, int &len, int &type, bool with_delay) 
 {
     ReceivedPacket pkt;
-    bool result = xQueueReceive(this->receiveQueue,&pkt,0) == pdPASS;
+    bool result = false;
+    if (with_delay)
+        result = xQueueReceive(this->receiveQueue,&pkt,portMAX_DELAY) == pdPASS;
+    else
+        result = xQueueReceive(this->receiveQueue,&pkt,0) == pdPASS;
     if (result) 
     {
         memcpy(data,pkt.payload,pkt.size);
         len = pkt.size;
         type = pkt.type;
-        return result;
+        return true;
     }
     else
         return false;
