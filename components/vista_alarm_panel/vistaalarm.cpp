@@ -108,6 +108,7 @@ namespace esphome
     void vistaECPHome::stop()
     {
       vistabus.stop();
+      vTaskDelete(processReceiveQHandle);
     }
 
     vistaECPHome::vistaECPHome(char kpaddr, int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2, int maxzones, int maxpartitions) : keypadAddr1(kpaddr),
