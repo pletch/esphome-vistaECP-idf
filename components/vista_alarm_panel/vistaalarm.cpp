@@ -952,7 +952,7 @@ namespace esphome
                 if (partitions[partition - 1])
                 {
                   forceRefresh = partitionStates[partition - 1].refreshStatus || forceRefreshGlobal;
-                  ESP_LOGI(TAG, "Partition: %02X", partition);
+                  ESP_LOGI("v-a", "Partition: %02X", partition);
 
                   updateDisplayLines(partition);
                   if (partitionStates[partition - 1].lastbeeps != statusFlags.beeps || forceRefresh)
@@ -967,9 +967,9 @@ namespace esphome
                 }
                 //forceRefreshZones = true;
               }
-              ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt1);
-              ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
-              ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
+              ESP_LOGI("v-a", "Prompt: %s", statusFlags.prompt1);
+              ESP_LOGI("v-a", "Prompt: %s", statusFlags.prompt2);
+              ESP_LOGI("v-a", "Beeps: %d", statusFlags.beeps);
               //forceRefreshZones = true;
             }
             if (payload[0]==0xF2)
