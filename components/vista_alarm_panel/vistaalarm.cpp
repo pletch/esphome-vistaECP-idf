@@ -447,6 +447,11 @@ namespace esphome
         set_alarm_state("Y", "", partition);
         return;
       }
+      if (keystring == "D")
+      {
+        set_alarm_state("D", "", partition);
+        return;
+      }
 
       if (!partition)
         partition = defaultPartition;
@@ -637,8 +642,10 @@ namespace esphome
           vistabus.write("#3",1, addr);
         else if (code.length() == 4)
         {
-          vistabus.write(code.c_str(),4, addr);
-          vistabus.write("3",1,addr);
+          char send_str[5];
+          memcpy(send_str,code.c_str(),4);
+          memcpy(send_str+4,"3",1);
+          vistabus.write(send_str,5, addr);
         }
       }
       // Arm away
@@ -649,8 +656,10 @@ namespace esphome
           vistabus.write("#2",1, addr);
         else if (code.length() == 4)
         {
-          vistabus.write(code.c_str(),4, addr);
-          vistabus.write("2",1, addr);
+          char send_str[5];
+          memcpy(send_str,code.c_str(),4);
+          memcpy(send_str+4,"2",1);
+          vistabus.write(send_str,5, addr);
         }
       }
       else if (state.compare("I") == 0 && !partitionStates[partition - 1].previousLightState.armed)
@@ -659,8 +668,10 @@ namespace esphome
           vistabus.write("#7",1, addr);
         else if (code.length() == 4)
         {
-          vistabus.write(code.c_str(),4, addr);
-          vistabus.write("7",1, addr);
+          char send_str[5];
+          memcpy(send_str,code.c_str(),4);
+          memcpy(send_str+4,"7",1);
+          vistabus.write(send_str,5, addr);
         }
       }
       else if (state.compare("N") == 0 && !partitionStates[partition - 1].previousLightState.armed)
@@ -670,8 +681,10 @@ namespace esphome
           vistabus.write("#33",1, addr);
         else if (code.length() == 4)
         {
-          vistabus.write(code.c_str(),4, addr);
-          vistabus.write("33",1, addr);
+          char send_str[6];
+          memcpy(send_str,code.c_str(),4);
+          memcpy(send_str+4,"33",1);
+          vistabus.write(send_str,6, addr);
         }
       }
       // Fire command
@@ -690,26 +703,30 @@ namespace esphome
       {
         if (code.length() == 4)
         {
-          vistabus.write(code.c_str(),4, addr);
-          vistabus.write("6#",1, addr);
+          char send_str[6];
+          memcpy(send_str,code.c_str(),4);
+          memcpy(send_str+4,"6#",1);
+          vistabus.write(send_str,6, addr);
         }
       }
       else if (state.compare("Y") == 0)
       {
         if (code.length() == 4)
         {
-          vistabus.write(code.c_str(),4, addr);
-          vistabus.write("600",1, addr);
+          char send_str[7];
+          memcpy(send_str,code.c_str(),4);
+          memcpy(send_str+4,"600",1);
+          vistabus.write(send_str,7, addr);
         }
       }
       else if (state.compare("D") == 0)
       {
         if (code.length() == 4)
         { // ensure we get 4 digit code
-          vistabus.write(code.c_str(),4, addr);
-          vistabus.write("1",1, addr);
-          vistabus.write(code.c_str(),4, addr);
-          vistabus.write("1",1, addr);
+          char send_str[5];
+          memcpy(send_str,code.c_str(),4);
+          memcpy(send_str+4,"1",1);
+          vistabus.write(send_str,5, addr);
         }
       }
     }
@@ -1537,8 +1554,6 @@ namespace esphome
       }
         
       AUIprocessQueue();
-
-      //static unsigned long long refreshLrrTime, refreshRfTime;   <--Not used right now
     }
   }
 } // namespaces

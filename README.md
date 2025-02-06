@@ -1,6 +1,6 @@
 # Honeywell/Ademco Vista ECP ESPHome custom component and library
 
-## Table of contents
+## Table of contents (see note below about this fork)
 
 - [Honeywell/Ademco Vista ECP ESPHome custom component and library](#honeywell-ademco-vista-ecp-esphome-custom-component-and-library)
   * [Table of contents](#table-of-contents)
@@ -30,22 +30,31 @@
 - [References](#references)
 - [Author & Contributors](#author---contributors)
 - 
-**This version is a highly modified FORK of this project!!**
+## This version is a highly modified FORK of this project!!
   
 Project compiles using ESP-IDF rather than Arduino framework in ESPHome.
 
 Fork is tailored for the needs of my system and shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein.
 
-Please no judgement on quality of code or approach.  I am merely a self-learned c++ hobbyist!
+Please no judgement on quality of code or approach.  I am merely a self-learned c++ hobbyist figuring this out as I go!
 
 Key differences from original project:
 - Arduino dependency removed and refactored for ESP-IDF.
-- Refactored to support workflow associated with Vistabus class using FreeRTOS tasks and Queues.
-- Only targeted towards ESPHome API.  MQTT is removed in this version.
-- Expander emulation and relay emulation are not present / enabled. May be added back in future.
+- Refactored to support workflow associated with Vistabus class using FreeRTOS tasks for UART comm and intertask comm via FreeRTOS Queues.
+- Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel and for local AUI queue     processing.
+- Targeted only towards ESPHome API.  Stand-alone MQTT is removed in this version.
+- Expander emulation and relay emulation are not present / enabled. Will work on adding back in future.
 - Limited testing of expanded functionality such as AUI traffic handling.  My panel does not
     seem to respond to AUI commands from either original project or this forked version.
-- Web server interface not integrated or enabled.
+- Web server interface component not integrated as is done in the upstream version.
+- Uses one or two (if monitoring TX wire for RF messages etc.) hardware UARTS on the ESP32 family rather than software GPIO bit-banging.
+- Due to the above, impact of control pulse timing differs and some commands headers are detected differently (eg. RFx related FE vs FB).
+- Will not work with older ESP8266. Untested on single core ESP32 family devices such as S2/C3.
+
+Special thanks to Dilbert for helping answer questions that have come up along the way! 
+
+**⚠️Caution:  There may be features / capabilities unused by me that were not tested.  If you wish to use this fork and find something misbehaving, please let me know and I'll do my best to fix it!
+
 
 ## About the project
 Original Project README
