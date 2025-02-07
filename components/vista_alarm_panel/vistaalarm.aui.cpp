@@ -1,3 +1,15 @@
+/*
+Functions in this file:
+AUIsendTime
+AUIprocessQueue
+AUIset_panel_time
+AUIparseMessage
+AUIupdateZoneState
+AUIsendZoneRequest
+AUIprocessZoneList
+AUIprocessF2
+*/
+
 #include "vistaalarm.h"
     
 namespace esphome 
@@ -281,85 +293,85 @@ namespace esphome
         void vistaECPHome::AUIprocessF2(char *cbuf)
         {
             if (auiCmd.state != rsidle)
-              ESP_LOGD(TAG, "AUI cmd state: %d, pending: %d", auiCmd.state, auiCmd.pending);
+                ESP_LOGD(TAG, "AUI cmd state: %d, pending: %d", auiCmd.state, auiCmd.pending);
             if (((cbuf[2] >> 1) & auiAddr) && (cbuf[7] & 0xf0) == 0x60 && cbuf[8] == 0x63 && cbuf[9] == 0x02)
             { // partition update broadcast
-              char *m = AUIparseMessage(cbuf);
-              if (m == NULL)
-                return;
-              size_t l = &cbuf[1] + cbuf[1] - m;
-              // ESP_LOGD(TAG, "m length = %d,byte=%02X", l, m[0]);
-              // if (m[0] & 1)
-              // {
-              if (auiCmd.state == rsidle)
-              {
-                auiCmd.state = rsopenzones;
-                auiCmd.partition = cbuf[13];
-                auiCmd.pending = false;
-                AUIsendZoneRequest();
-              }
-              else if (auiCmd.state != rsopenzones && auiCmd.state != rsbypasszones)
-              {
-                auiCmdType c;
-                c.state = rsopenzones;
-                c.partition = cbuf[13];
-                if (auiQueue.size() < 5)
-                  auiQueue.push(c);
-              }
-              //   }
-              // else
-              if (l > 4 && m[0] == 2)
-              {
-                // we have an exit delay
-                // exitDelay=m[5] for partition partitionRequest
-              }
+                char *m = AUIparseMessage(cbuf);
+                if (m == NULL)
+                    return;
+                size_t l = &cbuf[1] + cbuf[1] - m;
+                // ESP_LOGD(TAG, "m length = %d,byte=%02X", l, m[0]);
+                // if (m[0] & 1)
+                // {
+                if (auiCmd.state == rsidle)
+                {
+                    auiCmd.state = rsopenzones;
+                    auiCmd.partition = cbuf[13];
+                    auiCmd.pending = false;
+                    AUIsendZoneRequest();
+                }
+                else if (auiCmd.state != rsopenzones && auiCmd.state != rsbypasszones)
+                {
+                    auiCmdType c;
+                    c.state = rsopenzones;
+                    c.partition = cbuf[13];
+                    if (auiQueue.size() < 5)
+                        auiQueue.push(c);
+                }
+                //   }
+                // else
+                if (l > 4 && m[0] == 2)
+                {
+                    // we have an exit delay
+                    // exitDelay=m[5] for partition partitionRequest
+                }
             }
             else if (((cbuf[2] >> 1) & auiAddr) && (cbuf[7] & 0xf0) == 0x50 && cbuf[8] == 0xfe && cbuf[10] != 0xfd)
             { // response data from request
-              char *m = AUIparseMessage(cbuf);
-              if (m == NULL)
-                return;
-              auiCmd.time = esp_timer_get_time();
-              ESP_LOGD(TAG, "success message from %d", auiCmd.state);
-              auiCmd.pending = false;
-              if (auiCmd.state == rsopenzones || auiCmd.state == rsbypasszones)
-              {
-                AUIprocessZoneList(m);
-
-                if (auiCmd.state == rsopenzones)
+                char *m = AUIparseMessage(cbuf);
+                if (m == NULL)
+                    return;
+                auiCmd.time = esp_timer_get_time();
+                ESP_LOGD(TAG, "success message from %d", auiCmd.state);
+                auiCmd.pending = false;
+                if (auiCmd.state == rsopenzones || auiCmd.state == rsbypasszones)
                 {
-                  auiCmd.state = rsbypasszones;
-                  AUIsendZoneRequest();
+                    AUIprocessZoneList(m);
+
+                    if (auiCmd.state == rsopenzones)
+                    {
+                        auiCmd.state = rsbypasszones;
+                        AUIsendZoneRequest();
+                    }
+                    else
+                        auiCmd.state = rsidle;
                 }
-                else
-                  auiCmd.state = rsidle;
-              }
-              else if (auiCmd.state == rsdate)
-              {
-                auiCmd.state = rsidle;
-              }
+                else if (auiCmd.state == rsdate)
+                {
+                    auiCmd.state = rsidle;
+                }
             }
             else if (((cbuf[2] >> 1) & auiAddr) && (cbuf[7] & 0xf0) == 0x50 && (cbuf[8] == 0xfd || cbuf[10] == 0xfd))
             {
-              char *m = AUIparseMessage(cbuf);
-              if (m == NULL)
-                return;
-              auiCmd.time = esp_timer_get_time();
-              auiCmd.pending = false;
-              ESP_LOGD(TAG, "failure message from %d", auiCmd.state);
-              if (auiCmd.state == rszoneinfo)
-              {
-                auiCmd.record++;
-                if (auiCmd.record > auiCmd.records)
-                  auiCmd.state = rsidle;
-              }
-              else if (auiCmd.state == rsdate)
-              {
-                auiCmd.state = rsidle;
-              }
-              else
-                auiCmd.state = rsidle;
+                char *m = AUIparseMessage(cbuf);
+                if (m == NULL)
+                    return;
+                auiCmd.time = esp_timer_get_time();
+                auiCmd.pending = false;
+                ESP_LOGD(TAG, "failure message from %d", auiCmd.state);
+                if (auiCmd.state == rszoneinfo)
+                {
+                    auiCmd.record++;
+                    if (auiCmd.record > auiCmd.records)
+                        auiCmd.state = rsidle;
+                }
+                else if (auiCmd.state == rsdate)
+                {
+                    auiCmd.state = rsidle;
+                }
+                else
+                    auiCmd.state = rsidle;
             }
         }
-    }
-}
+    } //namespace
+} // namespace

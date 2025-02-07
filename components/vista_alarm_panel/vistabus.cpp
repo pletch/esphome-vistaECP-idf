@@ -51,7 +51,6 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
 
 bool VistaBus::stop() 
 {
-
     this->stop_requested = true;
 
     //vTaskDelete(this->uart_evt_task_Handle);
