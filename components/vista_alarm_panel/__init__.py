@@ -139,8 +139,6 @@ CONFIG_SCHEMA = cv.Schema(
     cv.Optional(CONF_CHECK): cv.string  ,
     cv.Optional(CONF_TRBL): cv.string  ,   
     cv.Optional(CONF_HITSTAR): cv.string
-    # cv.Optional(CONF_BINARY_SENSORS): cv.ensure_list(ALARM_PANEL_BINARY_SENSOR_SCHEMA),
-    # cv.Optional(CONF_TEXT_SENSORS): cv.ensure_list(ALARM_PANEL_TEXT_SENSOR_SCHEMA),    
     }
 )
 
@@ -171,17 +169,17 @@ async def to_code(config):
     if CONF_KEYPAD3 in config:
         cg.add(var.set_partitionKeypad(3,config[CONF_KEYPAD3]));
     if CONF_EXPANDER1 in config:
-        cg.add(var.set_expanderAddr(1,config[CONF_EXPANDER1]));
+        cg.add(var.set_expanderAddr(config[CONF_EXPANDER1]));
     if CONF_EXPANDER2 in config:
-        cg.add(var.set_expanderAddr(2,config[CONF_EXPANDER2]));
+        cg.add(var.set_expanderAddr(config[CONF_EXPANDER2]));
     if CONF_RELAY1 in config:
-        cg.add(var.set_expanderAddr(3,config[CONF_RELAY1]));
+        cg.add(var.set_expanderAddr(config[CONF_RELAY1]));
     if CONF_RELAY2 in config:
-        cg.add(var.set_expanderAddr(4,config[CONF_RELAY2]));
+        cg.add(var.set_expanderAddr(config[CONF_RELAY2]));
     if CONF_RELAY3 in config:
-        cg.add(var.set_expanderAddr(5,config[CONF_RELAY3]));
+        cg.add(var.set_expanderAddr(config[CONF_RELAY3]));
     if CONF_RELAY4 in config:
-        cg.add(var.set_expanderAddr(6,config[CONF_RELAY4]));
+        cg.add(var.set_expanderAddr(config[CONF_RELAY4]));
     if CONF_TTL in config:
         cg.add(var.set_ttl(config[CONF_TTL]));        
     if CONF_QUICKARM in config:

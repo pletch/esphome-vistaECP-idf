@@ -60,6 +60,15 @@ struct SendPacket
     int size;
 };
 
+struct emulatedDevice  
+{
+    char address;
+    char fault;
+    char faultBits;
+    char relayState;
+};
+const emulatedDevice emulatedDevice_INIT = {.address = 0, .fault = 0, .faultBits = 0, .relayState = 0};
+
 
 class VistaBus
 {
@@ -73,6 +82,8 @@ public:
     bool connected();
     bool read_packet(char * data, int &len, int &type, bool with_delay = false);
     void emulateLRR(bool enabled);
+    void setExpAddr(int address);
+    void setExpFault(int zone, bool fault);
 
 protected:
     int rxPin, txPin;
@@ -82,9 +93,14 @@ protected:
     bool panel_connected;
     bool stop_requested;
     bool LRRemulation;
+    bool EXPemulation;
     static void rx_tx_task_start(void *args );
     static void monitor_rx_task_start(void *args);
-    //static void uart_evt_task_start(void *args);
+    void rx_tx_task(void * args);
+    void monitor_rx_task(void * args);
+    void process98(const char * cbuf);
+    //static void uart_evt_task_start(vo;id *args);
+    emulatedDevice expander[6];
     TaskHandle_t rx_tx_task_Handle;
     TaskHandle_t monitor_rx_task_Handle;
     //TaskHandle_t uart_evt_task_Handle;
@@ -92,8 +108,6 @@ protected:
     QueueHandle_t sendQueue;
     //QueueHandle_t uartevtQueue;
     uint64_t last_int;
-    void rx_tx_task(void * args);
-    void monitor_rx_task(void * args);
     //void uart_evt_task(void * args);
     static void gpio_isr_handler(void * args);
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);

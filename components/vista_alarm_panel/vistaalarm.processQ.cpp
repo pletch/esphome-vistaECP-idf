@@ -86,7 +86,7 @@ namespace esphome
                             if (auiAddr)
                             AUIprocessF2(payload);
                         }
-                        else if ((payload[0] == 0xf9))
+                        else if ((payload[0] == 0xF9))
                         {         
                             // we process all lrr messages with type 58
                             if (payload[3] == 0x58)
@@ -179,7 +179,7 @@ namespace esphome
                                 }
                             }
                         }     
-                        else if (payload[0] == 0xFE && size == 7)
+                        else if (payload[0] == 0xFE && size == 7 && payload[1] == 0)
                         {
                             char rf_serial_char[14];
                             char rf_serial_char_out[20];

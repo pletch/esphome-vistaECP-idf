@@ -214,6 +214,8 @@ namespace esphome
             n.zone = z;
             n.active = true;
             n.partition = p;
+            n.lowbat = false;
+            n.rflowbat = false;
             extZones.push_back(n);
             ESP_LOGD(TAG, "added zone %d", extZones.back().zone);
             if (zoneStatusChangeCallback != NULL)
@@ -395,7 +397,15 @@ namespace esphome
 
         void vistaECPHome::set_zone_fault(int32_t zone, bool fault)
         {
-            //vista.setExpFault(zone, fault);
+            vistabus.setExpFault(zone, fault);
+        }
+
+        void vistaECPHome::set_expanderAddr(uint8_t addr)
+        {
+            if (addr)
+            {
+                vistabus.setExpAddr(addr);
+            }
         }
 
         void vistaECPHome::alarm_keypress(std::string keystring)

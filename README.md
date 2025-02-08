@@ -43,8 +43,7 @@ Key differences from original project:
 - Refactored to support workflow associated with Vistabus class using FreeRTOS tasks for UART comm and intertask comm via FreeRTOS Queues.
 - Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel and for local AUI queue     processing.
 - Targeted only towards ESPHome API.  Stand-alone MQTT is removed in this version.
-- Expander emulation and relay emulation are not present / enabled. Will work on adding back in future.
-- Limited testing of expanded functionality such as AUI traffic handling.  My panel does not
+- Limited testing of expanded functionality such as AUI command handling.  My panel does not
     seem to respond to AUI commands from either original project or this forked version.
 - Web server interface component not integrated as is done in the upstream version.
 - Uses one or two (if monitoring TX wire for RF messages etc.) hardware UARTS on the ESP32 family rather than software GPIO bit-banging.

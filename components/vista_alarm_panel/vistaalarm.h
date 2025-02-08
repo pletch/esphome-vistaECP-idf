@@ -176,11 +176,7 @@ namespace esphome
                 void set_displaySystemMsg(bool dsm) { displaySystemMsg = dsm; }
                 void set_lrrSupervisor(bool ls) { lrrSupervisor = ls; }
                 void set_auiaddr(uint8_t addr) { auiAddr = addr; };
-                void set_expanderAddr(uint8_t idx, uint8_t addr)
-                {
-                    if (idx && idx < 10)
-                        expanderAddr[idx - 1] = addr;
-                }
+                void set_expanderAddr(uint8_t addr);
 
                 void set_maxZones(int mz) { maxZones = mz; }
                 void set_maxPartitions(uint8_t mp) { maxPartitions = mp; }
@@ -443,10 +439,6 @@ namespace esphome
                     return vistabus.connected();
                 }
 
-                void setExpFault(int zone, bool fault)
-                {
-                    //vista.setExpFault(zone, fault);
-                }
                 void createZoneFromId(const char * zid,uint8_t p=0);
                 void set_zone_fault(int32_t zone, bool fault);
 

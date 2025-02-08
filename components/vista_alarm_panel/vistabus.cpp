@@ -6,8 +6,10 @@ VistaBus::VistaBus()
 {
     this->receiveQueue = xQueueCreate(20,sizeof(ReceivedPacket)); 
     this->sendQueue = xQueueCreate(6, sizeof(SendPacket));
-    this->panel_connected=false;
-    this->stop_requested=false;
+    this->panel_connected = false;
+    this->stop_requested = false;
+    this->LRRemulation = false;
+    this->EXPemulation = false;
 }
 
 VistaBus::~VistaBus()
@@ -27,7 +29,7 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
     this->txPin = txpin;
     this->extuartNum = extuartnum;
     this->monitorPin = monitorpin;
-    this->LRRemulation = false;
+
 
     if (this->receiveQueue == NULL || this->sendQueue == NULL)
     {
@@ -405,7 +407,7 @@ void VistaBus::rx_tx_task(void * args)
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
             }
-            else if ( data[0] == 0xFA ) //EXP
+            else if ( data[0] == 0x98 ) //EXP
             {                    
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 4, pdMS_TO_TICKS(UART_DELAY));
                 if (rxBytes != 4)
@@ -432,6 +434,8 @@ void VistaBus::rx_tx_task(void * args)
                 }
                 uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //checksum
                 received_packet.payload[received_packet.size - 1] = data[0];
+                if (EXPemulation)
+                    this->process98(received_packet.payload);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));          
             }
             else if ( data[0] == 0xF9 ) //LRR
@@ -541,8 +545,8 @@ void VistaBus::monitor_rx_task(void * args)
                 int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
                 if (res > 0)
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
-                memset(tempbuff,'\0', sizeof(tempbuff));
-                tempbuff_fill = 0;
+                //memset(tempbuff,'\0', sizeof(tempbuff));
+                //tempbuff_fill = 0;
                 //emit_Packet(rcvd_extPkt.payload,rcvd_extPkt.size,TASK_TAG);
             }
             else if(val >> 8 == 0xF6) //next byte will be header of sending sequence
@@ -555,24 +559,24 @@ void VistaBus::monitor_rx_task(void * args)
                 get_Packet(&rcvd_extPkt, data, 4, rcvd_extPkt.payload[3], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
-                memset(tempbuff,'\0', sizeof(tempbuff));
-                tempbuff_fill = 0;
+                //memset(tempbuff,'\0', sizeof(tempbuff));
+                //tempbuff_fill = 0;
             }
             else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //expect response
             {
                 get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
-                memset(tempbuff,'\0', sizeof(tempbuff));
-                tempbuff_fill = 0;
+                //memset(tempbuff,'\0', sizeof(tempbuff));
+                //tempbuff_fill = 0;
             }
             else if(val >> 8 == 0x9E && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to 9E command
             {
                 get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
-                memset(tempbuff,'\0', sizeof(tempbuff));
-                tempbuff_fill = 0;
+               //memset(tempbuff,'\0', sizeof(tempbuff));
+                //tempbuff_fill = 0;
             }
             else if (val == 0) //put byte in temp buffer to emit to log
             {
@@ -584,19 +588,6 @@ void VistaBus::monitor_rx_task(void * args)
                 {
                     tempbuff[tempbuff_fill] = data[0];
                     tempbuff_fill++;
-                }
-            }
-            else if (val == 0) //put byte in temp buffer to emit to log
-            {
-                if (tempbuff_fill == 0 && data[0] == 0) 
-                {
-                    //don't accumulate leading zeros
-                }
-                else
-                {
-                    tempbuff[tempbuff_fill] = data[0];
-                    tempbuff_fill++;
-                    cksum += data[0];
                 }
             }
             if (tempbuff_fill == 4)  //don't clutter queue with 1 byte sequences
@@ -618,6 +609,149 @@ void VistaBus::monitor_rx_task(void * args)
     vTaskDelete(NULL);
 }
 
+void VistaBus::process98(const char * cbuf)
+{
+    char type = cbuf[4];
+    char seq = cbuf[3];
+    char lcbuf[8];
+
+    int idx;
+
+    if (cbuf[2] & 1)
+    {
+        seq = cbuf[4];
+        type = cbuf[5];
+        for (idx = 0; idx < 9; idx++)
+        {
+            if (!expander[idx].address)
+                continue;
+            if (cbuf[2] == (0x01 << (expander[idx].address - 13)))
+                break; // for us - relay addresses 14-15
+        }
+    }
+    else
+    {
+        for (idx = 0; idx < 9; idx++)
+        {
+            if (!expander[idx].address)
+                continue;
+            if (cbuf[2] == (0x01 << (expander[idx].address - 6)))
+                break; // for us - address range 7 -13
+        }
+    }
+    if (idx == 9)
+    {
+        return; // no match return
+    }
+
+    uint8_t lcbuflen = 0;
+    uint8_t expSeq = (seq == 0x20 ? 0x31 : 0x34);
+
+    // we use zone to either | or & bits depending if in fault or reset
+    // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry ,0x00 relay control
+    if (type == 0xF1)
+    {
+        lcbuflen = 4;
+        lcbuf[0] = expander[idx].address;
+        lcbuf[1] = expSeq;
+        // lcbuf[2] = (char) currentFault.relayState;
+        lcbuf[2] = 0;
+        lcbuf[3] = expander[idx].fault; // we send out the current zone state
+    }
+    else if (type == 0xF7)
+    { // periodic  zone state poll (every 30 seconds) expander
+        // I think the actual sequence looks something like this but I don't have a real 4219 with which to test.  
+        // A 0xFE in checksum would eliminate need to subtract 1 below.
+        // The response should include device address??
+        // The response sequence should also include a 0xF7??
+        //lcbuflen = 5;         
+        //lcbuf[0] = 0xFE;
+        //lcbuf[1] = 1 << (expander[idx].address-6);
+        //lcbuf[2] = expSeq;
+        //lcbuf[3] = 0;
+        //lcbuf[4] = expander[idx].faultBits;
+        //lcbuf[5] = 0; 
+        lcbuflen = 4;       //This sequence works but doesn't match what monitor line expected sequence is for parsing for so it must not be correct.
+        lcbuf[0] = 0xF0;
+        lcbuf[1] = expSeq;
+        lcbuf[2] = 0;                       // we simulate having a termination resistor so set to zero for all zones
+        lcbuf[3] = expander[idx].faultBits; // opens zones - we send out the list of zone states. if 0 in both fields, means terminated
+    }
+    else if (type == 0x00 || type == 0x0D)
+    { // relay module
+        lcbuflen = 4;
+        lcbuf[0] = expander[idx].address;
+        lcbuf[1] = expSeq;
+        lcbuf[2] = 0x00;
+        if (cbuf[2] & 1)
+        { // address 14/15
+            expander[idx].relayState = cbuf[6] & 0x80 ? expander[idx].relayState | (cbuf[6] & 0x7f) : expander[idx].relayState & ((cbuf[6] & 0x7f) ^ 0xFF);
+            lcbuf[3] = cbuf[6];
+        }
+        else
+        {
+            expander[idx].relayState = cbuf[5] & 0x80 ? expander[idx].relayState | (cbuf[5] & 0x7f) : expander[idx].relayState & ((cbuf[5] & 0x7f) ^ 0xFF);
+            lcbuf[3] = cbuf[5];
+        }
+    }
+    else
+    {
+        return; // we don't acknowledge if we don't know  //0x80 or 0x81
+    }
+    uint8_t chksum = 0;
+    for (int x = 0; x < lcbuflen; x++)
+    {
+        chksum += lcbuf[x];
+    }
+    lcbuflen ++;
+    chksum -= 1;
+    chksum = chksum ^ 0xFF;
+    lcbuf[lcbuflen-1] = chksum;
+    uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
+}
+
+void VistaBus::setExpFault(int zone, bool fault)
+{
+    // expander address 7 - zones: 9 - 16
+    // expander address 8 - zones:  17 - 24
+    // expander address 9 - zones: 25 - 32
+    // expander address 10 - zones: 33 - 40
+    // expander address 11 - zones: 41 - 48
+    uint8_t idx = 0;
+    if (zone > 8 && zone < 17)  
+        idx = 0;
+    else if (zone > 16 && zone < 25)
+        idx = 1;
+    else if (zone > 24 && zone < 33)
+        idx = 2;
+    else if (zone > 32 && zone < 41)
+        idx = 3;
+    else if (zone > 40 && zone < 49)
+        idx = 4;
+    else
+        return;
+
+    int z = zone % 8;                      // convert zone to range of 1 - 7,0 (last zone is 0)
+    expander[idx].fault = z << 5 | (fault ? 0x8 : 0); // 0 = terminated(eol resistor), 0x08=open, 0x10 = closed (shorted)  - convert to bitfield for F1 response
+    if (z > 0)
+        z--;
+    else
+        z = 7;                                                                                   // now convert to 0 - 7 for F7 poll response
+    expander[idx].faultBits = (fault ? expander[idx].faultBits | (0x80 >> z) : expander[idx].faultBits & ((0x80 >> z) ^ 0xFF)); // setup bit fields for return response with fault values for each zone
+}
+
+void VistaBus::setExpAddr(int address)
+{   
+    int idx = -1;
+    if (address > 6 && address < 16)
+    {
+        idx = address-7; //valid range of addresses is 7-15.
+        this->EXPemulation = true;
+    }
+    else
+        return;
+    this->expander[idx].address = address;
+}
 /*void VistaBus::uart_evt_task(void * args) //Task for monitoring for UART break/framing error/parity events from TX/RX UART.
 {
     uart_event_t event;
