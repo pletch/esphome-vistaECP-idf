@@ -448,6 +448,7 @@ namespace esphome
                     //vista.setExpFault(zone, fault);
                 }
                 void createZoneFromId(const char * zid,uint8_t p=0);
+                void set_zone_fault(int32_t zone, bool fault);
 
             private:
                 std::string previousMsg,
@@ -500,8 +501,6 @@ namespace esphome
                 void alarm_trigger_fire(std::string code, int32_t partition);
 
                 void alarm_trigger_panic(std::string code, int32_t partition);
-
-                void set_zone_fault(int32_t zone, bool fault);
 
                 void alarm_keypress(std::string keystring);
 
