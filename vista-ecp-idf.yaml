@@ -9,13 +9,6 @@ vista_alarm_panel:
   accesscode: $accesscode #Only comes into effect if needed for arming and quickarm is not set
   maxzones: "48" #maximum amount of zones that your panel supports
   maxpartitions: "1" #maximum amount of partitions that your panel supports
-
-  # Enroll your RF serial devices here. Format: serial#:loop#:zone#  Each record is comma separated.
-  # For most devices loop1 is used such as 5800pir, other devices such as 5816 will use loop2.  Please refer to your
-  # RF device programming (*56 program) to see what loop and zones are assigned to your RF devices. 
-  # You can refer to the pdf link below for more details on loop numbers 
-  # https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf
-  rfseriallookup: "0233353:2:9,0972804:2:10,0633294:2:11,0914446:1:12,0919958:1:13" # serial1:loop#:zone1,serial2:loop#:zone2
  
   defaultpartition: "1" #set to your main partition
   vistadebuglevel: "3" #component debug level for messages
@@ -65,42 +58,9 @@ external_components:
     components: [vista_alarm_panel] 
     refresh: 10min
 
-## web keypad component
-## each included files will be downloaded automatically and compiled within the flash.  
-## there will be no need for internet access when running. 
-#For www.js build details and source: https://github.com/Dilbert66/esphome-webserver-custom/tree/keypad
-#Component source: https://github.com/Dilbert66/esphome-components/tree/keypad/components/web_keypad
-### Note: this is an ESP32 only component. The esp8266 does not support the resources needed.
-#web_keypad:
-#  port: 80 
-#  partitions: 1  # a keypad will be shown for each partition
-#  log: false
-#  auth:          #this section is optional. Enable if you need authentication/encryption
-#    username: test
-#    password: test
-#    encryption: true  #set true to use AES256HMAC encryption/auth for sent keys and returned LCD messages
-                      #set to false to use Digest authentication - no encryption
-#  config_url: https://dilbert66.github.io/config_files/config_vista.yml
-#  js_url: https://dilbert66.github.io/js_files/www.js
-  ## If you prefer to use locally hosted compile time files comment two lines above and uncomment below  
-  #config_local: ./config_vista.yml     
-  #js_local: ./www.js    
-   ## custom function call to send keypresses if other than dsc/vista components are used. Parmeters are a string keys and int partition
-  #service_lambda: |- 
-      #$panelId->alarm_keypress_partition(keys,partition);    
-    
-#you can remove/disable this section if you don't want your panel time updated automatically. 
-#interval:
-  #- interval: 7200s
-   # then:
-    #  - lambda: |-
-     #     $panelId->set_panel_time();    
-
 esphome:
   name: $name
   friendly_name: $friendlyName
-  platformio_options:
-    board_build.flash_mode: dio
 #Example of how to set the panel time from the esp time on bootup  
   #on_boot:
     #priority: 600
@@ -123,15 +83,6 @@ wifi:
 
 time:
  - platform: sntp
-
-#ethernet:
-#  type: W5500
-#  clk_pin: GPIO12
-#  mosi_pin: GPIO11
-#  miso_pin: GPIO13
-#  cs_pin: GPIO14
-#  interrupt_pin: GPIO4
-#  reset_pin: GPIO9
   
 # Enable logging
 logger:
@@ -149,171 +100,139 @@ api:
 ######################################################################## 
 # Edit binary and text sensors below to suit your alarm setup.
 # You can safely add or remove any sensor as needed. 
-# The id code is entered using the "id:" tag.  Alternatively you can
-# add the id code in round brackets  at the end of the sensor name: eg. (z1)
+# Examples are provided for both hardwired and RF zones.  
+# Enroll your RF serial devices using the rf_serial and rf_loop parameters.
+# For most devices loop1 is used such as 5800pir, other devices such as 5816 will use loop2.  Please refer to your
+# RF device programming (*56 program) to see what loop and zones are assigned to your RF devices. 
+# You can refer to the pdf link below for more details on loop numbers 
+# https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf
 binary_sensor:
 
 ### zone sensors ###
 # open/close status for each zone 
 # zone id code = z+zone number
-  - platform: vista_alarm_panel
-    id: z8  
-    name: "Flood Sensor"
-    device_class: moisture
-
-  - platform: vista_alarm_panel
-    id: z9
-    name: "Front Door"
-    device_class: door   
-
-  - platform: vista_alarm_panel
-    name: "Patio Door"
-    id: z10
-    device_class: door  
-  
-  - platform: vista_alarm_panel
-    id: z11
-    name: "Garage Entry"
-    device_class: door  
- 
-  - platform: vista_alarm_panel
-    id: z12
-    name: "Foyer Motion"
-    device_class: motion      
-
-  - platform: vista_alarm_panel
-    id: z13
-    name: "Kitchen Motion"
-    device_class: motion
-
-  - platform: vista_alarm_panel
-    id: z15
-    name: "Hallway Smoke Detector"
-    device_class: smoke          
-  
-# you can also add fields to show fault statuses of other devices you have.  The id will be 1 + device address.  
-
-#relay addresses are 12/13/14/15
 #  - platform: vista_alarm_panel
-#    id: z112    
-#    name: "check relay 12"  
-#    device_class: problem
+#    id: z8  
+#    name: "Flood Sensor"
+#    partition: 1
+#    zone: 8
+#    device_class: moisture
 
-#zone expander device addresses are 07/08/09/10/11
 #  - platform: vista_alarm_panel
-#    id: z108    
-#    name: "check expander 08"  
-#    device_class: problem
+#    id: z9
+#    name: "Front Door"
+#    partition: 1
+#    zone: 9
+#    rf_serial: 233353
+#    rf_loop: 2
+#    device_class: door   
 
-#comm device address such as Alarmnet/LRR is 03
-  - platform: vista_alarm_panel
-    id: z103
-    name: "Check Comm Device"  
-    device_class: problem
 
+#######################################################################
+# Non-zone binary sensors should be specified with 
+# status_indicator parameter.  Valid options are
+# [ready, trouble, bypass, armed_away, armed_instant, armed_night, 
+# chime, alarm, fire, ac_power, and battery]
+# Partition specific indicators will require specifying partition:
 ### non zone sensors ###
 
 # partition ready status
-# ready id code = rdy_ + partition number
   - platform: vista_alarm_panel
     id: rdy_1
-    name: "Ready Partiton 1"
+    name: "Ready"
+    partition: 1
+    status_indicator: "ready"
+
 # partition/panel trouble status 
-# trouble id code = trbl_ + partition number
   - platform: vista_alarm_panel
     id: trbl_1
-    name: "Trouble Partition 1"
+    name: "Trouble"
+    partition: 1
+    status_indicator: "trouble"
     device_class: problem
  
-# bypass zones active status
-# bypass id code = byp_ + partition number   
-  - platform: vista_alarm_panel
-    id: byp_1
-    name: "Bypass Partition 1"
+# bypass zones active status 
+#  - platform: vista_alarm_panel
+#    id: byp_1
+#    partition: 1
+#    status_indicator: "bypass"
+#    name: "Bypass Partition 1"
 
 # armed away status
-# armed away id code = arma_ + partition number 
-  - platform: vista_alarm_panel
-    name: "Away Partition 1"
+#  - platform: vista_alarm_panel
+#    name: "Away Partition 1"
+#    id: arma_1
+#    partition: 1
+#    status_indicator: "armed_away"
 
 # armed status 
-# armed id code = arm_ + partition number
   - platform: vista_alarm_panel
     id: arm_1  
-    name: "Armed Partition 1"
-  
-# armed stay status
-# armed stay id code = arms_ + partition number      
-  - platform: vista_alarm_panel
-    id: arms_1  
-    name: "Stay Partition 1"
+    partition: 1
+    status_indicator: "armed"
+    name: "Armed"
 
-# armed instant status
-# armed instant id code = armi_ + partition number    
+
+# ac status     
   - platform: vista_alarm_panel
-    id: armi_1
-    name: "Instant Partition 1"
- 
-# armed night status
-# armed night id code = armn_ + partition number      
-  - platform: vista_alarm_panel
-    id: armn_1  
-    name: "Night Partition 1"
- 
-# ac status
-# ac id code = (ac)     
-  - platform: vista_alarm_panel
-    id: ac  
-    name: "AC Status"
+    id: ac
+    name: "Power Status"
+    status_indicator: "ac_power"
     device_class: plug  
- 
-# chime status
-# chime id code = chm_ + partition number   
-  - platform: vista_alarm_panel
-    id: chm_1  
-    name: "Chime Partition 1"
 
-# alarm status
-# alarm id code = alm_ + partition number    
+# alarm status 
   - platform: vista_alarm_panel
     id: alm_1  
-    name: "Alarm Partition 1"
+    name: "Alarm"
+    partition: 1
+    status_indicator: "alarm"
  
 # battery status
-# battery id code = bat    
-  - platform: vista_alarm_panel
-    id: bat  
-    name: "Battery Status"
-    device_class: problem
-
-# fire alarm status
-# fire alarm id code = fire_ + partition number     
-  - platform: vista_alarm_panel
-    id: fire_1  
-    name: "Fire Partition 1"  
-    device_class: smoke
-
-# relay status
-# relay id code = r + address + channel   
 #  - platform: vista_alarm_panel
-#    id: r121  
-#    name: "Relay1"
+#    id: bat  
+#    name: "Battery Status"
+#    status_indicator: "battery"
+#    device_class: problem
 
+# fire alarm status  
+# - platform: vista_alarm_panel
+#    id: fire_1  
+#    name: "Fire"
+#    partition: 1
+#    status_indicator: "fire"  
+#    device_class: smoke
+
+#########################################################################
+# Zone text sensors can be specified to include alternative zone status as 
+# a text sensor using type: zone. Output values: (O=open, B=bypass,T=trbl or check,A=alarm)
+# Other general text sensors are available.
+# type:
+#    lrr = long range radio messages
+#    rf = rf messages
+#    line1 = keypad prompt line 1 displayed messages
+#    line2 = keypad prompt line 2 displayed messages
+#    zone_status = combined status for zones with messages
+#    beeps = beeps output
+# 
+# Text sensors with partition specific data will require specifying partition:
 #### text sensors ####
 text_sensor:
 
-#alternative zone status as a text sensor. Values:  O=open, B=bypass,T=trbl or check,A=alarm
-# zone id code = z+zone number
+#
 #  - platform: vista_alarm_panel
-#    name: "Front door Txt"
-#    id: z9_messages
+#    name: "Kitchen Motion Txt"
+#    id: z13_txt
+#    type: "zone"
+#    zone: 13
+#    partition: 1
 
-# system status messages
-# system status id code = ss_ + partition number  
+# system status messages  
   - platform: vista_alarm_panel
     id: ss_1  
-    name: "System Status Partition 1"
+    name: "System Status"
     icon: "mdi:shield"
+    type: "system_status"
+    partition: 1
 # sample filter to change "not_ready" status to "disarmed" for use in HA Alarm Panel
 #    filters:
 #      - lambda: |-
@@ -321,17 +240,17 @@ text_sensor:
 #          return x;
 
 # long range radio messages
-# lrr id code = lrr 
   - platform: vista_alarm_panel
     id: lrr  
     name: "Lrr Msg"
+    type: "lrr_messages"
     icon: "mdi:alert-box"
 
-# RF zone messages
-# RF id code = rf  
+# RF zone messages 
   - platform: vista_alarm_panel
     id: rf  
     name: "RF Msg"
+    type: "rf_messages"
     icon: "mdi:alert-box"    
 
 # virtual lcd keypad line1 and line2 messages for each partition   
@@ -339,23 +258,30 @@ text_sensor:
 # partition line2 id code = ln2_ + partition number
 # partition 1
   - platform: vista_alarm_panel
-    name: "Line1 Partition 1"
-    id: ln1_1    
+    name: "Line1"
+    id: ln1_1
+    partition: 1
+    type: "line1"    
   - platform: vista_alarm_panel
-    name: "Line2 Partition 1"
-    id: ln2_1    
+    name: "Line2"
+    id: ln2_1
+    partition: 1
+    type: "line2"    
 
 # zone status messages bypas/open/alarm
 # zone status id code = zs
   - platform: vista_alarm_panel
     name: "Zone Status" 
     id: zs
+    type: "zone_status"
 
 # system beeps
 # beeps id code = bp_ + partition number     
   - platform: vista_alarm_panel
-    name: "Beeps Partition 1"  
+    name: "Beeps"  
     id: bp_1
+    partition: 1
+    type: "beeps"
     
 #optional cmd button example.  Send any keypad keys 
 #button:
@@ -365,19 +291,7 @@ text_sensor:
 #      icon: "mdi:emoticon-outline"    
 #      on_press:
 #        - lambda: |-
-#            $panelId->alarm_keypress_partition("${accesscode}#701",1);    
-
-   
- #- platform: gpio  #example use of pin d8 as a zone trigger port for the emulated zone expander
-  #  pin: D8
-  #  id: pind8
-  #  device_class: window
-   # on_press:       #zone,on/off
-   #   - lambda: |-
-   #       $panelId->setZoneFault(17,1);
-  #  on_release:
-  #    - lambda: |-
-   #       $panelId->setZoneFault(17,0);    
+#            $panelId->alarm_keypress_partition("${accesscode}#701",1);     
 
  # end of panel sensor setup - no need to edit anything below.
 ##############################################################################
@@ -408,17 +322,17 @@ switch:
   - platform: safe_mode
     name: "Safe Mode"   
 
-debug:
-  update_interval: 300s
+#debug:
+#  update_interval: 300s
 
-sensor:
-  - platform: debug
-    free:
-      name: "Heap Free"
-    block:
-      name: "Heap Max Block"
-    loop_time:
-      name: "Loop Time"
-  - platform: uptime
-    type: timestamp
-    name: Last Boot
+#sensor:
+#  - platform: debug
+#    free:
+#      name: "Heap Free"
+#    block:
+#      name: "Heap Max Block"
+#    loop_time:
+#      name: "Loop Time"
+#  - platform: uptime
+#    type: timestamp
+#    name: Last Boot
