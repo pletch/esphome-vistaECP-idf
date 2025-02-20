@@ -6,7 +6,6 @@
 #include "esphome/core/application.h"
 #include "esphome/core/helpers.h"
 #include "esphome/components/time/real_time_clock.h"
-
 #include "esphome/components/api/custom_api_device.h"
 #include "esphome/core/defines.h"
 
@@ -18,7 +17,7 @@
 // for documentation see project at https://github.com/Dilbert66/esphome-vistaecp
 
 #define KP_ADDR 17 // only used as a default if not set in the yaml
-#define MAX_ZONES 48
+#define MAX_ZONES 32
 #define MAX_PARTITIONS 3
 #define DEFAULTPARTITION 1
 
@@ -100,6 +99,18 @@ namespace esphome
             rsdate,
         };
 
+        class vistaECPBinarySensor
+        {
+            public:
+                virtual void process(bool triggered) = 0;
+        };
+
+        class vistaECPTextSensor
+        {
+            public:
+                virtual void process(std::string text) = 0;
+        };
+
 
         class vistaECPHome : public api::CustomAPIDevice, public time::RealTimeClock
         {
@@ -107,68 +118,6 @@ namespace esphome
             public:
                 vistaECPHome(char kpaddr = KP_ADDR, int receivePin = RX_PIN, int transmitPin = TX_PIN, int uartnum1 = DEF_UART1, 
                             int monitorTxPin = MONITOR_PIN, int uartnum2 = DEF_UART2, int maxzones = MAX_ZONES, int maxpartitions = MAX_PARTITIONS);
-
-                std::function<void(int, std::string)> zoneStatusChangeCallback;
-                std::function<void(uint16_t, bool)> zoneStatusChangeBinaryCallback;
-                std::function<void(std::string, uint8_t)> systemStatusChangeCallback;
-                std::function<void(sysState, bool, uint8_t)> statusChangeCallback;
-                std::function<void(std::string, uint8_t)> systemMsgChangeCallback;
-                std::function<void(std::string)> lrrMsgChangeCallback;
-                std::function<void(std::string)> rfMsgChangeCallback;
-                std::function<void(std::string, uint8_t)> line1DisplayCallback;
-                std::function<void(std::string, uint8_t)> line2DisplayCallback;
-                std::function<void(std::string, uint8_t)> beepsCallback;
-                std::function<void(std::string)> zoneExtendedStatusCallback;
-                std::function<void(uint8_t, int, bool)> relayStatusChangeCallback;
-
-                void onZoneStatusChange(std::function<void(int zone, std::string msg)> callback)
-                {
-                    zoneStatusChangeCallback = callback;
-                }
-                void onZoneStatusChangeBinarySensor(std::function<void(int zone, bool open)> callback)
-                {
-                    zoneStatusChangeBinaryCallback = callback;
-                }
-                void onSystemStatusChange(std::function<void(std::string status, uint8_t partition)> callback)
-                {
-                    systemStatusChangeCallback = callback;
-                }
-                void onStatusChange(std::function<void(sysState led, bool isOpen, uint8_t partition)> callback)
-                {
-                    statusChangeCallback = callback;
-                }
-                void onSystemMsgChange(std::function<void(std::string msg, uint8_t partition)> callback)
-                {
-                    systemMsgChangeCallback = callback;
-                }
-                void onLrrMsgChange(std::function<void(std::string msg)> callback)
-                {
-                    lrrMsgChangeCallback = callback;
-                }
-                void onLine1DisplayChange(std::function<void(std::string msg, uint8_t partition)> callback)
-                {
-                    line1DisplayCallback = callback;
-                }
-                void onLine2DisplayChange(std::function<void(std::string msg, uint8_t partition)> callback)
-                {
-                    line2DisplayCallback = callback;
-                }
-                void onBeepsChange(std::function<void(std::string beeps, uint8_t partition)> callback)
-                {
-                    beepsCallback = callback;
-                }
-                void onZoneExtendedStatusChange(std::function<void(std::string zoneExtendedStatus)> callback)
-                {
-                    zoneExtendedStatusCallback = callback;
-                }
-                void onRelayStatusChange(std::function<void(uint8_t addr, int channel, bool state)> callback)
-                {
-                    relayStatusChangeCallback = callback;
-                }
-                void onRfMsgChange(std::function<void(std::string msg)> callback)
-                {
-                    rfMsgChangeCallback = callback;
-                }
 
                 void set_accessCode(const char *ac) { accessCode = ac; }
                 void set_rfSerialLookup(const char *rf) { rfSerialLookup = rf; }
@@ -179,7 +128,7 @@ namespace esphome
                 void set_expanderAddr(uint8_t addr);
 
                 void set_maxZones(int mz) { maxZones = mz; }
-                void set_maxPartitions(uint8_t mp) { maxPartitions = mp; }
+                void set_maxPartitions(uint8_t mp);
                 void set_partitionKeypad(uint8_t idx, uint8_t addr)
                 {
                     if (idx && idx < 4)
@@ -189,42 +138,10 @@ namespace esphome
                 void set_defaultPartition(uint8_t dp) { defaultPartition = dp; }
                 void set_debug(uint8_t db) { debug = db; }
                 void set_ttl(uint32_t t) { TTL = t; };
-                void set_text(uint8_t text_idx, const char *text)
-                {
-                    switch (text_idx)
-                    {
-                        case 1:
-                            FAULT = text;
-                            break;
-                        case 2:
-                            BYPAS = text;
-                            break;
-                        case 3:
-                            ALARM = text;
-                            break;
-                        case 4:
-                            FIRE = text;
-                            break;
-                        case 5:
-                            CHECK = text;
-                            break;
-                        case 6:
-                            TRBL = text;
-                            break;
-                        case 7:
-                            HITSTAR = text;
-                            break;
-                        default:
-                            break;
-                    }
-                }
+                float get_setup_priority() const override { return setup_priority::LATE; }
 
                 std::vector<binary_sensor::BinarySensor *> bMap;
                 std::vector<text_sensor::TextSensor *> tMap;
-
-                void publishStatusChange(sysState led, bool open, uint8_t partition);
-                void publishBinaryState(const std::string &cstr, uint8_t partition, bool open);
-                void publishTextState(const std::string &cstr, uint8_t partition, std::string *text);
 
                 bool displaySystemMsg = false;
                 bool forceRefreshGlobal, forceRefreshZones, forceRefresh;
@@ -232,7 +149,7 @@ namespace esphome
                 previousSystemState;
                 void stop();
 
-            private:
+            protected:
                 uint64_t TTL = 3000000;
                 uint64_t last_refresh = 0;
                 uint8_t debug = 0;
@@ -252,6 +169,7 @@ namespace esphome
                 void processReceiveQueue(void *args);
                 static void processReceiveQueue_task_start(void *args);
                 TaskHandle_t processReceiveQHandle;
+                bool api_connection_state;
 
                 struct auiCmdType
                 {
@@ -308,8 +226,41 @@ namespace esphome
                     int code;
                     uint8_t qual;
                     int data;
-                    uint8_t partition;;
+                    uint8_t partition;
                 };
+
+                struct textSensorPartition
+                {
+                    vistaECPTextSensor *system_status {NULL};
+                    vistaECPTextSensor *line1 {NULL};
+                    vistaECPTextSensor *line2 {NULL};
+                    vistaECPTextSensor *beeps {NULL};
+                };
+                std::vector<textSensorPartition> text_sensors_partition;
+
+                struct statusSensorPartition
+                {
+                    vistaECPBinarySensor *rdy {NULL};
+                    vistaECPBinarySensor *trbl {NULL};
+                    vistaECPBinarySensor *byp {NULL};
+                    vistaECPBinarySensor *arm {NULL};
+                    vistaECPBinarySensor *arma {NULL};
+                    vistaECPBinarySensor *arms {NULL};
+                    vistaECPBinarySensor *armi {NULL};
+                    vistaECPBinarySensor *armn {NULL};
+                    vistaECPBinarySensor *chm {NULL};
+                    vistaECPBinarySensor *alm {NULL};
+                    vistaECPBinarySensor *fire {NULL};
+                };
+                std::vector<statusSensorPartition> status_sensors_partition;
+
+                struct textSensorCommon
+                {
+                    vistaECPTextSensor *zone_status {NULL};
+                    vistaECPTextSensor *rf_messages {NULL};
+                    vistaECPTextSensor *lrr_messages {NULL};
+                };
+                textSensorCommon text_sensors_common;
 
                 const char *accessCode;
                 const char *rfSerialLookup;
@@ -325,8 +276,12 @@ namespace esphome
 
                 struct zoneType
                 {
-                    uint16_t zone;
+                    vistaECPBinarySensor *binary_sensor;
+                    vistaECPTextSensor *text_sensor;
+                    uint8_t zone;
                     uint64_t time;
+                    uint32_t rfserial;
+                    uint8_t rfloop;
                     uint8_t partition : 7;
                     uint8_t open : 1;
                     uint8_t bypass : 1;
@@ -339,9 +294,14 @@ namespace esphome
                     uint8_t active : 1;
                     uint8_t rflowbat : 1;
                 };
-                zoneType zonetype_INIT = {
+                zoneType zonetype_INIT = 
+                {
+                    .binary_sensor = NULL,
+                    .text_sensor = NULL,
                     .zone = 0,
                     .time = 0,
+                    .rfserial = 0,
+                    .rfloop = 0,
                     .partition = 0,
                     .open = 0,
                     .bypass = 0,
@@ -352,19 +312,23 @@ namespace esphome
                     .trouble = 0,
                     .lowbat = 0,
                     .active = 0,
-                    .rflowbat = 0};
+                    .rflowbat = 0
+                };
 
-                struct
+
+                struct textSensor
                 {
-                    uint8_t bell : 1;
-                    uint8_t wrx1 : 1;
-                    uint8_t wrx2 : 1;
-                    uint8_t loop : 1;
-                    uint8_t duress : 1;
-                    uint8_t panic1 : 1;
-                    uint8_t panic2 : 1;
-                    uint8_t panic3 : 1;
-                } otherSup;
+                    vistaECPTextSensor *text_sensor;
+                    uint8_t partition;
+                    const char * type;
+                };
+                textSensor textSensor_INIT = 
+                {
+                    .text_sensor = NULL,
+                    .partition = 0,
+                    .type = NULL
+                };
+
 
                 uint64_t lowBatteryTime;
 
@@ -405,11 +369,6 @@ namespace esphome
 
                 lightStates currentLightState,
                 previousLightState;
-                enum lrrtype
-                {
-                    user_t,
-                    zone_t
-                };
 
                 struct partitionStateType
                 {
@@ -441,34 +400,34 @@ namespace esphome
 
                 void createZoneFromId(const char * zid,uint8_t p=0);
                 void set_zone_fault(int32_t zone, bool fault);
+                void register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial, uint8_t rf_loop);
+                void register_status_sensor(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, const char * type);
+                void register_zone_text(vistaECPTextSensor *text_sensor, uint8_t partition_number, uint8_t zone_number);
+                void register_text_sensor(vistaECPTextSensor *text_sensor, uint8_t partition, const char * type);
+                void register_ac(vistaECPBinarySensor *binary_sensor) {ac_bin_sensor = binary_sensor;}
+                void register_bat(vistaECPBinarySensor *binary_sensor) {bat_bin_sensor = binary_sensor;}
+
+                void setup() override;
 
             private:
-                std::string previousMsg,
-                previousZoneStatusMsg;
+                std::string previousZoneStatusMsg;
 
-                alarmStatusType fireStatus,
-                panicStatus,
-                alarmStatus;
+                alarmStatusType fireStatus, panicStatus, alarmStatus;
                 uint8_t partitionTargets;
-                bool firstRun;
-
-                struct serialType
-                {
-                    uint16_t zone;
-                    int mask;
-                };
 
                 void createZone(uint16_t z,uint8_t p=0);
       
                 auiCmdType auiCmd;
-                std::vector<zoneType> extZones{};
+                std::vector<zoneType> alarmZones{};
+                vistaECPBinarySensor *ac_bin_sensor = NULL;
+                vistaECPBinarySensor *bat_bin_sensor = NULL;
+
                 std::queue<auiCmdType> auiQueue{};
 
                 zoneType nz;
-
                 zoneType *getZone(uint16_t z);
-                std::string getZoneName(uint16_t zone, bool append=false);
-                serialType getRfSerialLookup(char *serialCode);
+
+                zoneType *getRfSerialLookup(uint32_t serialCode);
 
                 void zoneStatusUpdate(zoneType *zt);
                 void assignPartitionToZone(zoneType *zt);
@@ -477,8 +436,6 @@ namespace esphome
                 lrrstatusFlagType lrrstatusFlags;
                 void refreshStatusFlags(char * cbuf, struct statusFlagType * statusFlags);
                 void refreshLRRStatusFlags(char * cbuf, struct lrrstatusFlagType * LRRstatusFlags); 
-
-                void setup() override;
 
                 void AUIset_panel_time();
 
@@ -499,7 +456,7 @@ namespace esphome
                 void alarm_keypress_partition(std::string keystring, int32_t partition);
                 void send_cmd_bytes(int32_t addr, std::string hexbytes);
 
-                private:
+            private:
                 bool isInt(std::string s, int base);
 
                 int toDec(int n);
@@ -527,7 +484,6 @@ namespace esphome
                 public:
                 void update() override;
 
-                private:
         };
         extern vistaECPHome *alarmPanelPtr;
     } // namespace

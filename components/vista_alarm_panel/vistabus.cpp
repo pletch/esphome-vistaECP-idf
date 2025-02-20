@@ -43,7 +43,6 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
         init_uart(static_cast<uart_port_t>(this->extuartNum),static_cast<gpio_num_t>(this->monitorPin), static_cast<gpio_num_t>(-1));
     }
 
-    //xTaskCreate(uart_evt_task_start, "uart_evt_task", UART_EVT_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-12, &this->uart_evt_task_Handle);
     xTaskCreate(rx_tx_task_start, "uart_rx_tx_task", UART_RX_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-9, &this->rx_tx_task_Handle);
     if (monitorPin != -1)
     {
@@ -54,9 +53,6 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
 bool VistaBus::stop() 
 {
     this->stop_requested = true;
-
-    //vTaskDelete(this->uart_evt_task_Handle);
-
     //monitor_rx_task must be shutdown first and is potentially parked at uartreadbytes.
     //send an FF byte to wake so it shuts down. Must shut down gracefully to free(data).
     char tmp[1];
@@ -148,14 +144,9 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     intr_alloc_flags = ESP_INTR_FLAG_IRAM;
 #endif
 
-    //if (static_cast<int>(tx_pin) == -1)
-    //{      
-        ESP_ERROR_CHECK(uart_driver_install(u_n, RX_BUF_SIZE + 8, 0, 0, NULL, intr_alloc_flags));
-    //}
-    //else
-    //{
-    //    ESP_ERROR_CHECK(uart_driver_install(u_n, RX_BUF_SIZE + 8, 0, 5, &uartevtQueue, intr_alloc_flags));
-    //}
+     
+    ESP_ERROR_CHECK(uart_driver_install(u_n, RX_BUF_SIZE + 8, 0, 0, NULL, intr_alloc_flags));
+
     ESP_ERROR_CHECK(uart_param_config(u_n, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(u_n, tx_pin, rx_pin, -1, -1));
     ESP_ERROR_CHECK(uart_set_rx_timeout(u_n, 4));
@@ -170,7 +161,6 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     {
         ESP_ERROR_CHECK(uart_set_rx_full_threshold(u_n, 2));
         ESP_ERROR_CHECK(uart_set_line_inverse(u_n, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV));
-        //ESP_ERROR_CHECK(uart_enable_intr_mask(u_n, UART_INTR_BRK_DET | UART_INTR_FRAM_ERR | UART_INTR_PARITY_ERR));
     }
 }
 
@@ -478,9 +468,6 @@ void VistaBus::rx_tx_task(void * args)
                 get_Packet(&received_packet,data,1,7,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
-            /*else if ( data[0] == 0x00) 
-            {
-            }*/
             else
             {
                 if (tempbuff_fill == 0 && data[0] == 0) 
@@ -545,9 +532,6 @@ void VistaBus::monitor_rx_task(void * args)
                 int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
                 if (res > 0)
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
-                //memset(tempbuff,'\0', sizeof(tempbuff));
-                //tempbuff_fill = 0;
-                //emit_Packet(rcvd_extPkt.payload,rcvd_extPkt.size,TASK_TAG);
             }
             else if(val >> 8 == 0xF6) //next byte will be header of sending sequence
             {
@@ -559,24 +543,29 @@ void VistaBus::monitor_rx_task(void * args)
                 get_Packet(&rcvd_extPkt, data, 4, rcvd_extPkt.payload[3], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
-                //memset(tempbuff,'\0', sizeof(tempbuff));
-                //tempbuff_fill = 0;
+
             }
             else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //expect response
             {
                 get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
-                //memset(tempbuff,'\0', sizeof(tempbuff));
-                //tempbuff_fill = 0;
+
             }
             else if(val >> 8 == 0x9E && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to 9E command
             {
                 get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
-               //memset(tempbuff,'\0', sizeof(tempbuff));
-                //tempbuff_fill = 0;
+
+            }
+            else if (data[0]==0xFB || 0xFD || 0xF7) //expanders such as 4219 ??=07,FE=08, FB=09, FD=10, F7=11
+            {
+                int res = get_Packet(&rcvd_extPkt, data, 1, 4, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
+                if (res > 0)
+                    xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
+
+                //emit_Packet(rcvd_extPkt.payload,rcvd_extPkt.size,TASK_TAG);
             }
             else if (val == 0) //put byte in temp buffer to emit to log
             {
@@ -590,6 +579,7 @@ void VistaBus::monitor_rx_task(void * args)
                     tempbuff_fill++;
                 }
             }
+
             if (tempbuff_fill == 4)  //don't clutter queue with 1 byte sequences
             {
                 if (tempbuff[0] != cksum)
@@ -619,8 +609,8 @@ void VistaBus::process98(const char * cbuf)
 
     if (cbuf[2] & 1)
     {
-        seq = cbuf[4];
-        type = cbuf[5];
+        seq = cbuf[3];
+        type = cbuf[4];
         for (idx = 0; idx < 9; idx++)
         {
             if (!expander[idx].address)
@@ -645,32 +635,23 @@ void VistaBus::process98(const char * cbuf)
     }
 
     uint8_t lcbuflen = 0;
-    uint8_t expSeq = (seq == 0x20 ? 0x31 : 0x34);
+    uint8_t expSeq = (seq == 0x20 ? 0x34 : 0x31);
 
     // we use zone to either | or & bits depending if in fault or reset
     // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry ,0x00 relay control
     if (type == 0xF1)
     {
         lcbuflen = 4;
-        lcbuf[0] = expander[idx].address;
-        lcbuf[1] = expSeq;
+        lcbuf[0] = 0xFF;
+        lcbuf[1] = 0xFE;
+        lcbuf[2] = expander[idx].address;
+        lcbuf[3] = expSeq;
         // lcbuf[2] = (char) currentFault.relayState;
-        lcbuf[2] = 0;
-        lcbuf[3] = expander[idx].fault; // we send out the current zone state
+        lcbuf[4] = 0; 
+        lcbuf[5] = expander[idx].fault; // we send out the current zone state
     }
     else if (type == 0xF7)
     { // periodic  zone state poll (every 30 seconds) expander
-        // I think the actual sequence looks something like this but I don't have a real 4219 with which to test.  
-        // A 0xFE in checksum would eliminate need to subtract 1 below.
-        // The response should include device address??
-        // The response sequence should also include a 0xF7??
-        //lcbuflen = 5;         
-        //lcbuf[0] = 0xFE;
-        //lcbuf[1] = 1 << (expander[idx].address-6);
-        //lcbuf[2] = expSeq;
-        //lcbuf[3] = 0;
-        //lcbuf[4] = expander[idx].faultBits;
-        //lcbuf[5] = 0; 
         lcbuflen = 4;       //This sequence works but doesn't match what monitor line expected sequence is for parsing for so it must not be correct.
         lcbuf[0] = 0xF0;
         lcbuf[1] = expSeq;
@@ -752,39 +733,6 @@ void VistaBus::setExpAddr(int address)
         return;
     this->expander[idx].address = address;
 }
-/*void VistaBus::uart_evt_task(void * args) //Task for monitoring for UART break/framing error/parity events from TX/RX UART.
-{
-    uart_event_t event;
-    while (1)
-    {
-        if (xQueueReceive(uartevtQueue, (void *)&event, portMAX_DELAY)) 
-        {
-            switch (event.type) 
-            {
-            case UART_PARITY_ERR:
-                //uart_clear_intr_status(static_cast<uart_port_t>(this->extuartNum), UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT);
-                //uart_flush(static_cast<uart_port_t>(this->extuartNum));
-                ESP_LOGI("", "uart rx parity error");
-                break;
-            //Event of UART frame error
-            case UART_FRAME_ERR:
-                //uart_clear_intr_status(static_cast<uart_port_t>(this->extuartNum), UART_INTR_RXFIFO_FULL| UART_INTR_RXFIFO_TOUT);
-                //uart_flush(static_cast<uart_port_t>(this->extuartNum));
-                ESP_LOGI("", "uart rx frame error");
-                break;
-            //Event of UART RX break detected
-            case UART_BREAK:
-                //uart_clear_intr_status(static_cast<uart_port_t>(this->extuartNum), UART_INTR_RXFIFO_FULL | UART_INTR_RXFIFO_TOUT);
-                //uart_flush(static_cast<uart_port_t>(this->extuartNum));
-                ESP_LOGI("", "uart rx break");
-                break;
-            default:
-                ESP_LOGI("", "uart event type: %d", event.type);
-                break;
-            }
-        }
-    }
-}*/
 
 void VistaBus::rx_tx_task_start(void *args)
 {
@@ -798,8 +746,3 @@ void VistaBus::monitor_rx_task_start(void *args)
     tsk->monitor_rx_task(args);
 }
 
-/*void VistaBus::uart_evt_task_start(void *args)
-{
-    VistaBus *tsk = static_cast<VistaBus *>(args);
-    tsk->uart_evt_task(args);
-}*/

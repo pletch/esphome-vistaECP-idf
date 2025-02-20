@@ -165,6 +165,8 @@ namespace esphome
         
         void vistaECPHome::AUIupdateZoneState(zoneType *zt, int p, bool state, uint64_t t)
         {
+            if (zt==NULL)
+                return;
             zt->partition = p;
             zt->time = t;
             if (auiCmd.state == rsopenzones)
@@ -276,14 +278,15 @@ namespace esphome
             }
 
             // clear  bypass/open zones for partition p that were not set above
-            auto it = std::find_if(extZones.begin(), extZones.end(), [&p, &t](zoneType &f)
+            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [&p, &t](zoneType &f)
                     { return (f.partition == p && f.active && f.time != t && (f.open || f.bypass)); });
 
-            while (it != extZones.end())
+
+            while (it != alarmZones.end())
             {
                 AUIupdateZoneState(&(*it), p, false, esp_timer_get_time());
 
-                it = std::find_if(++it, extZones.end(), [&p, &t](zoneType &f)
+                it = std::find_if(++it, alarmZones.end(), [&p, &t](zoneType &f)
                         { return (f.partition == p && f.active && f.time != t && (f.open || f.bypass)); });
             }
             //forceRefreshZones = true; 

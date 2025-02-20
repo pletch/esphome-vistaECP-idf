@@ -15,21 +15,21 @@ const char *HITSTAR = " * ";
 
 // messages to display to home assistant
 
-const char *STATUS_ARMED = "armed_away";
-const char *STATUS_STAY = "armed_home";
-const char *STATUS_NIGHT = "armed_night";
-const char *STATUS_OFF = "disarmed";
-const char *STATUS_ONLINE = "online";
-const char *STATUS_OFFLINE = "offline";
-const char *STATUS_TRIGGERED = "triggered";
-const char *STATUS_READY = "ready";
-const char *STATUS_ARMING = "arming";
-const char *STATUS_PENDING = "pending";
+const char *STATUS_ARMED = "Armed_Away";
+const char *STATUS_STAY = "Armed_Stay";
+const char *STATUS_NIGHT = "Armed_Night";
+const char *STATUS_OFF = "Disarmed";
+const char *STATUS_ONLINE = "Online";
+const char *STATUS_OFFLINE = "Offline";
+const char *STATUS_TRIGGERED = "Triggered";
+const char *STATUS_READY = "Ready";
+const char *STATUS_ARMING = "Arming";
+const char *STATUS_PENDING = "Pending";
 
 // the default ha alarm panel card likes to see "unavailable" instead of not_ready when the system can't be armed
-const char *STATUS_NOT_READY = "not_ready";
+const char *STATUS_NOT_READY = "Not_Ready";
 // const char * STATUS_NOT_READY = "unavailable";
-const char *MSG_ZONE_BYPASS = "zone_bypass_entered";
-const char *MSG_ARMED_BYPASS = "armed_custom_bypass";
-const char *MSG_NO_ENTRY_DELAY = "no_entry_delay";
-const char *MSG_NONE = "no_messages";
+const char *MSG_ZONE_BYPASS = "Zone_Bypass_Entered";
+const char *MSG_ARMED_BYPASS = "Armed_Custom_Bypass";
+const char *MSG_NO_ENTRY_DELAY = "No_Entry_Delay";
+const char *MSG_NONE = "No_Messages";

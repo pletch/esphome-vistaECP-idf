@@ -28,7 +28,7 @@ namespace esphome
         vistaECPHome *alarmPanelPtr;
 
 
-        void vistaECPHome::publishStatusChange(sysState led, bool open, uint8_t partition)
+        /*void vistaECPHome::publishStatusChange(sysState led, bool open, uint8_t partition)
         {
             std::string sensor = "NIL";
             switch (led)
@@ -80,10 +80,10 @@ namespace esphome
                     break;
             };
             publishBinaryState(sensor, partition, open);
-        }
+        }*/
 
 
-        void vistaECPHome::publishBinaryState(const std::string &idstr, uint8_t partition, bool open)
+        /*void vistaECPHome::publishBinaryState(const std::string &idstr, uint8_t partition, bool open)
         {
             std::string id = idstr;
             if (partition)
@@ -94,10 +94,10 @@ namespace esphome
 
             if (it != bMap.end() && (*it)->state != open)
                 (*it)->publish_state(open);
-        }
+        }*/
 
 
-        void vistaECPHome::publishTextState(const std::string &idstr, uint8_t partition, std::string *text)
+        /*void vistaECPHome::publishTextState(const std::string &idstr, uint8_t partition, std::string *text)
         {
             std::string id = idstr;
             if (partition)
@@ -106,7 +106,7 @@ namespace esphome
                                { return ts->get_object_id() == id; });
             if (it != tMap.end() && (*it)->state != *text)
                 (*it)->publish_state(*text);
-        }
+        }*/
 
 
         void vistaECPHome::stop()
@@ -130,11 +130,12 @@ namespace esphome
             partitions = new uint8_t[maxPartitions];
             partitionStates = new partitionStateType[maxPartitions];
             alarmPanelPtr = this;
+            api_connection_state = false;
         }
 
         void vistaECPHome::zoneStatusUpdate(zoneType *zt)
         {
-            if (zoneStatusChangeCallback != NULL)
+            if (zt->text_sensor != NULL)
             {
                 std::string msg, zs1, lb;
                 zs1 = zt->check ? "T" : zt->open ? "O"
@@ -143,168 +144,144 @@ namespace esphome
                                            : "";
                 lb = zt->lowbat || zt->rflowbat ? "L" : "";
                 msg.append(zs1).append(lb);
-                zoneStatusChangeCallback(zt->zone, msg.c_str());
+                zt->text_sensor->process(msg);
             }
 
-            if (zoneStatusChangeBinaryCallback != NULL)
+            if (zt->binary_sensor != NULL)
             {
                 if (zt->zone <= maxZones)
-                {
-                    zoneStatusChangeBinaryCallback(zt->zone, zt->open || zt->check);
+                {                   
+                    zt->binary_sensor->process(zt->open || zt->check);
                 }
                 else
                 {
-                    zoneStatusChangeBinaryCallback(zt->zone, zt->check || zt->open || zt->alarm || zt->trouble);
+                    zt->binary_sensor->process(zt->check || zt->open || zt->alarm || zt->trouble);
                 }
             }
         }
 
 
-        void vistaECPHome::loadZones()
+        void vistaECPHome::register_status_sensor(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, const char * type)
         {
-            for (auto obj : bMap)
-            {
-                createZoneFromId(obj->get_object_id().c_str());
-            }
-
-            for (auto obj : tMap)
-            {
-                createZoneFromId(obj->get_object_id().c_str());
-            }
+            if (strncmp(type,"READY", 3) == 0)
+                status_sensors_partition[partition_number-1].rdy = binary_sensor;
+            else if (strncmp(type, "TROUBLE", 3) == 0)
+                status_sensors_partition[partition_number-1].trbl = binary_sensor;
+            else if (strncmp(type, "BYPASS", 3) == 0)
+                status_sensors_partition[partition_number-1].byp = binary_sensor;
+            else if (strncmp(type, "ARMED_AWAY", 10) == 0)
+                status_sensors_partition[partition_number-1].arma = binary_sensor;
+            else if (strncmp(type, "ARMED_STAY", 10) == 0)
+                status_sensors_partition[partition_number-1].arms = binary_sensor;
+            else if (strncmp(type, "ARMED_INSTANT", 10)== 0)
+                status_sensors_partition[partition_number-1].armi = binary_sensor;
+            else if (strncmp(type, "ARMED_NIGHT", 10)== 0)
+                status_sensors_partition[partition_number-1].armn = binary_sensor;
+            else if (strncmp(type, "ARMED",5)== 0)
+                status_sensors_partition[partition_number-1].arm = binary_sensor;
+            else if (strncmp(type, "CHIME", 3)== 0)
+                status_sensors_partition[partition_number-1].chm = binary_sensor;
+            else if (strncmp(type, "ALARM", 3)== 0)
+                status_sensors_partition[partition_number-1].alm = binary_sensor;
+            else if (strncmp(type, "FIRE", 3)== 0)
+                status_sensors_partition[partition_number-1].chm = binary_sensor;
+            ESP_LOGI("","Registering partition sensor %s for partition %d.",type, partition_number);
         }
 
 
-        void vistaECPHome::createZoneFromId(const char * zid, uint8_t p)
+        void vistaECPHome::register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial, uint8_t rf_loop)
         {
-          char z_text[4];
-          memset(z_text,'\0',sizeof(z_text));
-          int start = 0;
-          int len = 0;
-          bool z_found = false;
-          for (int i = 0; i < strlen(zid); i++)
-          {
-            if((zid[i] < 0x30 || zid[i] > 0x39) && z_found)
-              break;
-            if(zid[i] == 0x5A || zid[i] == 0x7A)
+            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [zone_number](zoneType &f)
+                { return f.zone == zone_number; });
+            if (it != alarmZones.end())
             {
-              start = i+1;
-              z_found = true;
-            }
-            if(zid[i] >= 0x30 && zid[i] <= 0x39 && z_found) 
-            {
-              len++;
-            }
-          }
-          if (z_found && len > 0)
-          {
-            memcpy(z_text,zid+start,len);
-            int z = toInt(z_text, 10);
-            createZone(z, p);
-          }
-        }
-
-
-        void vistaECPHome::createZone(uint16_t z, uint8_t p)
-        {
-            zoneType *zt = getZone(z);
-            if (zt->zone == z)
+                it->binary_sensor = binary_sensor;
+                it->rfserial = rf_serial;
+                it->rfloop = rf_loop;
+                ESP_LOGI("","Adding binary zone sensor.  Zone: %d   rfserial:%lu   rfloop:%d",it->zone, it->rfserial, it->rfloop);
                 return;
-
-            zoneType n;
-            n.zone = z;
-            n.active = true;
-            n.partition = p;
-            n.lowbat = false;
-            n.rflowbat = false;
-            extZones.push_back(n);
-            ESP_LOGD(TAG, "added zone %d", extZones.back().zone);
-            if (zoneStatusChangeCallback != NULL)
-                zoneStatusChangeCallback(z, "C");
-            if (zoneStatusChangeBinaryCallback != NULL)
-                zoneStatusChangeBinaryCallback(z, false);
-        }
-
-
-        std::string vistaECPHome::getZoneName(uint16_t zone, bool append)
-        {
-            std::string c = "z" + std::to_string(zone);
-            auto it = std::find_if(bMap.begin(), bMap.end(), [c](binary_sensor::BinarySensor *bs)
-                               { return bs->get_object_id() == c; });
-            if (it != bMap.end())
-            {
-                if (append)
-                    return std::string((*it)->get_name()).append(" (").append(std::to_string(zone)).append(")");
-                else
-                    return (*it)->get_name();
             }
-            return std::to_string(zone);
+            else 
+            {
+                zoneType zt = zonetype_INIT;
+                zt.binary_sensor = binary_sensor;
+                zt.partition = partition_number;
+                zt.zone = zone_number;
+                zt.rfserial = rf_serial;
+                zt.rfloop = rf_loop;
+                zt.active = true;
+                alarmZones.push_back(zt);
+                ESP_LOGI("","Registering zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
+            } 
         }
 
 
         vistaECPHome::zoneType *vistaECPHome::getZone(uint16_t z)
         {
-            auto it = std::find_if(extZones.begin(), extZones.end(), [&z](zoneType &f)
-                               { return f.zone == z; });
-            if (it != extZones.end())
+    
+            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [=](zoneType &f)
+                { return f.zone == z; });
+            if (it != alarmZones.end())
                 return &(*it);
 
-            return &zonetype_INIT;
+            return NULL;
+
+        }
+    
+
+        vistaECPHome::zoneType *vistaECPHome::getRfSerialLookup(uint32_t serialCode)
+        {
+            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [&serialCode](zoneType &f)
+                { 
+                    return f.rfserial == serialCode; });
+            if (it != alarmZones.end())
+                return &(*it);
+
+            return NULL;
         }
 
 
-        vistaECPHome::serialType vistaECPHome::getRfSerialLookup(char *serialCode)
+        void vistaECPHome::register_zone_text(vistaECPTextSensor *text_sensor, uint8_t partition_number, uint8_t zone_number)
         {
-
-            serialType rf;
-            rf.zone = 0;
-            if (rfSerialLookup != NULL && *rfSerialLookup)
+            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [zone_number](zoneType &f)
+                { return f.zone == zone_number; });
+            if (it != alarmZones.end())
             {
-                std::string serial = serialCode;
-
-                std::string s = rfSerialLookup;
-
-                size_t pos, pos1, pos2;
-                s.append(",");
-                while ((pos = s.find(',')) != std::string::npos)
-                {
-                    std::string token, token1, token2, token3;
-                    token = s.substr(0, pos);
-                    pos1 = token.find(':');
-                    pos2 = token.find(':', pos1 + 1);
-                    token1 = token.substr(0, pos1); // serial
-                    if (pos2 != std::string::npos)
-                    {
-                        token2 = token.substr(pos1 + 1, pos2 - pos1 - 1); // loop
-                        token3 = token.substr(pos2 + 1);                  // zone
-                    }
-                    if (token1 == serial && token2 != "" && token3 != "")
-                    {
-                        rf.zone = toInt(token3, 10);
-                        int8_t loop = toInt(token2, 10);
-                        switch (loop)
-                        {
-                            case 1:
-                                rf.mask = 0x80;
-                                break;
-                            case 2:
-                                rf.mask = 0x20;
-                                break;
-                            case 3:
-                                rf.mask = 0x10;
-                                break;
-                            case 4:
-                                rf.mask = 0x40;
-                                break;
-                            default:
-                                rf.mask = 0x80;
-                                break;
-                        }
-                    break;
-                    }
-                    s.erase(0, pos + 1); /* erase() function store the current positon and move to next token. */
-                }
+                it->text_sensor = text_sensor;
+                ESP_LOGI("","Adding text zone sensor.  Zone: %d",it->zone);
+                return;
             }
-            return rf;
+            else 
+            {
+                zoneType zt = zonetype_INIT;
+                zt.binary_sensor = NULL;
+                zt.text_sensor = text_sensor;
+                zt.partition = partition_number;
+                zt.zone = zone_number;
+                zt.active = true;
+                alarmZones.push_back(zt);
+                ESP_LOGI("","Registering zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
+            } 
+        }
+
+
+        void vistaECPHome::register_text_sensor(vistaECPTextSensor *text_sensor, uint8_t partition_number, const char * type)
+        {
+            if (strncmp(type,"SYSTEM_STATUS", 13) == 0)
+                text_sensors_partition[partition_number-1].system_status = text_sensor;
+            else if (strncmp(type, "LRR_MESSAGES", 12) == 0)
+                text_sensors_common.lrr_messages = text_sensor;
+            else if (strncmp(type, "RF_MESSAGES", 11) == 0)
+                text_sensors_common.rf_messages = text_sensor;
+            else if (strncmp(type, "LINE1", 5) == 0)
+                text_sensors_partition[partition_number-1].line1 = text_sensor;
+            else if (strncmp(type, "LINE2", 5) == 0)
+                text_sensors_partition[partition_number-1].line2 = text_sensor;
+            else if (strncmp(type, "ZONE_STATUS", 11)== 0)
+                text_sensors_common.zone_status = text_sensor;
+            else if (strncmp(type, "BEEPS", 5) == 0)
+                text_sensors_partition[partition_number-1].beeps = text_sensor;
+            ESP_LOGI("","Registering text sensor %s for partition %d.",type, partition_number);
         }
 
 
@@ -312,10 +289,7 @@ namespace esphome
         {
             ESP_LOGD(TAG, "Start setup: Free heap: (%lu)", esp_get_free_heap_size());
 
-            bMap = App.get_binary_sensors();
-            tMap = App.get_text_sensors();
             set_update_interval(250); // set interval to fire in main loop task
-            loadZones();
 
             register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
@@ -329,27 +303,27 @@ namespace esphome
             register_service(&vistaECPHome::alarm_trigger_fire, "alarm_trigger_fire", {"code", "partition"});
             register_service(&vistaECPHome::set_zone_fault, "set_zone_fault", {"zone", "fault"});
 
-            systemStatusChangeCallback(STATUS_ONLINE, 1);
-            statusChangeCallback(sac, true, 1);
-
-            vistabus.begin(uart1, rxPin, txPin, uart2, monitorPin);
-            vistabus.emulateLRR(lrrSupervisor);
-
             // Disabling this for now.
             // set addresses of expander emulators
             //for (int x = 0; x < 9; x++)
             //{
             //  vista.zoneExpanders[x].expansionAddr = expanderAddr[x];
             //}
-
+            if(text_sensors_partition[0].system_status != NULL)
+                text_sensors_partition[0].system_status->process(STATUS_ONLINE);
             for (uint8_t p = 0; p < maxPartitions; p++)
             {
                 partitions[p] = 0;
-                systemStatusChangeCallback(STATUS_NOT_READY, p + 1);
-                beepsCallback("0", p + 1);
+                if (text_sensors_partition[p].system_status != NULL)
+                    text_sensors_partition[p].system_status->process(STATUS_NOT_READY);             
+                if (text_sensors_partition[p].beeps != NULL)
+                    text_sensors_partition[p].beeps->process("0");
             }
-            lrrMsgChangeCallback(" ");
-            rfMsgChangeCallback(" ");
+            if (text_sensors_common.lrr_messages != NULL)
+                text_sensors_common.lrr_messages->process(" ");
+            if (text_sensors_common.rf_messages != NULL)
+                text_sensors_common.rf_messages->process(" ");
+\
             esp_chip_info_t info;
             esp_chip_info(&info);
 
@@ -361,8 +335,10 @@ namespace esphome
                 (void *)this,              // Task input parameter
                 10,                        // Priority of the task
                 &processReceiveQHandle              // Task handle.
-            );     
-            ESP_LOGD(TAG, "Completed setup. Free heap=%lu", esp_get_free_heap_size());
+            );
+            vistabus.emulateLRR(lrrSupervisor);    
+            vistabus.begin(uart1, rxPin, txPin, uart2, monitorPin);
+            ESP_LOGD(TAG, "Completed setup. Free heap=%lu", esp_get_free_heap_size()); 
         }
 
         void vistaECPHome::alarm_disarm(std::string code, int32_t partition)
@@ -405,6 +381,18 @@ namespace esphome
             if (addr)
             {
                 vistabus.setExpAddr(addr);
+            }
+        }
+
+        void vistaECPHome::set_maxPartitions(uint8_t mp)
+        {
+            maxPartitions = mp;
+            for (int i=0; i < mp; i++)
+            {
+                textSensorPartition ts;
+                statusSensorPartition ss;
+                text_sensors_partition.push_back(ts);
+                status_sensors_partition.push_back(ss);
             }
         }
 
@@ -550,8 +538,10 @@ namespace esphome
                     p1 = sub1 + std::string(buf) + sub2;
                 }
             }
-            line1DisplayCallback(p1.c_str(), partition);
-            line2DisplayCallback(p2.c_str(), partition);
+            if (text_sensors_partition[partition-1].line1 != NULL)
+                text_sensors_partition[partition-1].line1->process(p1);
+            if (text_sensors_partition[partition-1].line2 != NULL)
+                text_sensors_partition[partition-1].line2->process(p2);
         }
 
     /*std::string vistaECPHome::getNameFromPrompt(char *p1, char *p2)  <-- not used for anything at this time. 
@@ -603,6 +593,10 @@ namespace esphome
                 int z = toInt(z_text, 10);
                 ESP_LOGD(TAG, "zone match=%d", z);
                 return z;
+            }
+            else
+            {
+                ESP_LOGD(TAG, "No zone match");
             }
             return 0;
         }

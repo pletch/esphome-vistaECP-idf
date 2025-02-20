@@ -1,24 +1,23 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.const import CONF_ID,CONF_BINARY_SENSORS,CONF_TEXT_SENSORS
 from esphome.core import CORE
 import os
 import logging
-import pathlib
 from esphome.components.esp32 import get_esp32_variant
-from esphome.components.esp32.const import ( VARIANT_ESP32C3 )
 from esphome.helpers import copy_file_if_changed, sanitize, snake_case
-from esphome.components import binary_sensor,text_sensor
+from esphome.components import binary_sensor
+from esphome.const import (
+    CONF_ID
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-component_ns = cg.esphome_ns.namespace('alarm_panel')
-AlarmComponent = component_ns.class_('vistaECPHome', cg.PollingComponent)
+alarm_panel_ns = cg.esphome_ns.namespace('alarm_panel')
+AlarmComponent = alarm_panel_ns.class_('vistaECPHome', cg.PollingComponent)
 
 CONF_ACCESSCODE="accesscode"
 CONF_MAXZONES="maxzones"
 CONF_MAXPARTITIONS="maxpartitions"
-CONF_RFSERIAL="rfseriallookup"
 CONF_DEFAULTPARTITION="defaultpartition"
 CONF_DEBUGLEVEL="vistadebuglevel"
 CONF_KEYPAD1="keypadaddr1"
@@ -40,78 +39,14 @@ CONF_TTL="ttl"
 CONF_QUICKARM="quickarm"
 CONF_LRR="lrrsupervisor"
 CONF_CLEAN="clean_build"
-CONF_FAULT="fault_text"
-CONF_BYPASS="bypas_text"
-CONF_ALARM="alarm_text"
-CONF_FIRE="fire_text"
-CONF_CHECK="check_text"
-CONF_TRBL="trbl_text"
-CONF_HITSTAR="hitstar_text"
-CONF_TYPE_ID="code"
-
-systemstatus= '''[&](std::string statusCode,uint8_t partition) {
-      alarm_panel::alarmPanelPtr->publishTextState("ss_",partition,&statusCode); 
-    }'''
-line1 ='''[&](std::string msg,uint8_t partition) {
-      alarm_panel::alarmPanelPtr->publishTextState("ln1_",partition,&msg);
-    }'''
-line2='''[&](std::string msg,uint8_t partition) {
-      alarm_panel::alarmPanelPtr->publishTextState("ln2_",partition,&msg);
-    }'''
-beeps='''[&](std::string  beeps,uint8_t partition) {
-      alarm_panel::alarmPanelPtr->publishTextState("bp_",partition,&beeps); 
-    }'''
-zoneext='''[&](std::string msg) {
-      alarm_panel::alarmPanelPtr->publishTextState("zs",0,&msg);  
-    }'''
-lrr='''[&](std::string msg) {
-      alarm_panel::alarmPanelPtr->publishTextState("lrr",0,&msg);  
-    }''' 
-rf='''[&](std::string msg) {
-      alarm_panel::alarmPanelPtr->publishTextState("rf",0,&msg);  
-    }'''
-statuschange='''[&](alarm_panel::sysState led,bool open,uint8_t partition) {
-     alarm_panel::alarmPanelPtr->publishStatusChange(led,open,partition);
-    }'''
-zonebinary='''[&](int zone, bool open) {
-      std::string sensor = "z" + std::to_string(zone) ;
-      alarm_panel::alarmPanelPtr->publishBinaryState(sensor,0,open);    
-    }'''
-zonestatus='''[&](int zone, std::string open) {
-      std::string sensor = "z" + std::to_string(zone);
-      alarm_panel::alarmPanelPtr->publishTextState(sensor,0,&open); 
-    }''' 
-relay='''[&](uint8_t addr,int channel,bool open) {
-      std::string sensor = "r"+std::to_string(addr) + std::to_string(channel);
-      alarm_panel::alarmPanelPtr->publishBinaryState(sensor,0,open);       
-    }'''
-
-# ALARM_PANEL_BINARY_SENSOR_SCHEMA = cv.maybe_simple_value(
-#     {
-#         cv.Required(CONF_ID): cv.use_id(binary_sensor.BinarySensor),
-#         cv.Optional(CONF_TYPE_ID): cv.string_strict,  
-#     },
-#     key=CONF_ID,
-
-# )
-
-# ALARM_PANEL_TEXT_SENSOR_SCHEMA = cv.maybe_simple_value(
-#     {
-#         cv.Required(CONF_ID): cv.use_id(text_sensor.TextSensor),
-#         cv.Optional(CONF_TYPE_ID): cv.string_strict,  
-#     },
-#     key=CONF_ID,
-
-# )
 
 CONFIG_SCHEMA = cv.Schema(
     {
     cv.GenerateID(): cv.declare_id(AlarmComponent),
     cv.Optional(CONF_ACCESSCODE,default=""): cv.string  ,
-    cv.Optional(CONF_MAXZONES,default=32): cv.int_, 
-    cv.Optional(CONF_MAXPARTITIONS,default=1): cv.int_, 
-    cv.Optional(CONF_RFSERIAL,default=""): cv.string, 
-    cv.Optional(CONF_DEFAULTPARTITION): cv.int_, 
+    cv.Optional(CONF_MAXPARTITIONS,default=1): cv.int_range(min=1, max=8),
+    cv.Optional(CONF_MAXZONES,default=32): cv.int_range(min=8, max=128), 
+    cv.Optional(CONF_DEFAULTPARTITION, default=1): cv.int_range(min=1, max=8),
     cv.Optional(CONF_DEBUGLEVEL): cv.int_, 
     cv.Optional(CONF_KEYPAD1,default=17): cv.int_, 
     cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
@@ -132,13 +67,6 @@ CONFIG_SCHEMA = cv.Schema(
     cv.Optional(CONF_QUICKARM): cv.boolean, 
     cv.Optional(CONF_LRR): cv.boolean, 
     cv.Optional(CONF_CLEAN,default='false'): cv.boolean,     
-    cv.Optional(CONF_FAULT): cv.string  ,
-    cv.Optional(CONF_BYPASS): cv.string  ,
-    cv.Optional(CONF_ALARM): cv.string  ,
-    cv.Optional(CONF_FIRE): cv.string  ,  
-    cv.Optional(CONF_CHECK): cv.string  ,
-    cv.Optional(CONF_TRBL): cv.string  ,   
-    cv.Optional(CONF_HITSTAR): cv.string
     }
 )
 
@@ -156,8 +84,6 @@ async def to_code(config):
         cg.add(var.set_maxZones(config[CONF_MAXZONES]));
     if CONF_MAXPARTITIONS in config:
         cg.add(var.set_maxPartitions(config[CONF_MAXPARTITIONS]));
-    if CONF_RFSERIAL in config:
-        cg.add(var.set_rfSerialLookup(config[CONF_RFSERIAL]));
     if CONF_DEFAULTPARTITION in config:
         cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]));
     if CONF_DEBUGLEVEL in config:
@@ -188,51 +114,8 @@ async def to_code(config):
         cg.add(var.set_lrrSupervisor(config[CONF_LRR]));      
     if CONF_AUIADDR in config:
         cg.add(var.set_auiaddr(config[CONF_AUIADDR]));
-    if CONF_FAULT in config:
-        cg.add(var.set_text(1,config[CONF_FAULT])); 
-    if CONF_BYPASS in config:
-        cg.add(var.set_text(2,config[CONF_BYPASS])); 
-    if CONF_ALARM in config:
-        cg.add(var.set_text(3,config[CONF_ALARM])); 
-    if CONF_FIRE in config:
-        cg.add(var.set_text(4,config[CONF_FIRE])); 
-    if CONF_CHECK in config:
-        cg.add(var.set_text(5,config[CONF_CHECK])); 
-    if CONF_TRBL in config:
-        cg.add(var.set_text(6,config[CONF_TRBL]));  
-    if CONF_HITSTAR in config:
-        cg.add(var.set_text(7,config[CONF_HITSTAR]));  
 
-        
-    cg.add(var.onSystemStatusChange(cg.RawExpression(systemstatus)))   
-    cg.add(var.onLine1DisplayChange(cg.RawExpression(line1))) 
-    cg.add(var.onLine2DisplayChange(cg.RawExpression(line2)))    
-    cg.add(var.onBeepsChange(cg.RawExpression(beeps)))    
-    cg.add(var.onZoneExtendedStatusChange(cg.RawExpression(zoneext)))   
-    cg.add(var.onLrrMsgChange(cg.RawExpression(lrr))) 
-    cg.add(var.onRfMsgChange(cg.RawExpression(rf)))    
-    cg.add(var.onStatusChange(cg.RawExpression(statuschange)))    
-    cg.add(var.onZoneStatusChangeBinarySensor(cg.RawExpression(zonebinary)))    
-    cg.add(var.onZoneStatusChange(cg.RawExpression(zonestatus)))
-    cg.add(var.onRelayStatusChange(cg.RawExpression(relay)))      
     await cg.register_component(var, config)
-
-    # for sensor in config.get(CONF_BINARY_SENSORS, []):
-    #     bs = await cg.get_variable(sensor[CONF_ID])
-    #     if CONF_TYPE_ID in sensor and sensor[CONF_TYPE_ID]:
-    #         cg.add(bs.set_object_id(sanitize(snake_case(sensor[CONF_TYPE_ID]))))
-    #     elif sensor[CONF_ID].is_manual:
-    #         cg.add(bs.set_object_id(sanitize(snake_case(sensor[CONF_ID].id))))
-    #     cg.add(bs.set_disabled_by_default(False))
-    #     cg.add(bs.set_publish_initial_state(True))
-
-    # for sensor in config.get(CONF_TEXT_SENSORS, []):
-    #     ts = await cg.get_variable(sensor[CONF_ID])
-    #     if CONF_TYPE_ID in sensor and sensor[CONF_TYPE_ID]:
-    #         cg.add(ts.set_object_id(sanitize(snake_case(sensor[CONF_TYPE_ID]))))
-    #     elif sensor[CONF_ID].is_manual:
-    #         cg.add(ts.set_object_id(sanitize(snake_case(sensor[CONF_ID].id))))
-    #     cg.add(ts.set_disabled_by_default(False))   
     
 def real_clean_build():
     import shutil

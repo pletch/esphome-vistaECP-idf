@@ -1,106 +1,90 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome import automation
-from esphome.const import CONF_ID, CONF_LAMBDA, CONF_STATE,CONF_PUBLISH_INITIAL_STATE
-
-from esphome.core import CORE, coroutine_with_priority
-from esphome.helpers import sanitize, snake_case
 from esphome.components import binary_sensor
-from esphome.const import (
-    CONF_DELAY,
-    CONF_NAME,
-    CONF_DEVICE_CLASS,
-    CONF_ENTITY_CATEGORY,
-    CONF_FILTERS,
-    CONF_ICON,
-    CONF_ID,
-    CONF_INVALID_COOLDOWN,
-    CONF_INVERTED,
-    CONF_MAX_LENGTH,
-    CONF_MIN_LENGTH,
-    CONF_ON_CLICK,
-    CONF_ON_DOUBLE_CLICK,
-    CONF_ON_MULTI_CLICK,
-    CONF_ON_PRESS,
-    CONF_ON_RELEASE,
-    CONF_ON_STATE,
-    CONF_PUBLISH_INITIAL_STATE,
-    CONF_STATE,
-    CONF_TIMING,
-    CONF_TRIGGER_ID,
-    CONF_INTERNAL,
-    CONF_DISABLED_BY_DEFAULT,
-
+from .. import (
+    alarm_panel_ns,
+    AlarmComponent,
+    CONF_MAXPARTITIONS,
+    CONF_MAXZONES
 )
-from .. import component_ns,AlarmComponent
+DEPENDENCIES = ["vista_alarm_panel"]
+VistaBinarySensor = alarm_panel_ns.class_("VistaBinarySensor", binary_sensor.BinarySensor)
 
-CONF_TYPE_ID = "id_code"
-CONF_PARTITION="partition"
 CONF_ALARM_ID = "alarm_id"
 
-AlarmBinarySensor = component_ns.class_(
-    "AlarmBinarySensor", binary_sensor.BinarySensor, cg.Component
-)
+STATUS_SENSORS = [
+    "READY",
+    "TROUBLE",
+    "BYPASS",
+    "ARMED",
+    "ARMED_AWAY",
+    "ARMED_STAY",
+    "ARMED_INSTANT",
+    "ARMED_NIGHT",
+    "AC_POWER",
+    "CHIME",
+    "ALARM",
+    "BATTERY",
+    "FIRE"
+]
 
+PANEL_SENSORS = [
+    "AC_POWER",
+    "BATTERY"
+]
 
-CONFIG_SCHEMA = (
-    binary_sensor.binary_sensor_schema(AlarmBinarySensor)
-    .extend(
+CONF_ZONE = "zone"
+CONF_PARTITION = "partition"
+CONF_RFSERIAL = "rf_serial"
+CONF_RFLOOP = "rf_loop"
+CONF_STATUS_SENSOR = "status_indicator"
+
+def _validate(value):
+    if CONF_ZONE in value:
+        if ((CONF_RFSERIAL in value and CONF_RFLOOP not in value ) or 
+            (CONF_RFLOOP in value and CONF_RFSERIAL not in value )) :
+            raise cv.Invalid("rf_serial: and rf_loop: must both be specified for RF Zone")
+    if CONF_ZONE in value and CONF_STATUS_SENSOR in value :
+        raise cv.Invalid("Valid sensor config must include only one of either zone: or status_indicator:. Both are specified.")
+    if CONF_ZONE not in value and CONF_STATUS_SENSOR not in value :
+        raise cv.Invalid("Valid sensor config must include either zone: or status_indicator:. Neither are specified.")
+    if CONF_STATUS_SENSOR in value and value[CONF_STATUS_SENSOR] not in PANEL_SENSORS and CONF_PARTITION not in value:
+        raise cv.Invalid(value[CONF_STATUS_SENSOR] + " must be specified with partition value")
+    if CONF_PARTITION in value and value[CONF_PARTITION] > value[CONF_MAXPARTITIONS]:
+        raise cv.Invalid("partition: " + value[CONF_PARTITION] + " is greater than maxpartitions: " + value[CONF_MAXPARTITIONS] + " [default=1 if not in config]")
+    if CONF_ZONE in value and value[CONF_ZONE] > value[CONF_MAXZONES]:
+        raise cv.Invalid("zone: " + value[CONF_ZONE] + " is greater than maxpartitions: " + value[CONF_MAXZONES] + " [default=32 if not in config]")
+    return value
+
+CONFIG_SCHEMA = cv.All(binary_sensor.binary_sensor_schema(VistaBinarySensor).extend(
         {
-            cv.Optional(CONF_TYPE_ID, default=""): cv.string_strict,  
-            cv.Optional(CONF_LAMBDA): cv.returning_lambda,
-            cv.Optional(CONF_PARTITION,default=0): cv.int_,
             cv.GenerateID(CONF_ALARM_ID): cv.use_id(AlarmComponent),
+            cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=8),
+            cv.Optional(CONF_ZONE): cv.int_range(min=1, max=128),
+            cv.Optional(CONF_RFSERIAL): cv.int_range(min=1, max=9999999),
+            cv.Optional(CONF_RFLOOP): cv.int_range(min=1, max=4),
+            cv.Optional(CONF_STATUS_SENSOR): cv.one_of(*STATUS_SENSORS, upper=True),
+            cv.Optional(CONF_MAXPARTITIONS,default=1): cv.int_range(min=1, max=8),
+            cv.Optional(CONF_MAXZONES,default=32): cv.int_range(min=8, max=128)
         }
-    )
-    .extend(cv.COMPONENT_SCHEMA)
+    ),
+    _validate,
 )
-
-
-async def setup_entity_alarm(var, config):
-    """Set up custom properties for an alarm sensor"""
-
-
-    paren = await cg.get_variable(config[CONF_ALARM_ID])
-
-    if config.get(CONF_TYPE_ID):
-        cg.add(var.set_object_id(sanitize(snake_case(config[CONF_TYPE_ID]))))
-        cg.add(paren.createZoneFromId(var.get_object_id().c_str(),config[CONF_PARTITION]))
-    elif config[CONF_ID] and config[CONF_ID].is_manual:
-        cg.add(var.set_object_id(sanitize(snake_case(config[CONF_ID].id))))
-        cg.add(paren.createZoneFromId(var.get_object_id().c_str(),config[CONF_PARTITION]))
-
-    cg.add(var.set_publish_initial_state(True))
-
 
 
 async def to_code(config):
-    cg.add_define("TEMPLATE_ALARM")
     var = await binary_sensor.new_binary_sensor(config)
-    await setup_entity_alarm(var,config)
+    hub = await cg.get_variable(config[CONF_ALARM_ID])
+    await cg.register_parented(var, hub)
 
-    await cg.register_component(var, config)
-       
-    if CONF_LAMBDA in config:
-        template_ = await cg.process_lambda(
-            config[CONF_LAMBDA], [], return_type=cg.optional.template(bool)
-        )
-        cg.add(var.set_template(template_))
-
-
-@automation.register_action(
-    "binary_sensor.alarm.publish",
-    binary_sensor.BinarySensorPublishAction,
-    cv.Schema(
-        {
-            cv.Required(CONF_ID): cv.use_id(binary_sensor.BinarySensor),
-            cv.Required(CONF_STATE): cv.templatable(cv.boolean),
-        }
-    ),
-)
-async def binary_sensor_alarm_publish_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    var = cg.new_Pvariable(action_id, template_arg, paren)
-    template_ = await cg.templatable(config[CONF_STATE], args, bool)
-    cg.add(var.set_state(template_))
-    return var
+    if CONF_ZONE in config:
+        if CONF_RFSERIAL in config and CONF_RFLOOP in config:
+            cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],config[CONF_RFSERIAL],config[CONF_RFLOOP]))
+        else:
+            cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0))
+    elif (config[CONF_STATUS_SENSOR] == "AC_POWER"):
+        cg.add(hub.register_ac(var))
+    elif (config[CONF_STATUS_SENSOR] == "BATTERY"):
+        cg.add(hub.register_bat(var))
+    else:
+        cg.add(hub.register_status_sensor(var,config[CONF_PARTITION], config[CONF_STATUS_SENSOR]))

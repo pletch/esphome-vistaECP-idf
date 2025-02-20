@@ -1,93 +1,65 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome import automation
-from esphome.components import mqtt, web_server,text_sensor
-from esphome.helpers import sanitize, snake_case
-from esphome.components.text_sensor import TextSensorPublishAction
-from esphome.const import (
-    CONF_DEVICE_CLASS,
-    CONF_ENTITY_CATEGORY,
-    CONF_FILTERS,
-    CONF_ICON,
-    CONF_ID,
-    CONF_ON_VALUE,
-    CONF_ON_RAW_VALUE,
-    CONF_TRIGGER_ID,
-    CONF_MQTT_ID,
-    CONF_WEB_SERVER_ID,
-    CONF_NAME,
-    CONF_STATE,
-    CONF_LAMBDA,
-    CONF_STATE,
-    CONF_FROM,
-    CONF_TO,
-    CONF_INTERNAL,
-    CONF_DISABLED_BY_DEFAULT,
+from esphome.components import text_sensor
+from .. import (
+    alarm_panel_ns,
+    AlarmComponent,
+    CONF_MAXPARTITIONS,
+    CONF_MAXZONES
 )
-from .. import component_ns,AlarmComponent
+DEPENDENCIES = ["vista_alarm_panel"]
+VistaTextSensor = alarm_panel_ns.class_("VistaTextSensor", text_sensor.TextSensor)
 
-from esphome.core import CORE, coroutine_with_priority
-
-CONF_TYPE_ID = "id_code"
-CONF_PARTITION="partition"
 CONF_ALARM_ID = "alarm_id"
 
-AlarmTextSensor = component_ns.class_(
-    "AlarmTextSensor", text_sensor.TextSensor, cg.PollingComponent
-)
+TTYPES = [
+    "ZONE",
+    "SYSTEM_STATUS",
+    "LRR_MESSAGES",
+    "RF_MESSAGES",
+    "LINE1",
+    "LINE2",
+    "ZONE_STATUS",
+    "BEEPS"
+]
 
-CONFIG_SCHEMA = (
-    text_sensor.text_sensor_schema()
-    .extend(
+CONF_ZONE = "zone"
+CONF_PARTITION = "partition"
+CONF_TYPE = "type"
+
+def _validate(value):
+    if value[CONF_TYPE] == "ZONE":
+        if CONF_ZONE not in value or CONF_PARTITION not in value:
+            raise cv.Invalid("type: \"zone\" requires both zone: and partition:")
+    if value[CONF_TYPE] != "ZONE" and CONF_ZONE in value:
+        raise cv.Invalid("zone: parameter only valid with type: \"zone\"")
+    if CONF_PARTITION in value and value[CONF_PARTITION] > value[CONF_MAXPARTITIONS]:
+        raise cv.Invalid("partition: " + value[CONF_PARTITION] + " is greater than maxpartitions: " + value[CONF_MAXPARTITIONS] + " [default=1 if not in config]")
+    if CONF_ZONE in value and value[CONF_ZONE] > value[CONF_MAXZONES]:
+        raise cv.Invalid("zone: " + value[CONF_ZONE] + " is greater than maxpartitions: " + value[CONF_MAXZONES] + " [default=32 if not in config]")
+    return value
+
+CONFIG_SCHEMA = cv.All(text_sensor.text_sensor_schema(VistaTextSensor).extend(
         {
-            cv.Optional(CONF_TYPE_ID, default=""): cv.string_strict,  
-            cv.GenerateID(): cv.declare_id(AlarmTextSensor),
-            cv.Optional(CONF_LAMBDA): cv.returning_lambda,
-            cv.Optional(CONF_PARTITION,default=0): cv.int_,
             cv.GenerateID(CONF_ALARM_ID): cv.use_id(AlarmComponent),
-        }
-    )
-    .extend(cv.polling_component_schema("60s"))
-)
-
-async def setup_entity_alarm(var, config):
-    """Set up custom properties for an alarm sensor"""
-    paren = await cg.get_variable(config[CONF_ALARM_ID])
-    if config.get(CONF_TYPE_ID):
-        cg.add(var.set_object_id(sanitize(snake_case(config[CONF_TYPE_ID]))))
-        cg.add(paren.createZoneFromId(var.get_object_id().c_str(),config[CONF_PARTITION]))
-    elif config[CONF_ID] and config[CONF_ID].is_manual:
-        cg.add(var.set_object_id(sanitize(snake_case(config[CONF_ID].id))))
-        cg.add(paren.createZoneFromId(var.get_object_id().c_str(),config[CONF_PARTITION]))
-
-async def to_code(config):
-    cg.add_define("TEMPLATE_ALARM")
-    var = await text_sensor.new_text_sensor(config)
-    await setup_entity_alarm(var,config)
-
-    await cg.register_component(var, config)
-
-        
-    if CONF_LAMBDA in config:
-        template_ = await cg.process_lambda(
-            config[CONF_LAMBDA], [], return_type=cg.optional.template(cg.std_string)
-        )
-        cg.add(var.set_template(template_))
-
-
-@automation.register_action(
-    "text_sensor.alarm.publish",
-    TextSensorPublishAction,
-    cv.Schema(
-        {
-            cv.Required(CONF_ID): cv.use_id(text_sensor.TextSensor),
-            cv.Required(CONF_STATE): cv.templatable(cv.string_strict),
+            cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=4),
+            cv.Optional(CONF_ZONE): cv.int_range(min=1, max=128),
+            cv.Required(CONF_TYPE): cv.one_of(*TTYPES, upper=True),
+            cv.Optional(CONF_MAXPARTITIONS,default=1): cv.int_range(min=1, max=8),
+            cv.Optional(CONF_MAXZONES,default=32): cv.int_range(min=8, max=128)
         }
     ),
+    _validate,
 )
-async def text_sensor_alarm_publish_to_code(config, action_id, template_arg, args):
-    paren = await cg.get_variable(config[CONF_ID])
-    var = cg.new_Pvariable(action_id, template_arg, paren)
-    template_ = await cg.templatable(config[CONF_STATE], args, cg.std_string)
-    cg.add(var.set_state(template_))
-    return var
+
+async def to_code(config):
+    var = await text_sensor.new_text_sensor(config)
+    hub = await cg.get_variable(config[CONF_ALARM_ID])
+    await cg.register_parented(var, hub)
+
+    if CONF_ZONE in config:
+        cg.add(hub.register_zone_text(var,config[CONF_PARTITION], config[CONF_ZONE]))
+    else:
+        if CONF_PARTITION not in config:
+            config[CONF_PARTITION] = 0
+        cg.add(hub.register_text_sensor(var,config[CONF_PARTITION],config[CONF_TYPE]))
