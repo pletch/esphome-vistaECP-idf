@@ -82,7 +82,7 @@ wifi:
   fast_connect: true
 
 time:
- - platform: sntp
+  - platform: homeassistant
   
 # Enable logging
 logger:
@@ -97,20 +97,26 @@ ota:
 
 api:
   port: 6053
+
 ######################################################################## 
 # Edit binary and text sensors below to suit your alarm setup.
-# You can safely add or remove any sensor as needed. 
-# Examples are provided for both hardwired and RF zones.  
+# You can safely add or remove any sensor as needed.
+# 
+# Examples are provided for both hardwired and RF zones.
+#  
 # Enroll your RF serial devices using the rf_serial and rf_loop parameters.
-# For most devices loop1 is used such as 5800pir, other devices such as 5816 will use loop2.  Please refer to your
-# RF device programming (*56 program) to see what loop and zones are assigned to your RF devices. 
+# For most devices loop1 is used such as 5800pir, other devices such as 5816 will use loop2.  
+# Please refer to your RF device programming (*56 program) to see what 
+# loop and zones are assigned to your RF devices.  
+#
+# !!Do not include leading zeros in rf_serial!!
+#
 # You can refer to the pdf link below for more details on loop numbers 
 # https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf
-binary_sensor:
 
+binary_sensor:
 ### zone sensors ###
 # open/close status for each zone 
-# zone id code = z+zone number
 #  - platform: vista_alarm_panel
 #    id: z8  
 #    name: "Flood Sensor"
@@ -123,7 +129,7 @@ binary_sensor:
 #    name: "Front Door"
 #    partition: 1
 #    zone: 9
-#    rf_serial: 233353
+#    rf_serial: 231357
 #    rf_loop: 2
 #    device_class: door   
 
@@ -207,8 +213,8 @@ binary_sensor:
 # a text sensor using type: zone. Output values: (O=open, B=bypass,T=trbl or check,A=alarm)
 # Other general text sensors are available.
 # type:
-#    lrr = long range radio messages
-#    rf = rf messages
+#    lrr_messages = long range radio messages
+#    rf_messages = rf messages
 #    line1 = keypad prompt line 1 displayed messages
 #    line2 = keypad prompt line 2 displayed messages
 #    zone_status = combined status for zones with messages
@@ -254,9 +260,6 @@ text_sensor:
     icon: "mdi:alert-box"    
 
 # virtual lcd keypad line1 and line2 messages for each partition   
-# partition line1 id code = ln1_ + partition number
-# partition line2 id code = ln2_ + partition number
-# partition 1
   - platform: vista_alarm_panel
     name: "Line1"
     id: ln1_1
@@ -269,14 +272,12 @@ text_sensor:
     type: "line2"    
 
 # zone status messages bypas/open/alarm
-# zone status id code = zs
   - platform: vista_alarm_panel
     name: "Zone Status" 
     id: zs
     type: "zone_status"
 
-# system beeps
-# beeps id code = bp_ + partition number     
+# system beeps   
   - platform: vista_alarm_panel
     name: "Beeps"  
     id: bp_1
@@ -296,13 +297,6 @@ text_sensor:
  # end of panel sensor setup - no need to edit anything below.
 ##############################################################################
 
-  - platform: debug
-    device:
-      name: "Device Info"
-    reset_reason:
-      name: "Reset Reason"
-
-
 switch:
   - platform: template
     name: "$name Connection"
@@ -321,18 +315,3 @@ switch:
     id: restart_switch
   - platform: safe_mode
     name: "Safe Mode"   
-
-#debug:
-#  update_interval: 300s
-
-#sensor:
-#  - platform: debug
-#    free:
-#      name: "Heap Free"
-#    block:
-#      name: "Heap Max Block"
-#    loop_time:
-#      name: "Loop Time"
-#  - platform: uptime
-#    type: timestamp
-#    name: Last Boot
