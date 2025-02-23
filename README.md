@@ -40,10 +40,13 @@ Please no judgement on quality of code or approach.  I am merely a self-learned 
 
 Key differences from original project:
 - Arduino dependency removed and refactored for ESP-IDF.
+- Relay board emulation has been removed.
 - Config refactored with validation. Examine examples for specifying sensors as these are different from original project.
 - Sensors refactored to work with modified config approach.
+- Zone emulation specifier in yaml config automatically enables expander board emulation on appropriate channel.
+  (Note there is delay on emulated zones.  Zone data is only exchanged with the panel during polling.) <--Work in progress to fix.
 - Refactored to support workflow associated with Vistabus class using FreeRTOS tasks for UART comm and intertask comm via FreeRTOS Queues.
-- Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel and for local AUI queue     processing.
+- Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel.
 - Targeted only towards ESPHome API.  Stand-alone MQTT is removed in this version.
 - Limited testing of expanded functionality such as AUI command handling.  My panel does not
     seem to respond to AUI commands from either original project or this forked version.
@@ -55,11 +58,6 @@ Key differences from original project:
 Special thanks to Dilbert for helping answer questions that have come up along the way! 
 
 **⚠️Caution:  There may be features / capabilities unused by me that were not tested.  If you wish to use this fork and find something misbehaving, please let me know and I'll do my best to fix it!
-
-Not currently working quite right but will be fixed as i have time:
-  Expander zone changes for expander board with address 7.  I don't want to reassign zones in my system to reverse engineer the packet header for this.
-  Zone fault expiration TTL requires reworking particularly if multiple zones go into fault simultaneously.
-  Relay emulation and monitoring not tested at all.  I don't have parts for this.
 
 
 ## About the project

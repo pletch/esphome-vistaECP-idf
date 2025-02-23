@@ -113,6 +113,19 @@ api:
 #
 # You can refer to the pdf link below for more details on loop numbers 
 # https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf
+#
+# Zone emulation through automatic expander board emulation (e.g. Honeywell 4129) is 
+# possible with the use of the option emulation: true in binary zone configuration.  
+# Ensure that the zone number selected for emulated zone does not conflict with 
+# existing physical boards in your system. 
+#
+# Emulated zones 9-16 will enable expander emulation on address 7.
+# Emulated zones 17-24 will enable expander emulation on address 8.
+# Emulated zones 25-32 will enable expander emulation on address 9.
+# Emulated zones 33-40 will enable expander emulation on address 10.
+# Emulated zones 41-48 will enable expander emulation on address 11.
+# 
+#######################################################################
 
 binary_sensor:
 ### zone sensors ###
@@ -131,7 +144,26 @@ binary_sensor:
 #    zone: 9
 #    rf_serial: 231357
 #    rf_loop: 2
-#    device_class: door   
+#    device_class: door
+
+#  - platform: vista_alarm_panel
+#    id: z33
+#    name: "Emulated zone"
+#    partition: 1
+#    zone: 33  # For example, specifying zone 33 will enable emulated expander on address 10.
+#    emulation: true
+#    device_class: door 
+
+# Example showing attachment Home Assistant Input Boolean to emulated zone
+#  - platform: homeassistant
+#    name: "Input Boolean From Home Assistant"
+#    entity_id: input_boolean.example
+#    on_press:       #zone,on/off
+#      - lambda: |-
+#          $panelId->set_zone_fault(33,1);
+#    on_release:
+#      - lambda: |-
+#          $panelId->set_zone_fault(33,0);
 
 
 #######################################################################
