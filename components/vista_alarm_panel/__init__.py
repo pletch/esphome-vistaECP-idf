@@ -57,8 +57,6 @@ CONFIG_SCHEMA = cv.Schema(
     cv.Optional(CONF_UART1): cv.int_, 
     cv.Optional(CONF_MONITORPIN): cv.int_,
     cv.Optional(CONF_UART2): cv.int_,
-    cv.Optional(CONF_EXPANDER1): cv.int_, 
-    cv.Optional(CONF_EXPANDER2): cv.int_, 
     cv.Optional(CONF_RELAY1): cv.int_, 
     cv.Optional(CONF_RELAY2): cv.int_, 
     cv.Optional(CONF_RELAY3): cv.int_, 
@@ -94,18 +92,6 @@ async def to_code(config):
         cg.add(var.set_partitionKeypad(2,config[CONF_KEYPAD2]));
     if CONF_KEYPAD3 in config:
         cg.add(var.set_partitionKeypad(3,config[CONF_KEYPAD3]));
-    if CONF_EXPANDER1 in config:
-        cg.add(var.set_expanderAddr(config[CONF_EXPANDER1]));
-    if CONF_EXPANDER2 in config:
-        cg.add(var.set_expanderAddr(config[CONF_EXPANDER2]));
-    if CONF_RELAY1 in config:
-        cg.add(var.set_expanderAddr(config[CONF_RELAY1]));
-    if CONF_RELAY2 in config:
-        cg.add(var.set_expanderAddr(config[CONF_RELAY2]));
-    if CONF_RELAY3 in config:
-        cg.add(var.set_expanderAddr(config[CONF_RELAY3]));
-    if CONF_RELAY4 in config:
-        cg.add(var.set_expanderAddr(config[CONF_RELAY4]));
     if CONF_TTL in config:
         cg.add(var.set_ttl(config[CONF_TTL]));        
     if CONF_QUICKARM in config:

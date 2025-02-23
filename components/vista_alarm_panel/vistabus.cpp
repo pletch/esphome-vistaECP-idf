@@ -22,6 +22,31 @@ VistaBus::~VistaBus()
     vQueueDelete(this->sendQueue);
 }
 
+static const char* get_chip_model(esp_chip_model_t model) {
+    switch (model) {
+        case CHIP_ESP32:
+            return "ESP32";
+        case CHIP_ESP32S2:
+            return "ESP32-S2";
+        case CHIP_ESP32S3:
+            return "ESP32-S3";
+        case CHIP_ESP32C3:
+            return "ESP32-C3";
+        case CHIP_ESP32C2:
+            return "ESP32-C2";
+        case CHIP_ESP32C6:
+            return "ESP32-C6";
+        case CHIP_ESP32H2:
+            return "ESP32-H2";
+        case CHIP_ESP32P4:
+            return "ESP32-P4";
+        case CHIP_POSIX_LINUX:
+            return "POSIX/Linux Simulator";
+        default:
+            return "Unknown Model";
+    }
+}
+
 void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int monitorpin = -1) 
 {
     this->uartNum = uartnum;
@@ -30,6 +55,10 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
     this->extuartNum = extuartnum;
     this->monitorPin = monitorpin;
 
+    esp_chip_info_t esp_variant;
+    esp_chip_info(&esp_variant);
+
+    ESP_LOGI("Chip Info", "Chip Model: %s", get_chip_model(esp_variant.model));
 
     if (this->receiveQueue == NULL || this->sendQueue == NULL)
     {
@@ -37,6 +66,7 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
         return;
     }
 
+    
     init_uart(static_cast<uart_port_t>(this->uartNum),static_cast<gpio_num_t>(this->rxPin), static_cast<gpio_num_t>(this->txPin));
     if (extuartNum > 0) 
     {
@@ -188,12 +218,7 @@ static bool validChksum(const char * cbuf, int start, int len)
         strcat(s," ");
         strcat(s,st);
     }
-    time_t now = time(0);
-    tm* timeinfo = localtime(&now);
-    char strftime_buf[64];
-    localtime_r(&now, timeinfo);
-    strftime(strftime_buf, sizeof(strftime_buf), "%T", timeinfo);
-    ESP_LOGI("", "Timestamp: %s  Packet: %s",strftime_buf,s);    
+    ESP_LOGI("","Packet: %s",s);    
 }*/
 
 static int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout)
@@ -276,7 +301,7 @@ void VistaBus::rx_tx_task(void * args)
             {
                 snd_data[0] = 0xFF;
                 snd_data[1] = 0xFF;
-                snd_data[2] =  0xFF^(0x01 << (pkt_to_send.keypadaddress - 16));
+                snd_data[2] = 0xFF ^ (0x01 << (pkt_to_send.keypadaddress - 16));
             }
             //Use GPIO on rxPin to find pulse signal
             gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_ANYEDGE);
@@ -399,31 +424,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0x98 ) //EXP
             {                    
-                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 4, pdMS_TO_TICKS(UART_DELAY));
-                if (rxBytes != 4)
-                    continue;
-                for (int i=1; i<5; i++) 
-                {
-                    received_packet.payload[i] = data[i-1]; // 01? / dev id or len code if &1 / seq / type
-                }
-                if (received_packet.payload[2] & 1) // byte 2 = 01 if extended addressing for relay boards 14,15 so packet longer by 1 byte
-                {
-                    uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //extra byte
-                    received_packet.payload[5] = data[0];
-                    received_packet.size = 7;
-                }
-                else if (received_packet.payload[4] == 0x00 || received_packet.payload[4] == 0x0D) // 00 cmds use an extra byte
-                {
-                    uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); 
-                    received_packet.payload[5] = data[0];
-                    received_packet.size = 7;
-                }
-                else
-                {
-                    received_packet.size = 6;
-                }
-                uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //checksum
-                received_packet.payload[received_packet.size - 1] = data[0];
+                get_Packet(&received_packet,data,1,M98_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 if (EXPemulation)
                     this->process98(received_packet.payload);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));          
@@ -559,7 +560,7 @@ void VistaBus::monitor_rx_task(void * args)
                 val = 0;
 
             }
-            else if (data[0]==0xFB || 0xFD || 0xF7) //expanders such as 4219 ??=07,FE=08, FB=09, FD=10, F7=11
+            else if (data[0] == 0xF0 || data[0] == 0x7F || data[0]==0xFB || data[0] == 0xFD || data[0] == 0xF7) //expanders such as 4219 7F=07,FE=08, FB=09, FD=10, F7=11
             {
                 int res = get_Packet(&rcvd_extPkt, data, 1, 4, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
                 if (res > 0)
@@ -599,139 +600,218 @@ void VistaBus::monitor_rx_task(void * args)
     vTaskDelete(NULL);
 }
 
-void VistaBus::process98(const char * cbuf)
-{
-    char type = cbuf[4];
-    char seq = cbuf[3];
-    char lcbuf[8];
-
-    int idx;
-
-    if (cbuf[2] & 1)
-    {
-        seq = cbuf[3];
-        type = cbuf[4];
-        for (idx = 0; idx < 9; idx++)
-        {
-            if (!expander[idx].address)
-                continue;
-            if (cbuf[2] == (0x01 << (expander[idx].address - 13)))
-                break; // for us - relay addresses 14-15
-        }
-    }
-    else
-    {
-        for (idx = 0; idx < 9; idx++)
-        {
-            if (!expander[idx].address)
-                continue;
-            if (cbuf[2] == (0x01 << (expander[idx].address - 6)))
-                break; // for us - address range 7 -13
-        }
-    }
-    if (idx == 9)
-    {
-        return; // no match return
-    }
-
-    uint8_t lcbuflen = 0;
-    uint8_t expSeq = (seq == 0x20 ? 0x34 : 0x31);
-
-    // we use zone to either | or & bits depending if in fault or reset
-    // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry ,0x00 relay control
-    if (type == 0xF1)
-    {
-        lcbuflen = 4;
-        lcbuf[0] = 0xFF;
-        lcbuf[1] = 0xFE;
-        lcbuf[2] = expander[idx].address;
-        lcbuf[3] = expSeq;
-        // lcbuf[2] = (char) currentFault.relayState;
-        lcbuf[4] = 0; 
-        lcbuf[5] = expander[idx].fault; // we send out the current zone state
-    }
-    else if (type == 0xF7)
-    { // periodic  zone state poll (every 30 seconds) expander
-        lcbuflen = 4;       //This sequence works but doesn't match what monitor line expected sequence is for parsing for so it must not be correct.
-        lcbuf[0] = 0xF0;
-        lcbuf[1] = expSeq;
-        lcbuf[2] = 0;                       // we simulate having a termination resistor so set to zero for all zones
-        lcbuf[3] = expander[idx].faultBits; // opens zones - we send out the list of zone states. if 0 in both fields, means terminated
-    }
-    else if (type == 0x00 || type == 0x0D)
-    { // relay module
-        lcbuflen = 4;
-        lcbuf[0] = expander[idx].address;
-        lcbuf[1] = expSeq;
-        lcbuf[2] = 0x00;
-        if (cbuf[2] & 1)
-        { // address 14/15
-            expander[idx].relayState = cbuf[6] & 0x80 ? expander[idx].relayState | (cbuf[6] & 0x7f) : expander[idx].relayState & ((cbuf[6] & 0x7f) ^ 0xFF);
-            lcbuf[3] = cbuf[6];
-        }
-        else
-        {
-            expander[idx].relayState = cbuf[5] & 0x80 ? expander[idx].relayState | (cbuf[5] & 0x7f) : expander[idx].relayState & ((cbuf[5] & 0x7f) ^ 0xFF);
-            lcbuf[3] = cbuf[5];
-        }
-    }
-    else
-    {
-        return; // we don't acknowledge if we don't know  //0x80 or 0x81
-    }
-    uint8_t chksum = 0;
-    for (int x = 0; x < lcbuflen; x++)
-    {
-        chksum += lcbuf[x];
-    }
-    lcbuflen ++;
-    chksum -= 1;
-    chksum = chksum ^ 0xFF;
-    lcbuf[lcbuflen-1] = chksum;
-    uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
-}
-
-void VistaBus::setExpFault(int zone, bool fault)
+static uint8_t getExpanderAddress(uint8_t zone)
 {
     // expander address 7 - zones: 9 - 16
     // expander address 8 - zones:  17 - 24
     // expander address 9 - zones: 25 - 32
     // expander address 10 - zones: 33 - 40
     // expander address 11 - zones: 41 - 48
-    uint8_t idx = 0;
+    uint8_t address = 0;
     if (zone > 8 && zone < 17)  
-        idx = 0;
+        address = 7;
     else if (zone > 16 && zone < 25)
-        idx = 1;
+        address = 8;
     else if (zone > 24 && zone < 33)
-        idx = 2;
+        address = 9;
     else if (zone > 32 && zone < 41)
-        idx = 3;
+        address = 10;
     else if (zone > 40 && zone < 49)
-        idx = 4;
-    else
-        return;
+        address = 11;
 
-    int z = zone % 8;                      // convert zone to range of 1 - 7,0 (last zone is 0)
-    expander[idx].fault = z << 5 | (fault ? 0x8 : 0); // 0 = terminated(eol resistor), 0x08=open, 0x10 = closed (shorted)  - convert to bitfield for F1 response
-    if (z > 0)
-        z--;
-    else
-        z = 7;                                                                                   // now convert to 0 - 7 for F7 poll response
-    expander[idx].faultBits = (fault ? expander[idx].faultBits | (0x80 >> z) : expander[idx].faultBits & ((0x80 >> z) ^ 0xFF)); // setup bit fields for return response with fault values for each zone
+    return address;
 }
 
-void VistaBus::setExpAddr(int address)
-{   
-    int idx = -1;
-    if (address > 6 && address < 16)
+VistaBus::emulatedExpander *VistaBus::getExpander(uint8_t address)
+{
+    auto it = std::find_if(emulated_expanders.begin(), emulated_expanders.end(), [address](emulatedExpander &f)
+        { return f.address == address; });
+    if (it != emulated_expanders.end())
+        return &(*it);
+    return NULL;
+}
+
+void VistaBus::process98(const char * cbuf)
+{
+    char type = cbuf[4];
+    // we use zone to either | or & bits depending if in fault or reset
+    // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry
+    if (type == 0xF1)
     {
-        idx = address-7; //valid range of addresses is 7-15.
-        this->EXPemulation = true;
+        /*uint8_t address = getExpanderAddress(exp_zone);
+        emulatedExpander *expander = getExpander(address);
+        if (expander != NULL)
+        {
+            uint8_t z;
+            uint8_t expSeq;
+            uint8_t lcbuflen = 5;
+            char lcbuf[6];
+            //lcbuf[0] = 0xFF;
+            if (exp_zone % 8)
+            {
+                z = exp_zone % 8;
+                lcbuf[3] = 0;
+            }
+            else
+            {
+                z = 0;
+                lcbuf[3] = 0x01;                     // convert zone to range of 1 - 7,0 (last zone is 0)
+            }
+            //expander->fault = z << 5 | (fault ? 0x8 : 0); // 0 = terminated(eol resistor), 0x08=open, 0x10 = closed (shorted)  - convert to bitfield for F1 response
+            expander->faultBits = exp_zone_fault << z;                                                                                  // now convert to 0 - 7 for F7 poll response
+            //add code to to send appropriate packet to readQueue based on F1
+            
+            switch (address) //7F=07,FE=08, FB=09, FD=10, F7=11
+            {
+                case 7:
+                    lcbuf[0] = 0x7F;
+                    break;
+                case 8:
+                    lcbuf[0] = 0xFE;
+                    break;
+                case 9:
+                    lcbuf[0] = 0xFB;
+                    break;
+                case 10:
+                    lcbuf[0] = 0xFD;
+                    break;
+                case 11:
+                    lcbuf[0] = 0xF7;
+            }
+            lcbuf[1] = address;
+            expSeq = expander->seq == 0x31 ? 0x34 : 0x31;
+            expander->seq = expSeq;
+            lcbuf[2] = expSeq;
+            uint8_t chksum = 0;
+            lcbuf[4] = (z << 5) ^ (0x10*exp_zone_fault); // we send out the current zone state
+            for (int x = 0; x < lcbuflen; x++)
+            {
+                chksum += lcbuf[x];
+            }
+            lcbuflen ++;
+            chksum = (chksum ^ 0xFF) + 1;
+            lcbuf[lcbuflen-1] = chksum;
+            uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
+            this->write(lcbuf,lcbuflen, address);
+        }*/
     }
-    else
-        return;
-    this->expander[idx].address = address;
+    else if (type == 0xF7)
+    { // periodic  zone state poll (every 30 seconds) expander
+        char seq = cbuf[3];
+        char lcbuf[5];
+        bool valid_address = false;
+        
+        uint8_t address = 0;
+        for (int index = 1; index <= 5; index++)
+            if (cbuf[2] == 0x01 << index)
+            {
+                address = 6+index;
+                valid_address = true;
+                break;
+            }
+        if (emulated_expanders.size() > 0 && valid_address)  //check if any emulated expanders present, otherwise poll is from real 4219
+        {
+            emulatedExpander *expander = getExpander(address);
+            if (expander != NULL)
+            {
+                uint8_t expSeq = (seq == 0x20 ? 0x34 : 0x31);
+                uint8_t lcbuflen = 0;
+                lcbuflen = 4;       //This sequence works but doesn't match what monitor line expected sequence is for parsing for so it must not be correct.
+                lcbuf[0] = 0xF0;
+                lcbuf[1] = expSeq;
+                expander->seq = expSeq;
+                lcbuf[2] = expander->faultBits;                       // we simulate having a termination resistor so set to zero for all zones
+                lcbuf[3] = 0x7E; // opens zones - we send out the list of zone states. if 0 in both fields, means terminated
+                uint8_t chksum = 0;
+                for (int x = 0; x < lcbuflen; x++)
+                {
+                    chksum += lcbuf[x];
+                }
+                lcbuflen ++;
+                chksum = (chksum ^ 0xFF) + 1;
+                lcbuf[lcbuflen-1] = chksum;
+                uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
+            }
+        }
+    }
+}
+
+
+void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
+{
+    uint8_t address = getExpanderAddress(zone);
+    emulatedExpander *expander = getExpander(address);
+    if (expander != NULL)
+    {
+            uint8_t z;
+            uint8_t expSeq;
+            uint8_t lcbuflen = 5;
+            char lcbuf[6];
+            //lcbuf[0] = 0xFF;
+            if (zone % 8)
+            {
+                z = zone % 8;
+                lcbuf[3] = 0;
+            }
+            else
+            {
+                z = 0;
+                lcbuf[3] = 0x01;                     // convert zone to range of 1 - 7,0 (last zone is 0)
+            }
+            //expander->fault = z << 5 | (fault ? 0x8 : 0); // 0 = terminated(eol resistor), 0x08=open, 0x10 = closed (shorted)  - convert to bitfield for F1 response
+            expander->faultBits = (expander->faultBits && (0xFF ^ (0x01 << (8-z)))) ^ (fault << (8-z));
+            ESP_LOGI("","FaultBits: %d  Fault:%d  Zone:%d", expander->faultBits, fault,z);  // now convert to 0 - 7 for F7 poll response
+            //add code to to send appropriate packet to readQueue based on F1
+            
+            /*switch (address) //7F=07,FE=08, FB=09, FD=10, F7=11
+            {
+                case 7:
+                    lcbuf[0] = 0x7F;
+                    break;
+                case 8:
+                    lcbuf[0] = 0xFE;
+                    break;
+                case 9:
+                    lcbuf[0] = 0xFB;
+                    break;
+                case 10:
+                    lcbuf[0] = 0xFD;
+                    break;
+                case 11:
+                    lcbuf[0] = 0xF7;
+            }
+            lcbuf[1] = address;
+            expSeq = expander->seq == 0x31 ? 0x34 : 0x31;
+            expander->seq = expSeq;
+            lcbuf[2] = expSeq;
+            uint8_t chksum = 0;
+            lcbuf[4] = (z << 5) ^ (0x10*exp_zone_fault); // we send out the current zone state
+            for (int x = 0; x < lcbuflen; x++)
+            {
+                chksum += lcbuf[x];
+            }
+            lcbuflen ++;
+            chksum = (chksum ^ 0xFF) + 1;
+            lcbuf[lcbuflen-1] = chksum;
+            //uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
+            //this->write(lcbuf,lcbuflen, address);*/
+    }
+}
+
+void VistaBus::add_emulated_expander(uint8_t zone)
+{   
+    uint8_t address = getExpanderAddress(zone);
+    emulatedExpander *expander = getExpander(address);
+    if (expander == NULL) //emulated expander does not exist, add it
+    {   
+        emulatedExpander new_expander;
+        new_expander.address = getExpanderAddress(zone);
+        this->emulated_expanders.push_back(new_expander);
+        ESP_LOGI("VISTABUS","Adding new emulated expander on address:%d for emulated zone:%d",new_expander.address,zone);
+        EXPemulation = true;
+    }
+    else //emulated expander already created
+        ESP_LOGI("VISTABUS","Existing emulated expander on address:%d handling emulated zone:%d",expander->address,zone);
 }
 
 void VistaBus::rx_tx_task_start(void *args)

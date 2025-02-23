@@ -4,8 +4,6 @@ from esphome.components import binary_sensor
 from .. import (
     alarm_panel_ns,
     AlarmComponent,
-    CONF_MAXPARTITIONS,
-    CONF_MAXZONES
 )
 DEPENDENCIES = ["vista_alarm_panel"]
 VistaBinarySensor = alarm_panel_ns.class_("VistaBinarySensor", binary_sensor.BinarySensor)
@@ -38,6 +36,7 @@ CONF_PARTITION = "partition"
 CONF_RFSERIAL = "rf_serial"
 CONF_RFLOOP = "rf_loop"
 CONF_STATUS_SENSOR = "status_indicator"
+CONF_EMULATED_ZONE = "emulated"
 
 def _validate(value):
     if CONF_ZONE in value:
@@ -49,11 +48,9 @@ def _validate(value):
     if CONF_ZONE not in value and CONF_STATUS_SENSOR not in value :
         raise cv.Invalid("Valid sensor config must include either zone: or status_indicator:. Neither are specified.")
     if CONF_STATUS_SENSOR in value and value[CONF_STATUS_SENSOR] not in PANEL_SENSORS and CONF_PARTITION not in value:
-        raise cv.Invalid(value[CONF_STATUS_SENSOR] + " must be specified with partition value")
-    if CONF_PARTITION in value and value[CONF_PARTITION] > value[CONF_MAXPARTITIONS]:
-        raise cv.Invalid("partition: " + value[CONF_PARTITION] + " is greater than maxpartitions: " + value[CONF_MAXPARTITIONS] + " [default=1 if not in config]")
-    if CONF_ZONE in value and value[CONF_ZONE] > value[CONF_MAXZONES]:
-        raise cv.Invalid("zone: " + value[CONF_ZONE] + " is greater than maxpartitions: " + value[CONF_MAXZONES] + " [default=32 if not in config]")
+        raise cv.Invalid(str(value[CONF_STATUS_SENSOR]) + " must be specified with partition value")
+    if CONF_ZONE in value and CONF_EMULATED_ZONE in value and value[CONF_ZONE] < 8:
+        raise cv.Invalid("zone: value must be greater than 8.  First 8 zones are used for panel hardwired zones")
     return value
 
 CONFIG_SCHEMA = cv.All(binary_sensor.binary_sensor_schema(VistaBinarySensor).extend(
@@ -62,10 +59,9 @@ CONFIG_SCHEMA = cv.All(binary_sensor.binary_sensor_schema(VistaBinarySensor).ext
             cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=8),
             cv.Optional(CONF_ZONE): cv.int_range(min=1, max=128),
             cv.Optional(CONF_RFSERIAL): cv.int_range(min=1, max=9999999),
+            cv.Optional(CONF_EMULATED_ZONE): cv.boolean,
             cv.Optional(CONF_RFLOOP): cv.int_range(min=1, max=4),
             cv.Optional(CONF_STATUS_SENSOR): cv.one_of(*STATUS_SENSORS, upper=True),
-            cv.Optional(CONF_MAXPARTITIONS,default=1): cv.int_range(min=1, max=8),
-            cv.Optional(CONF_MAXZONES,default=32): cv.int_range(min=8, max=128)
         }
     ),
     _validate,
@@ -82,6 +78,8 @@ async def to_code(config):
             cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],config[CONF_RFSERIAL],config[CONF_RFLOOP]))
         else:
             cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0))
+            if CONF_EMULATED_ZONE in config and config[CONF_EMULATED_ZONE] == True:
+                cg.add(hub.register_expander(config[CONF_ZONE]))         
     elif (config[CONF_STATUS_SENSOR] == "AC_POWER"):
         cg.add(hub.register_ac(var))
     elif (config[CONF_STATUS_SENSOR] == "BATTERY"):

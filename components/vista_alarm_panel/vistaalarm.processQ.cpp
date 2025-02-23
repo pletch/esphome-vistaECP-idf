@@ -16,7 +16,8 @@ namespace esphome
         {
             forceRefreshGlobal = true;
             while (1)
-            {
+            {               
+                AUIprocessQueue();
                 char payload[48];
                 int size;
                 int type;
@@ -108,40 +109,35 @@ namespace esphome
                     }
                     if (type == 1) 
                     {
-                        if (size == 5 && (payload[0] == 0xFE || payload[0] == 0xFB || payload[0] == 0xFD || payload[0] == 0xF7)) //missing prefix type for address 7
+                        if (payload[1] != 0 && (payload[0] == 0x7F || payload[0] == 0xFE || payload[0] == 0xFB || 
+                                payload[0] == 0xFD || payload[0] == 0xF7)) //Expander board 
                         {
                             //FD 09 31 00 30 open
                             //FD 09 31 00 20 closed
                             int z = payload[4] >> 5;
-                            switch (payload[2])
+                            switch (payload[1])
                             {
                                 case 0x07:
-                                    z += 8 + (payload[3] >> 3);
+                                    z += 8 + (payload[3] << 3);
                                     break;
                                 case 0x08:
-                                    z += 16 + (payload[3] >> 3);
+                                    z += 16 + (payload[3] << 3);
                                     break;
                                 case 0x09:
-                                    z += 24 + (payload[3] >> 3);
+                                    z += 24 + (payload[3] << 3);
                                     break;
                                 case 0x0A:
-                                    z += 32 + (payload[3] >> 3);
+                                    z += 32 + (payload[3] << 3);
                                     break;
                                 case 0x0B:
-                                    z += 40 + (payload[3] >> 3);
+                                    z += 40 + (payload[3] << 3);
                                     break;
                             }
-                            bool open;
-                                if (payload[4] & 0xF)
-                                    open = true;
-                                else
-                                    open = false;
+                            bool open = payload[4] & 0x10;
                             zoneType *zt = getZone(z);
-                            if (zt != NULL && !zt->open && zt->active)
+                            if (zt != NULL && zt->active)
                             {
-                                zt->open = true;
-                                zt->check = false;
-                                zt->bypass = false;
+                                zt->open = open;
                                 zoneStatusUpdate(zt);
                             }
                         }     

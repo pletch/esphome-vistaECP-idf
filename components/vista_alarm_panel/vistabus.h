@@ -16,10 +16,13 @@ Date: 2-Feb-2025
 #ifndef __VISTABUS_H__
 #define __VISTABUS_H__
 #include <string.h>
+#include <vector>
+#include <algorithm>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_system.h"
+#include "esp_chip_info.h"
 #include "esp_log.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
@@ -34,6 +37,7 @@ Date: 2-Feb-2025
 #define F9_MESSAGE_LENGTH 12
 #define F9_EXT_MESSAGE_LENGTH 8
 #define FE_EXT_MESSAGE_LENGTH 7
+#define M98_MESSAGE_LENGTH 6
 
 #define RX_BUF_SIZE (128)
 #define UART_RX_TASK_STACK_SIZE (3072)
@@ -59,15 +63,6 @@ struct SendPacket
     int size;
 };
 
-struct emulatedDevice  
-{
-    char address;
-    char fault;
-    char faultBits;
-    char relayState;
-};
-const emulatedDevice emulatedDevice_INIT = {.address = 0, .fault = 0, .faultBits = 0, .relayState = 0};
-
 
 class VistaBus
 {
@@ -81,8 +76,8 @@ public:
     bool connected();
     bool read_packet(char * data, int &len, int &type, bool with_delay = false);
     void emulateLRR(bool enabled);
-    void setExpAddr(int address);
-    void setExpFault(int zone, bool fault);
+    void add_emulated_expander(uint8_t zone);
+    void setExpFaultBits(uint8_t zone, bool fault);
 
 protected:
     int rxPin, txPin;
@@ -98,16 +93,21 @@ protected:
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
     void process98(const char * cbuf);
-    //static void uart_evt_task_start(vo;id *args);
-    emulatedDevice expander[6];
+
+    struct emulatedExpander  
+    {   
+        uint8_t address{0};
+        uint8_t seq{0x31};
+        char faultBits{0};
+    };
+
+    emulatedExpander *getExpander(uint8_t address);
+    std::vector<emulatedExpander> emulated_expanders{};
     TaskHandle_t rx_tx_task_Handle;
     TaskHandle_t monitor_rx_task_Handle;
-    //TaskHandle_t uart_evt_task_Handle;
     QueueHandle_t receiveQueue;
     QueueHandle_t sendQueue;
-    //QueueHandle_t uartevtQueue;
     uint64_t last_int;
-    //void uart_evt_task(void * args);
     static void gpio_isr_handler(void * args);
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
 };

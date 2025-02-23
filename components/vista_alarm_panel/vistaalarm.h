@@ -125,7 +125,6 @@ namespace esphome
                 void set_displaySystemMsg(bool dsm) { displaySystemMsg = dsm; }
                 void set_lrrSupervisor(bool ls) { lrrSupervisor = ls; }
                 void set_auiaddr(uint8_t addr) { auiAddr = addr; };
-                void set_expanderAddr(uint8_t addr);
 
                 void set_maxZones(int mz) { maxZones = mz; }
                 void set_maxPartitions(uint8_t mp);
@@ -184,35 +183,35 @@ namespace esphome
                 struct statusFlagType
                 {
                     char beeps : 3;
-                    uint8_t armedStay : 1;
-                    uint8_t armedAway : 1;
-                    uint8_t night : 1;
-                    uint8_t instant : 1;
-                    uint8_t chime : 1;
-                    uint8_t acPower : 1;
-                    uint8_t acLoss : 1;
-                    uint8_t ready : 1;
-                    uint8_t entryDelay : 1;
-                    uint8_t programMode : 1;
-                    uint8_t zoneBypass : 1;
-                    uint8_t zoneAlarm : 1;
-                    uint8_t alarm : 1;
-                    uint8_t check : 1;
-                    uint8_t systemFlag : 1;
-                    uint8_t lowBattery : 1;
-                    uint8_t systemTrouble : 1;
-                    uint8_t fire : 1;
-                    uint8_t fireZone : 1;
-                    uint8_t backlight : 1;
-                    uint8_t armed : 1;
-                    uint8_t away : 1;
-                    uint8_t bypass : 1;
-                    uint8_t inAlarm : 1;
-                    uint8_t noAlarm : 1;
-                    uint8_t exitDelay : 1;
-                    uint8_t cancel : 1;
-                    uint8_t fault : 1;
-                    uint8_t panicAlarm : 1;
+                    bool armedStay;
+                    bool armedAway;
+                    bool night;
+                    bool instant;
+                    bool chime;
+                    bool acPower;
+                    bool acLoss;
+                    bool ready;
+                    bool entryDelay;
+                    bool programMode;
+                    bool zoneBypass;
+                    bool zoneAlarm;
+                    bool alarm;
+                    bool check;
+                    bool systemFlag;
+                    bool lowBattery;
+                    bool systemTrouble;
+                    bool fire;
+                    bool fireZone;
+                    bool backlight;
+                    bool armed;
+                    bool away;
+                    bool bypass;
+                    bool inAlarm;
+                    bool noAlarm;
+                    bool exitDelay;
+                    bool cancel;
+                    bool fault;
+                    bool panicAlarm;
                     char keypad[4];
                     int zone;
                     char prompt1[18];
@@ -282,17 +281,17 @@ namespace esphome
                     uint64_t time;
                     uint32_t rfserial;
                     uint8_t rfloop;
-                    uint8_t partition : 7;
-                    uint8_t open : 1;
-                    uint8_t bypass : 1;
-                    uint8_t alarm : 1;
-                    uint8_t check : 1;
-                    uint8_t fire : 1;
-                    uint8_t panic : 1;
-                    uint8_t trouble : 1;
-                    uint8_t lowbat : 1;
-                    uint8_t active : 1;
-                    uint8_t rflowbat : 1;
+                    uint8_t partition;
+                    bool open;
+                    bool bypass;
+                    bool alarm;
+                    bool check;
+                    bool fire;
+                    bool panic;
+                    bool trouble;
+                    bool lowbat;
+                    bool active;
+                    bool rflowbat;
                 };
                 zoneType zonetype_INIT = 
                 {
@@ -303,16 +302,16 @@ namespace esphome
                     .rfserial = 0,
                     .rfloop = 0,
                     .partition = 0,
-                    .open = 0,
-                    .bypass = 0,
-                    .alarm = 0,
-                    .check = 0,
-                    .fire = 0,
-                    .panic = 0,
-                    .trouble = 0,
-                    .lowbat = 0,
-                    .active = 0,
-                    .rflowbat = 0
+                    .open = false,
+                    .bypass = false,
+                    .alarm = false,
+                    .check = false,
+                    .fire = false,
+                    .panic = false,
+                    .trouble = false,
+                    .lowbat = false,
+                    .active = false,
+                    .rflowbat = false
                 };
 
 
@@ -340,31 +339,24 @@ namespace esphome
                     char prompt[17];
                 };
 
-                struct lrrType
-                {
-                    int code;
-                    uint8_t qual;
-                    uint16_t zone;
-                    uint8_t user;
-                };
 
                 struct lightStates
                 {
-                    uint8_t away : 1;
-                    uint8_t stay : 1;
-                    uint8_t night : 1;
-                    uint8_t instant : 1;
-                    uint8_t bypass : 1;
-                    uint8_t ready : 1;
-                    uint8_t ac : 1;
-                    uint8_t chime : 1;
-                    uint8_t bat : 1;
-                    uint8_t alarm : 1;
-                    uint8_t check : 1;
-                    uint8_t fire : 1;
-                    uint8_t canceled : 1;
-                    uint8_t trouble : 1;
-                    uint8_t armed : 1;
+                    bool away;
+                    bool stay;
+                    bool night;
+                    bool instant;
+                    bool bypass;
+                    bool ready;
+                    bool ac;
+                    bool chime;
+                    bool bat;
+                    bool alarm;
+                    bool check;
+                    bool fire;
+                    bool canceled;
+                    bool trouble;
+                    bool armed;
                 };
 
                 lightStates currentLightState,
@@ -406,16 +398,18 @@ namespace esphome
                 void register_text_sensor(vistaECPTextSensor *text_sensor, uint8_t partition, const char * type);
                 void register_ac(vistaECPBinarySensor *binary_sensor) {ac_bin_sensor = binary_sensor;}
                 void register_bat(vistaECPBinarySensor *binary_sensor) {bat_bin_sensor = binary_sensor;}
+                void register_expander(uint8_t zone) {vistabus.add_emulated_expander(zone);}
 
                 void setup() override;
 
-            private:
+            protected:
                 std::string previousZoneStatusMsg;
 
                 alarmStatusType fireStatus, panicStatus, alarmStatus;
                 uint8_t partitionTargets;
 
                 void createZone(uint16_t z,uint8_t p=0);
+                //std::vector<uint8_t> emulated_zones{};
       
                 auiCmdType auiCmd;
                 std::vector<zoneType> alarmZones{};
@@ -456,7 +450,7 @@ namespace esphome
                 void alarm_keypress_partition(std::string keystring, int32_t partition);
                 void send_cmd_bytes(int32_t addr, std::string hexbytes);
 
-            private:
+            protected:
                 bool isInt(std::string s, int base);
 
                 int toDec(int n);
@@ -476,7 +470,7 @@ namespace esphome
             public:
                 void set_alarm_state(std::string const &state, std::string code = "", int partition = DEFAULTPARTITION);
 
-            private:
+            protected:
                 int getZoneFromChannel(uint8_t deviceAddress, uint8_t channel);
 
                 void getPartitionsFromMask();

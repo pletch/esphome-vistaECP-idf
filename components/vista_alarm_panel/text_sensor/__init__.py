@@ -4,8 +4,6 @@ from esphome.components import text_sensor
 from .. import (
     alarm_panel_ns,
     AlarmComponent,
-    CONF_MAXPARTITIONS,
-    CONF_MAXZONES
 )
 DEPENDENCIES = ["vista_alarm_panel"]
 VistaTextSensor = alarm_panel_ns.class_("VistaTextSensor", text_sensor.TextSensor)
@@ -33,10 +31,6 @@ def _validate(value):
             raise cv.Invalid("type: \"zone\" requires both zone: and partition:")
     if value[CONF_TYPE] != "ZONE" and CONF_ZONE in value:
         raise cv.Invalid("zone: parameter only valid with type: \"zone\"")
-    if CONF_PARTITION in value and value[CONF_PARTITION] > value[CONF_MAXPARTITIONS]:
-        raise cv.Invalid("partition: " + value[CONF_PARTITION] + " is greater than maxpartitions: " + value[CONF_MAXPARTITIONS] + " [default=1 if not in config]")
-    if CONF_ZONE in value and value[CONF_ZONE] > value[CONF_MAXZONES]:
-        raise cv.Invalid("zone: " + value[CONF_ZONE] + " is greater than maxpartitions: " + value[CONF_MAXZONES] + " [default=32 if not in config]")
     return value
 
 CONFIG_SCHEMA = cv.All(text_sensor.text_sensor_schema(VistaTextSensor).extend(
@@ -45,8 +39,6 @@ CONFIG_SCHEMA = cv.All(text_sensor.text_sensor_schema(VistaTextSensor).extend(
             cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=4),
             cv.Optional(CONF_ZONE): cv.int_range(min=1, max=128),
             cv.Required(CONF_TYPE): cv.one_of(*TTYPES, upper=True),
-            cv.Optional(CONF_MAXPARTITIONS,default=1): cv.int_range(min=1, max=8),
-            cv.Optional(CONF_MAXZONES,default=32): cv.int_range(min=8, max=128)
         }
     ),
     _validate,

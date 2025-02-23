@@ -27,88 +27,6 @@ namespace esphome
         const char *const TAG = "vista_alarm";
         vistaECPHome *alarmPanelPtr;
 
-
-        /*void vistaECPHome::publishStatusChange(sysState led, bool open, uint8_t partition)
-        {
-            std::string sensor = "NIL";
-            switch (led)
-            {
-                case sfire:
-                    sensor = "fire_";
-                    break;
-                case salarm:
-                    sensor = "alm_";
-                    break;
-                case strouble:
-                    sensor = "trbl_";
-                    break;
-                case sarmedstay:
-                    sensor = "arms_";
-                    break;
-                case sarmedaway:
-                    sensor = "arma_";
-                    break;
-                case sinstant:
-                    sensor = "armi_";
-                    break;
-                case sready:
-                    sensor = "rdy_";
-                    break;
-                case sac:
-                    publishBinaryState("ac", 0, open);
-                    return;
-                case sbypass:
-                    sensor = "byp_";
-                    break;
-                case schime:
-                    sensor = "chm_";
-                    break;
-                case sbat:
-                    publishBinaryState("bat", 0, open);
-                    return;
-                case sarmednight:
-                    sensor = "armn_";
-                    break;
-                case sarmed:
-                    sensor = "arm_";
-                    break;
-                case soffline:
-                    break;
-                case sunavailable:
-                    break;
-                default:
-                    break;
-            };
-            publishBinaryState(sensor, partition, open);
-        }*/
-
-
-        /*void vistaECPHome::publishBinaryState(const std::string &idstr, uint8_t partition, bool open)
-        {
-            std::string id = idstr;
-            if (partition)
-                id += std::to_string(partition);
-
-            auto it = std::find_if(bMap.begin(), bMap.end(), [id](binary_sensor::BinarySensor *bs)
-                               { return bs->get_object_id() == id; });
-
-            if (it != bMap.end() && (*it)->state != open)
-                (*it)->publish_state(open);
-        }*/
-
-
-        /*void vistaECPHome::publishTextState(const std::string &idstr, uint8_t partition, std::string *text)
-        {
-            std::string id = idstr;
-            if (partition)
-                id += std::to_string(partition);
-            auto it = std::find_if(tMap.begin(), tMap.end(), [id](text_sensor::TextSensor *ts)
-                               { return ts->get_object_id() == id; });
-            if (it != tMap.end() && (*it)->state != *text)
-                (*it)->publish_state(*text);
-        }*/
-
-
         void vistaECPHome::stop()
         {
         vistabus.stop();
@@ -198,6 +116,10 @@ namespace esphome
                 it->binary_sensor = binary_sensor;
                 it->rfserial = rf_serial;
                 it->rfloop = rf_loop;
+
+                //if(emulated)
+                //    emulated_zones.push_back(zone_number);
+
                 ESP_LOGI("","Adding binary zone sensor.  Zone: %d   rfserial:%lu   rfloop:%d",it->zone, it->rfserial, it->rfloop);
                 return;
             }
@@ -289,7 +211,7 @@ namespace esphome
         {
             ESP_LOGD(TAG, "Start setup: Free heap: (%lu)", esp_get_free_heap_size());
 
-            set_update_interval(250); // set interval to fire in main loop task
+            set_update_interval(1000); // set interval to fire in main loop task
 
             register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
@@ -373,15 +295,7 @@ namespace esphome
 
         void vistaECPHome::set_zone_fault(int32_t zone, bool fault)
         {
-            vistabus.setExpFault(zone, fault);
-        }
-
-        void vistaECPHome::set_expanderAddr(uint8_t addr)
-        {
-            if (addr)
-            {
-                vistabus.setExpAddr(addr);
-            }
+            vistabus.setExpFaultBits(zone, fault);
         }
 
         void vistaECPHome::set_maxPartitions(uint8_t mp)
@@ -784,7 +698,6 @@ namespace esphome
                 last_refresh = esp_timer_get_time();
                 return;
             }      
-            AUIprocessQueue();
         }
     } //namespace
 } // namespace

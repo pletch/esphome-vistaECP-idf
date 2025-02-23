@@ -165,20 +165,21 @@ namespace esphome
         
         void vistaECPHome::AUIupdateZoneState(zoneType *zt, int p, bool state, uint64_t t)
         {
-            if (zt==NULL)
-                return;
-            zt->partition = p;
-            zt->time = t;
-            if (auiCmd.state == rsopenzones)
+            if (zt!=NULL)
             {
-                zt->open = state;
-                zoneStatusUpdate(zt);
-                ESP_LOGD(TAG, "Setting open zone %d to %d,  partition %d", zt->zone, state, p);
-            }
-            else if (auiCmd.state == rsbypasszones)
-            {
-                zt->bypass = state;
-                ESP_LOGD(TAG, "Setting bypass zone %d to %d, partition %d", zt->zone, state, p);
+                zt->partition = p;
+                zt->time = t;
+                if (auiCmd.state == rsopenzones)
+                {
+                    zt->open = state;
+                    zoneStatusUpdate(zt);
+                    ESP_LOGD(TAG, "Setting open zone %d to %d,  partition %d", zt->zone, state, p);
+                }
+                else if (auiCmd.state == rsbypasszones)
+                {
+                    zt->bypass = state;
+                    ESP_LOGD(TAG, "Setting bypass zone %d to %d, partition %d", zt->zone, state, p);
+                }
             }
         }
             

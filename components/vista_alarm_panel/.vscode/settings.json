@@ -62,7 +62,9 @@
         "thread": "cpp",
         "variant": "cpp",
         "bit": "cpp",
-        "compare": "cpp"
+        "compare": "cpp",
+        "xmemory": "cpp",
+        "ranges": "cpp"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM6"
