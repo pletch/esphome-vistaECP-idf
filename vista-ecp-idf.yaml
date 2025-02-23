@@ -34,14 +34,6 @@ vista_alarm_panel:
   monitorpin: "22" #GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
   uart2: "2" #Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
 
-  expanderaddr1: "0" # 1st zone expander emulator (4229) address to use . Set to 0 to disable.
-  expanderaddr2: "0" # 2nd expander emulator address to use . Set to 0 to disable.
-  
-  relayaddr1: "0" # relay module emulation (4204) addresses. Set to 0 to disable.
-  relayaddr2: "0"
-  relayaddr3: "0"
-  relayaddr4: "0"
-  
   ttl: "30000"  # time  to live  in ms for zone/fire status before expiring;
   quickarm: "false"
   lrrsupervisor: "false" # set to true if we don't have an LRR monitoring supervisor so we can emulate one to get the statuses. 
