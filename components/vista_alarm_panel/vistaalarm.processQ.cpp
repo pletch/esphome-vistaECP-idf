@@ -109,8 +109,8 @@ namespace esphome
                     }
                     if (type == 1) 
                     {
-                        if (payload[1] != 0 && (payload[0] == 0x7F || payload[0] == 0xFE || payload[0] == 0xFB || 
-                                payload[0] == 0xFD || payload[0] == 0xF7)) //Expander board 
+                        if (payload[1] != 0 && (payload[0] == 0x7F || payload[0] == 0xFE || payload[0] == 0xFD || 
+                                payload[0] == 0xFB || payload[0] == 0xF7)) //Expander board 
                         {
                             //FD 09 31 00 30 open
                             //FD 09 31 00 20 closed
@@ -141,12 +141,11 @@ namespace esphome
                                 zoneStatusUpdate(zt);
                             }
                         }     
-                        else if (payload[0] == 0xFE && size == 7 && payload[1] == 0)
+                        else if (payload[0] == 0xFE && size == 7 && payload[1] == 0) // Honeywell 5881 uses address of 0 on Vista 15/20
                         {
                             char rf_serial_char[14];
                             //char rf_serial_char_out[20];
-                            // FB 04 06 18 98 B0 00 00 00 00 00 00  <-- Pattern from original upstream.
-                            // FE 00 54 83 8f 89 a0 = Open / Active for door sensor.    Hardware UART produces FE after UART break rather than FB header.
+                            // FE 00 54 83 8f 89 a0 = Open / Active for door sensor.  
                             // FE 00 54 83 8f 89 80 = Closed / Inactive
                             // fe 00 51 85 f4 03 04 = heartbeat
                             uint32_t device_serial = ((payload[3] & 0xF) << 16) + (payload[4] << 8) + payload[5];

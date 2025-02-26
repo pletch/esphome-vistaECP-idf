@@ -93,12 +93,20 @@ protected:
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
     void process98(const char * cbuf);
+    void mark_pulse(uint8_t address);
+
+    struct pendingUpdate
+    {
+        uint8_t zone{0};
+        bool fault{false};
+    };
 
     struct emulatedExpander  
     {   
         uint8_t address{0};
-        uint8_t seq{0x31};
         char faultBits{0};
+        char seq{31};
+        pendingUpdate pending_update;
     };
 
     emulatedExpander *getExpander(uint8_t address);
