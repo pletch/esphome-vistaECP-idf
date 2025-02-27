@@ -4,6 +4,7 @@ processReceiveQueue
 processReceiveQueue_task_start
 refreshStatusFlags
 refreshLRRStatusFlags
+updateDisplayLines
 */
 
 #include "vistaalarm.h"
@@ -92,9 +93,9 @@ namespace esphome
                                     std::string uf = "by user";
                                     if (lrrString[0] == 'Z') 
                                     {
-                                        uf = "on zone";
+                                        uf = "on";
                                         //zn=getZoneName(z);
-                                        zn = "null"; //fix this later
+                                        //zn = "null"; //fix this later
                                     }
 
                                     snprintf(msg,100, "CID_%d%03d: %s %s %s%s, Partition %d", q,c, &lrrString[1], uf.c_str(), zn.c_str(), qual.c_str(),p);
@@ -649,9 +650,7 @@ namespace esphome
             char prompt1[18];
             char prompt2[18];
             memcpy(prompt1,&cbuf[12], 16);
-            prompt1[16] = 0;
             memcpy(prompt2, &cbuf[28], 16);
-            prompt2[16] = 0;
             statusFlags->keypad[0] = cbuf[1]; // 0 to 7
 
             statusFlags->keypad[1] = cbuf[2]; // 8 to 15
@@ -770,5 +769,37 @@ namespace esphome
             }
         }   
 
+
+        void vistaECPHome::updateDisplayLines(uint8_t partition)
+        {
+            uint8_t pos = statusFlags.promptPos;
+            std::string p1 = statusFlags.prompt1;
+            std::string p2 = statusFlags.prompt2;
+            if (pos > 0)
+            {
+                char buf[10];
+                std::string sub1, sub2;
+                if (pos > 15)
+                {
+                    sub1 = p2.substr(0, pos - 16);
+                    if (pos < 31)
+                        sub2 = p2.substr(pos - 15);
+                    sprintf(buf, "[%c]", p2[pos - 16]);
+                    p2 = sub1 + std::string(buf) + sub2;
+                }
+                else
+                {
+                    sub1 = p1.substr(0, pos);
+                    if (pos < 15)
+                        sub2 = p1.substr(pos + 1);
+                    sprintf(buf, "[%c]", p2[pos]);
+                    p1 = sub1 + std::string(buf) + sub2;
+                }
+            }
+            if (text_sensors_partition[partition-1].line1 != NULL)
+                text_sensors_partition[partition-1].line1->process(p1);
+            if (text_sensors_partition[partition-1].line2 != NULL)
+                text_sensors_partition[partition-1].line2->process(p2);
+        }
     } //namespace
 } //namespace

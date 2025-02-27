@@ -1,5 +1,4 @@
-#ifndef __VISTA_BINARY_SENSOR_H__
-#define __VISTA_BINARY_SENSOR_H__
+#pragma once
 
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "../vistaalarm.h"
@@ -16,5 +15,3 @@ namespace esphome {
 
     }  // namespace alarm_panel
 }  // namespace esphome
-
-#endif //guard

@@ -1,5 +1,5 @@
-#ifndef __PANELTEXT_H__
-#define __PANELTEXT_H__
+#pragma once
+
  //EN
     //lookups for determining zone status as strings.  Must include complete word before zone#. 
     // No spaces. obsolete now. No longer needed. Using flags to identify type
@@ -33,4 +33,3 @@
     extern const char * MSG_ARMED_BYPASS;
     extern const char * MSG_NO_ENTRY_DELAY;
     extern const char * MSG_NONE;
-#endif //guard

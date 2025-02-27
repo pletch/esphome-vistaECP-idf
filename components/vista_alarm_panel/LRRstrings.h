@@ -1,5 +1,5 @@
-#ifndef __LRRSTRINGS_H__
-#define __LRRSTRINGS_H__
+#pragma once
+
 const char* const msg_values[] = 
 {
     "ZMedical",
@@ -1012,5 +1012,3 @@ extern inline char * lrr_msg_lookup(int statusCode)
         return (char *) msg_values[329];
     }
 }
-
-#endif //guard

@@ -1,5 +1,4 @@
-#ifndef __VISTALARM_H__
-#define __VISTALARM_H__
+#pragma once
 
 #include "esphome/core/defines.h"
 #include "esphome/core/component.h"
@@ -482,5 +481,3 @@ namespace esphome
         extern vistaECPHome *alarmPanelPtr;
     } // namespace
 } // namespace
-
-#endif

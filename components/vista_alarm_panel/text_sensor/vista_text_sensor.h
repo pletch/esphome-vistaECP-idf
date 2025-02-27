@@ -1,5 +1,4 @@
-#ifndef __ALARM_TEXT_SENSOR_H__
-#define __ALARM_TEXT_SENSOR_H__
+#pragma once
 
 #include "esphome/components/text_sensor/text_sensor.h"
 #include "../vistaalarm.h"
@@ -17,5 +16,3 @@ namespace esphome
 
     }  // namespace alarm_panel
 }   // namespace esphome
-
-#endif //guard

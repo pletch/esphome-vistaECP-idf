@@ -1,3 +1,5 @@
+#pragma once
+
 /*
 The Vistabus class interfaces with the Ademco Vista Keybus via one (or optionally two) hardware UARTs on the ESP32 family devices.
 The primary RX / TX traffic (yellow / green wires) is collected in the first required UART via a FreeRTOS Task that handles both data receipt and writing
@@ -13,8 +15,6 @@ Date: 2-Feb-2025
 
 */
 
-#ifndef __VISTABUS_H__
-#define __VISTABUS_H__
 #include <string.h>
 #include <vector>
 #include <algorithm>
@@ -119,4 +119,3 @@ protected:
     static void gpio_isr_handler(void * args);
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
 };
-#endif  //guard

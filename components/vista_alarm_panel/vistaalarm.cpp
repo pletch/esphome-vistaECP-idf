@@ -426,37 +426,6 @@ namespace esphome
             return true;
         }
 
-        void vistaECPHome::updateDisplayLines(uint8_t partition)
-        {
-            uint8_t pos = statusFlags.promptPos;
-            std::string p1 = statusFlags.prompt1;
-            std::string p2 = statusFlags.prompt2;
-            if (pos > 0)
-            {
-                char buf[10];
-                std::string sub1, sub2;
-                if (pos > 15)
-                {
-                    sub1 = p2.substr(0, pos - 16);
-                    if (pos < 31)
-                        sub2 = p2.substr(pos - 15);
-                    sprintf(buf, "[%c]", p2[pos - 16]);
-                    p2 = sub1 + std::string(buf) + sub2;
-                }
-                else
-                {
-                    sub1 = p1.substr(0, pos);
-                    if (pos < 15)
-                        sub2 = p1.substr(pos + 1);
-                    sprintf(buf, "[%c]", p2[pos]);
-                    p1 = sub1 + std::string(buf) + sub2;
-                }
-            }
-            if (text_sensors_partition[partition-1].line1 != NULL)
-                text_sensors_partition[partition-1].line1->process(p1);
-            if (text_sensors_partition[partition-1].line2 != NULL)
-                text_sensors_partition[partition-1].line2->process(p2);
-        }
 
     /*std::string vistaECPHome::getNameFromPrompt(char *p1, char *p2)  <-- not used for anything at this time. 
                                                                       Need to refactor to eliminate regex pattern matching with digit search if enabling.
