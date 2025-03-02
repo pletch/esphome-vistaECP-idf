@@ -774,6 +774,7 @@ void VistaBus::process98(const char * cbuf)
             }
         }
     }
+    esp_timer_delete(oneshot_timer);
 }
 
 void IRAM_ATTR VistaBus::precise_delay(void * args)
