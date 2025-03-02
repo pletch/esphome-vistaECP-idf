@@ -519,7 +519,7 @@ namespace esphome
             if (state.compare("S") == 0 && !partitionStates[partition - 1].previousLightState.armed)
             {
                 if (quickArm)
-                    vistabus.write("#3",1, addr);
+                    vistabus.write("#3",2, addr);
                 else if (code.length() == 4)
                 {
                     char send_str[5];
@@ -532,7 +532,7 @@ namespace esphome
             else if ((state.compare("A") == 0 || state.compare("W") == 0) && !partitionStates[partition - 1].previousLightState.armed)
             {
                 if (quickArm)
-                    vistabus.write("#2",1, addr);
+                    vistabus.write("#2",2, addr);
                 else if (code.length() == 4)
                 {
                     char send_str[5];
@@ -544,7 +544,7 @@ namespace esphome
             else if (state.compare("I") == 0 && !partitionStates[partition - 1].previousLightState.armed)
             {
                 if (quickArm)
-                    vistabus.write("#7",1, addr);
+                    vistabus.write("#7",2, addr);
                 else if (code.length() == 4)
                 {
                     char send_str[5];
@@ -556,12 +556,12 @@ namespace esphome
             else if (state.compare("N") == 0 && !partitionStates[partition - 1].previousLightState.armed)
             {
                 if (quickArm)
-                    vistabus.write("#33",1, addr);
+                    vistabus.write("#33",3, addr);
                 else if (code.length() == 4)
                 {
                 char send_str[6];
                 memcpy(send_str,code.c_str(),4);
-                memcpy(send_str+4,"33",1);
+                memcpy(send_str+4,"33",2);
                 vistabus.write(send_str,6, addr);
                 }
             }
@@ -581,7 +581,7 @@ namespace esphome
                 {
                     char send_str[6];
                     memcpy(send_str,code.c_str(),4);
-                    memcpy(send_str+4,"6#",1);
+                    memcpy(send_str+4,"6#",2);
                     vistabus.write(send_str,6, addr);
                 }
             }
@@ -591,7 +591,7 @@ namespace esphome
                 {
                     char send_str[7];
                     memcpy(send_str,code.c_str(),4);
-                    memcpy(send_str+4,"600",1);
+                    memcpy(send_str+4,"600",3);
                     vistabus.write(send_str,7, addr);
                 }
             }

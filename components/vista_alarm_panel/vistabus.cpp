@@ -110,7 +110,25 @@ bool VistaBus::write(const char * data_to_write, int size, int keypadaddress)
     sendpkt.keypadaddress = keypadaddress;
     sendpkt.type = 1;
     sendpkt.size = size;
-    bool result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
+    SendPacket queuedpkt;
+    bool result = false;
+    if (xQueueReceive(sendQueue,&queuedpkt,0) == pdPASS) //something in queue. Pop it out.
+    {
+        if ((sendpkt.size + queuedpkt.size) <= 24)
+        {
+            memcpy(queuedpkt.payload+queuedpkt.size, sendpkt.payload, sendpkt.size);
+            queuedpkt.size += sendpkt.size;
+            result = xQueueSend(sendQueue, &queuedpkt, 0) == pdPASS;
+        }
+        else //No room to concatenate...keep separate
+        {
+            xQueueSend(sendQueue, &queuedpkt, 0);
+            result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
+        }
+    }
+    else
+        result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
+
     return result;
 }
 
@@ -248,6 +266,7 @@ void IRAM_ATTR VistaBus::gpio_isr_handler(void * args)
 bool VistaBus::mark_pulse(uint8_t address)
 {
     uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_DISABLE);
+    uart_set_stop_bits(static_cast<uart_port_t>(this->uartNum),UART_STOP_BITS_1);
     char snd_data[3];
     bool sent_request = false;
     uint8_t which_pulse = 0;
@@ -276,40 +295,40 @@ bool VistaBus::mark_pulse(uint8_t address)
     gpioTaskArgs taskargs;
     taskargs.task_handle = this->rx_tx_task_Handle;
     taskargs.pin = this->rxPin;
-    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_NEGEDGE);
+    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_ANYEDGE);
     gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) &taskargs );
-    uint32_t result = 1;
-
-    while (result) //'result' is the pin value and needs to be low to proceed.
-    { 
-        xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(400));   //find first falling edge.                                                                
-    } 
-    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin),GPIO_INTR_POSEDGE);
-    bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(9)) == pdTRUE); //confirm still low after 9ms by waiting for timeout
-    if (!notified) 
-    {
+        gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_ANYEDGE);
+        uint32_t result = 1;
+        while (result) 
+        { 
+            xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(400));   //find first falling edge. 
+                                                                    //'result' is the pin value and needs to be low to proceed.
+        } 
+        gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin),GPIO_INTR_POSEDGE);
+        bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(9)) == pdTRUE); //confirm still low after 9ms by waiting for timeout
+        if (!notified) 
+        {
         
-        bool rising_edge = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(5)) == pdTRUE); //first rising edge
-        if (rising_edge)
-        {           
-
-            uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1);
+            bool rising_edge = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(5)) == pdTRUE); //first rising edge
+            if (rising_edge)
+            {           
+                uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1);
         
-            xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(7)); //second rising edge              
-            if (snd_data[1] != 0)
-                uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
+                xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(5)); //second rising edge              
+                if (snd_data[1] != 0)
+                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
     
-            xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(7)); //third rising edge           
-            if (snd_data[2] != 0)
-                uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
-            sent_request = true;
+                xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(5)); //third rising edge           
+                if (snd_data[2] != 0)
+                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
+                sent_request = true;
+            }
         }
-    }
     gpio_isr_handler_remove(static_cast<gpio_num_t>(this->rxPin));
     uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_EVEN);
+    uart_set_stop_bits(static_cast<uart_port_t>(this->uartNum),UART_STOP_BITS_2);
     return sent_request;
 }
-
 
 void VistaBus::rx_tx_task(void * args)
 {
@@ -333,13 +352,15 @@ void VistaBus::rx_tx_task(void * args)
     bool req_to_send = false;
     uint64_t last_data_received = 0;
     SendPacket pkt_to_send;
-    int send_retries = 0;
+    uint8_t ack_failures = 0;
+    uint8_t mark_failures = 0;
     int sequence = 0;
     char tempbuff[13];
     int tempbuff_fill = 0;
     int cksum = 0;
     while (1) 
     {
+        bool pulse_marked = false;
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
         {
             this->panel_connected = false;
@@ -356,17 +377,9 @@ void VistaBus::rx_tx_task(void * args)
         }
         if (req_to_send)
         {
-            if(send_retries < 10) 
-            {
-                send_retries += mark_pulse(pkt_to_send.keypadaddress);
-            }
-            else
-            {
-                ESP_LOGI("VistaBus", "Failure to mark pulse for send after 10 tries.  Giving up.");
-                send_retries = 0;
-                req_to_send = false;
-            }
+            pulse_marked = mark_pulse(pkt_to_send.keypadaddress);
         }
+        
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(250)); 
         if (rxBytes > 0) 
         {
@@ -375,6 +388,10 @@ void VistaBus::rx_tx_task(void * args)
             data[rxBytes] = 0;
             memset(received_packet.payload,'\0',sizeof(received_packet.payload));
             received_packet.payload[0] = data[0];
+            if (req_to_send && pulse_marked && pkt_to_send.type == 2)
+            {
+                req_to_send = false;
+            }
             if ( data[0] == 0xF6) //SEND ACK Received
             {                 
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //Get Address
@@ -422,20 +439,12 @@ void VistaBus::rx_tx_task(void * args)
                     outbuffer[pkt_to_send.size+2] = (0x100 - outbuffer[0] - (pkt_to_send.size + 1) - checksum ) & 0xff;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
-                    send_retries++;
                     get_Packet(&received_packet,data, 0, 2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(150)); 
 
                     if(received_packet.payload[1] == outbuffer[0]) 
                     {
                         req_to_send = false;
-                        send_retries = 0;
                     }
-                    else if (send_retries == 5)
-                    {
-                        req_to_send = false;
-                        send_retries = 0;
-                    };  
-
                 } 
                 else //ACK was for another device.
                 {        
@@ -460,9 +469,9 @@ void VistaBus::rx_tx_task(void * args)
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
             }
-            else if ( data[0] == 0x98) //EXP
-            {               
-                if (req_to_send && send_retries > 0 && pkt_to_send.type == 2)
+            else if ( data[0] == 0x98 ) //EXP
+            {                    
+                if (req_to_send && pulse_marked && pkt_to_send.type == 2)
                 {
                     req_to_send = false;
                 }     
@@ -470,7 +479,7 @@ void VistaBus::rx_tx_task(void * args)
                 if (EXPemulation)
                     this->process98(received_packet.payload);
                 get_Packet(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
-                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));    
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));          
             }
             else if ( data[0] == 0xF9 ) //LRR
             {   
@@ -502,7 +511,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0x9E ) //5881EN traffic on Vista 20p (address 0)??
             {   
-                get_Packet(&received_packet,data,1,4,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                get_Packet(&received_packet,data,1,3,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 uint32_t val = 0x9E << 8 | (received_packet.payload[3]);
                 xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
@@ -525,7 +534,7 @@ void VistaBus::rx_tx_task(void * args)
                     cksum += data[0];
                 }
             
-                if (tempbuff_fill == 1) 
+                if (tempbuff_fill == 4) 
                 {
                     if (tempbuff[0] != cksum) //don't clutter queue with 1 byte sequences
                     {
@@ -538,6 +547,32 @@ void VistaBus::rx_tx_task(void * args)
                 }
             }
         }
+        if (req_to_send && pulse_marked)
+        {
+            ack_failures++;
+            mark_failures = 0;
+        }
+        if (req_to_send && !pulse_marked)
+            mark_failures++;
+        if (!req_to_send)
+        {
+            ack_failures = 0;
+            mark_failures = 0;
+        }
+        if (ack_failures == 5)
+        {
+            ESP_LOGI("VistaBus", "Failure to receive F6 ACK after 5 tries.  Giving up.");
+            req_to_send = false;
+            ack_failures = 0;
+            mark_failures = 0;
+        };
+        if (mark_failures == 10)
+        {
+            ESP_LOGI("VistaBus", "Failure to mark pulse after 10 tries.  Giving up.");
+            req_to_send = false;
+            ack_failures = 0;
+            mark_failures = 0;
+        };
     }
     free(data);
     ESP_LOGI(TASK_TAG, "Stopping Task");
