@@ -198,17 +198,17 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
 
     ESP_ERROR_CHECK(uart_param_config(u_n, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(u_n, tx_pin, rx_pin, -1, -1));
-    ESP_ERROR_CHECK(uart_set_rx_timeout(u_n, 4));
-    ESP_ERROR_CHECK(uart_set_tx_empty_threshold(u_n,5));
+    ESP_ERROR_CHECK(uart_set_rx_timeout(u_n, 2));
+    ESP_ERROR_CHECK(uart_set_tx_empty_threshold(u_n,1));
     ESP_ERROR_CHECK(uart_enable_rx_intr(u_n));
     if (static_cast<int>(tx_pin) == -1) 
     {
-        ESP_ERROR_CHECK(uart_set_rx_full_threshold(u_n, 6));
+        ESP_ERROR_CHECK(uart_set_rx_full_threshold(u_n, 1));
         ESP_ERROR_CHECK(uart_set_line_inverse(u_n, UART_SIGNAL_RXD_INV));
     } 
     else 
     {
-        ESP_ERROR_CHECK(uart_set_rx_full_threshold(u_n, 2));
+        ESP_ERROR_CHECK(uart_set_rx_full_threshold(u_n, 1));
         ESP_ERROR_CHECK(uart_set_line_inverse(u_n, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV));
         ESP_ERROR_CHECK(uart_enable_tx_intr(u_n,1,0));
     }
@@ -358,9 +358,11 @@ void VistaBus::rx_tx_task(void * args)
     char tempbuff[13];
     int tempbuff_fill = 0;
     int cksum = 0;
+    bool pulse_marked = false;
+    uint64_t pulse_mark_time = 0;
     while (1) 
     {
-        bool pulse_marked = false;
+        
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
         {
             this->panel_connected = false;
@@ -378,6 +380,7 @@ void VistaBus::rx_tx_task(void * args)
         if (req_to_send)
         {
             pulse_marked = mark_pulse(pkt_to_send.keypadaddress);
+            pulse_mark_time = esp_timer_get_time();
         }
         
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(250)); 
@@ -444,6 +447,7 @@ void VistaBus::rx_tx_task(void * args)
                     if(received_packet.payload[1] == outbuffer[0]) 
                     {
                         req_to_send = false;
+                        pulse_marked = false;
                     }
                 } 
                 else //ACK was for another device.
@@ -547,18 +551,13 @@ void VistaBus::rx_tx_task(void * args)
                 }
             }
         }
-        if (req_to_send && pulse_marked)
+        if (req_to_send && pulse_marked && (last_data_received - pulse_mark_time > 500*1000))
         {
             ack_failures++;
             mark_failures = 0;
         }
         if (req_to_send && !pulse_marked)
             mark_failures++;
-        if (!req_to_send)
-        {
-            ack_failures = 0;
-            mark_failures = 0;
-        }
         if (ack_failures == 5)
         {
             ESP_LOGI("VistaBus", "Failure to receive F6 ACK after 5 tries.  Giving up.");
@@ -566,13 +565,19 @@ void VistaBus::rx_tx_task(void * args)
             ack_failures = 0;
             mark_failures = 0;
         };
-        if (mark_failures == 10)
+        if (mark_failures == 20)
         {
-            ESP_LOGI("VistaBus", "Failure to mark pulse after 10 tries.  Giving up.");
+            ESP_LOGI("VistaBus", "Failure to mark pulse after 20 tries.  Giving up.");
             req_to_send = false;
             ack_failures = 0;
-            mark_failures = 0;
+            mark_failures =0;
         };
+        if (!req_to_send)
+        {
+            ack_failures = 0;
+            mark_failures = 0;
+            pulse_marked = false;
+        }
     }
     free(data);
     ESP_LOGI(TASK_TAG, "Stopping Task");
