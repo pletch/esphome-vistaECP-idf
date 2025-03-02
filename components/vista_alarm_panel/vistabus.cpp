@@ -280,13 +280,12 @@ bool VistaBus::mark_pulse(uint8_t address)
     gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) &taskargs );
     uint32_t result = 1;
 
-    while (result) 
+    while (result) //'result' is the pin value and needs to be low to proceed.
     { 
-        xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(400));   //find first falling edge. 
-                                                                    //'result' is the pin value and needs to be low to proceed.
+        xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(400));   //find first falling edge.                                                                
     } 
     gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin),GPIO_INTR_POSEDGE);
-    bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(9)) == pdTRUE); //confirm still low after 11ms by waiting for timeout
+    bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(9)) == pdTRUE); //confirm still low after 9ms by waiting for timeout
     if (!notified) 
     {
         
@@ -363,7 +362,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             else
             {
-                ESP_LOGI("VistaBus", "Failure to send after 10 tries.  Giving up.");
+                ESP_LOGI("VistaBus", "Failure to mark pulse for send after 10 tries.  Giving up.");
                 send_retries = 0;
                 req_to_send = false;
             }
@@ -431,7 +430,7 @@ void VistaBus::rx_tx_task(void * args)
                         req_to_send = false;
                         send_retries = 0;
                     }
-                    else if (send_retries == 3)
+                    else if (send_retries == 5)
                     {
                         req_to_send = false;
                         send_retries = 0;
