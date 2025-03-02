@@ -73,7 +73,7 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
         init_uart(static_cast<uart_port_t>(this->extuartNum),static_cast<gpio_num_t>(this->monitorPin), static_cast<gpio_num_t>(-1));
     }
 
-    xTaskCreate(rx_tx_task_start, "uart_rx_tx_task", UART_RX_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-9, &this->rx_tx_task_Handle);
+    xTaskCreate(rx_tx_task_start, "uart_rx_tx_task", UART_RX_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-1, &this->rx_tx_task_Handle);
     if (monitorPin != -1)
     {
         xTaskCreate(monitor_rx_task_start, "uart_monitor_rx_task", UART_RX_EXT_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-10, &this->monitor_rx_task_Handle);
@@ -170,9 +170,10 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
 
     int intr_alloc_flags = 0;
 
-#if CONFIG_UART_ISR_IN_IRAM
-    intr_alloc_flags = ESP_INTR_FLAG_IRAM;
-#endif
+//#if CONFIG_UART_ISR_IN_IRAM
+    //intr_alloc_flags = ESP_INTR_FLAG_IRAM;
+    //intr_alloc_flags = 1;
+//#endif
 
      
     ESP_ERROR_CHECK(uart_driver_install(u_n, RX_BUF_SIZE + 8, 0, 0, NULL, intr_alloc_flags));
@@ -181,17 +182,19 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     ESP_ERROR_CHECK(uart_set_pin(u_n, tx_pin, rx_pin, -1, -1));
     ESP_ERROR_CHECK(uart_set_rx_timeout(u_n, 4));
     ESP_ERROR_CHECK(uart_set_tx_empty_threshold(u_n,5));
+    ESP_ERROR_CHECK(uart_enable_rx_intr(u_n));
     if (static_cast<int>(tx_pin) == -1) 
     {
         ESP_ERROR_CHECK(uart_set_rx_full_threshold(u_n, 6));
         ESP_ERROR_CHECK(uart_set_line_inverse(u_n, UART_SIGNAL_RXD_INV));
-        
     } 
     else 
     {
         ESP_ERROR_CHECK(uart_set_rx_full_threshold(u_n, 2));
         ESP_ERROR_CHECK(uart_set_line_inverse(u_n, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV));
+        ESP_ERROR_CHECK(uart_enable_tx_intr(u_n,1,0));
     }
+    
 }
 
 static bool validChksum(const char * cbuf, int start, int len)
@@ -233,62 +236,81 @@ static int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, 
 
 void IRAM_ATTR VistaBus::gpio_isr_handler(void * args)
 {
-    TaskHandle_t task_handle = (TaskHandle_t) args;
-    int val = gpio_get_level(GPIO_NUM_18);
-    xTaskNotifyFromISR(task_handle,val, eSetValueWithOverwrite,0);
-
+    gpioTaskArgs * taskargs = (gpioTaskArgs *) args; 
+    BaseType_t xHigherPriorityTaskWoken;
+    xHigherPriorityTaskWoken = pdFALSE;
+    int val = gpio_get_level(static_cast<gpio_num_t>(taskargs->pin));
+    xTaskNotifyFromISR(taskargs->task_handle,val, eSetValueWithOverwrite,&xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 } 
 
 
-void VistaBus::mark_pulse(uint8_t address)
+bool VistaBus::mark_pulse(uint8_t address)
 {
     uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_DISABLE);
     char snd_data[3];
+    bool sent_request = false;
+    uint8_t which_pulse = 0;
     if (address < 8)
     {
         snd_data[0] = 0xFF ^ (0x01 << (address & 0x07));
         snd_data[1] = 0;
         snd_data[2] = 0;
+        which_pulse = 1;
     }
     else if (address < 17)
     {
         snd_data[0] = 0xFF;
         snd_data[1] = 0xFF ^ (0x01 << (address & 0x07));
         snd_data[2] = 0;
+        which_pulse = 2;
     }
     else
     {
         snd_data[0] = 0xFF;
         snd_data[1] = 0xFF;
         snd_data[2] = 0xFF ^ (0x01 << (address & 0x07));
+        which_pulse = 3;
     }
     //Use GPIO on rxPin to find pulse signal
-    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_ANYEDGE);
-    gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) this->rx_tx_task_Handle);
+    gpioTaskArgs taskargs;
+    taskargs.task_handle = this->rx_tx_task_Handle;
+    taskargs.pin = this->rxPin;
+    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_NEGEDGE);
+    gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) &taskargs );
     uint32_t result = 1;
+
     while (result) 
     { 
-        xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(400));   //find first falling edge. Pulsing freq seems to be ~ 330 ms.  
+        xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(400));   //find first falling edge. 
                                                                     //'result' is the pin value and needs to be low to proceed.
     } 
     gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin),GPIO_INTR_POSEDGE);
-    bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(11)) == pdTRUE); //confirm still low after 11ms by waiting for timeout
+    bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(9)) == pdTRUE); //confirm still low after 11ms by waiting for timeout
     if (!notified) 
     {
-        xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(7)); //first rising edge           
-        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1);
         
-        xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(7)); //second rising edge              
-        if (snd_data[1] != 0)
-            uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
+        bool rising_edge = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(5)) == pdTRUE); //first rising edge
+        if (rising_edge)
+        {           
 
-        xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(7)); //third rising edge           
-        if (snd_data[2] != 0)
-            uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
+            uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1);
+        
+            xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(7)); //second rising edge              
+            if (snd_data[1] != 0)
+                uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
+    
+            xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(7)); //third rising edge           
+            if (snd_data[2] != 0)
+                uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
+            sent_request = true;
+        }
     }
     gpio_isr_handler_remove(static_cast<gpio_num_t>(this->rxPin));
     uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_EVEN);
+    return sent_request;
 }
+
 
 void VistaBus::rx_tx_task(void * args)
 {
@@ -333,9 +355,18 @@ void VistaBus::rx_tx_task(void * args)
         {
             req_to_send = xQueueReceive(this->sendQueue,&pkt_to_send,0) == pdPASS;
         }
-        if (req_to_send) 
+        if (req_to_send)
         {
-            mark_pulse(pkt_to_send.keypadaddress);
+            if(send_retries < 10) 
+            {
+                send_retries += mark_pulse(pkt_to_send.keypadaddress);
+            }
+            else
+            {
+                ESP_LOGI("VistaBus", "Failure to send after 10 tries.  Giving up.");
+                send_retries = 0;
+                req_to_send = false;
+            }
         }
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(250)); 
         if (rxBytes > 0) 
@@ -430,12 +461,17 @@ void VistaBus::rx_tx_task(void * args)
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
             }
-            else if ( data[0] == 0x98 ) //EXP
-            {                    
-                get_Packet(&received_packet,data,1,M98_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+            else if ( data[0] == 0x98) //EXP
+            {               
+                if (req_to_send && send_retries > 0 && pkt_to_send.type == 2)
+                {
+                    req_to_send = false;
+                }     
+                get_Packet(&received_packet,data,1,M98_MESSAGE_LENGTH-2,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 if (EXPemulation)
                     this->process98(received_packet.payload);
-                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));          
+                get_Packet(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));    
             }
             else if ( data[0] == 0xF9 ) //LRR
             {   
@@ -467,7 +503,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0x9E ) //5881EN traffic on Vista 20p (address 0)??
             {   
-                get_Packet(&received_packet,data,1,3,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                get_Packet(&received_packet,data,1,4,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 uint32_t val = 0x9E << 8 | (received_packet.payload[3]);
                 xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
@@ -644,11 +680,23 @@ void VistaBus::process98(const char * cbuf)
     char type = cbuf[4];
     // we use zone to either | or & bits depending if in fault or reset
     // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry
-    if (type == 0xF1)
+    esp_timer_handle_t oneshot_timer;
+    const esp_timer_create_args_t oneshot_timer_args = 
     {
+        .callback = &precise_delay,
+        .arg = (void *) this->rx_tx_task_Handle,
+        .dispatch_method = ESP_TIMER_ISR,
+        .name = "precise_delay_timer",
+        .skip_unhandled_events = false
+    };
+    esp_timer_create(&oneshot_timer_args, &oneshot_timer);
+    esp_timer_start_once(oneshot_timer, 2500);
+    xTaskNotifyWait(0xFFFFFFFF,0,NULL,portMAX_DELAY);
+    if (type == 0xF1)
+    {   
         char seq = cbuf[3];
-        char lcbuf[6];
-        int lcbuflen = 6;
+        char lcbuf[5];
+        int lcbuflen = 5;
         bool valid_address = false;
         uint8_t expSeq = (seq == 0x20 ? 0x34 : 0x31);
         uint8_t address = 0;
@@ -666,19 +714,20 @@ void VistaBus::process98(const char * cbuf)
             emulatedExpander *expander = getExpander(address);
             if (expander != NULL && expander->pending_update.zone != 0)
             {
-                //send appropriate packet (example FB 0A 31 00 48) to notify panel
-                lcbuf[0] = 0xFF ^ (0x01 << (address & 0x07)); //7F=07,FE=08, FD=09, FB=10, F7=11
-                lcbuf[1] = address;
-                lcbuf[2] = expSeq;
+                char header[1];
+                header[0] = 0xFF ^ (0x01 << (address & 0x07)); //7F=07,FE=08, FD=09, FB=10, F7=11
+                lcbuf[0] = address;
+                lcbuf[1] = expSeq;
                 uint8_t z = expander->pending_update.zone & 0x07;
-                lcbuf[3] = z ? 0 : 0x01;
+                lcbuf[2] = z ? 0 : 0x01;
                 uint8_t chksum = 0;
-                lcbuf[4] = (z << 5) ^ (0x10*expander->pending_update.fault); // we send out the current zone state
-                for (int x = 0; x < lcbuflen; x++)
+                lcbuf[3] = (z << 5) ^ (0x10*expander->pending_update.fault); // we send out the current zone state
+                for (int x = 0; x < lcbuflen-1; x++)
                 {
                     chksum += lcbuf[x];
                 }
-                chksum = (chksum ^ 0xFF)-1;
+                chksum += header[0];
+                chksum = (chksum ^ 0xFF)-(header[0] ^ 0xFF);
                 lcbuf[lcbuflen-1] = chksum;
                 uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
                 expander->pending_update.zone = 0;
@@ -728,6 +777,15 @@ void VistaBus::process98(const char * cbuf)
     }
 }
 
+void IRAM_ATTR VistaBus::precise_delay(void * args)
+{
+    TaskHandle_t task_handle = (TaskHandle_t) args;
+    BaseType_t xHigherPriorityTaskWoken;
+    xHigherPriorityTaskWoken = pdFALSE;
+    xTaskNotifyFromISR(task_handle,0, eNoAction, &xHigherPriorityTaskWoken);
+    esp_timer_isr_dispatch_need_yield();
+}
+
 
 void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
 {
@@ -744,13 +802,14 @@ void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
             expander->faultBits = (expander->faultBits && (0xFF ^ (0x01 << (8-z)))) ^ (fault << (8-z));
             expander->pending_update.zone = zone;
             expander->pending_update.fault = fault;
-            char pulse[3];
-            pulse[0] = 0x00;
-            pulse[1] = 0xFF;
-            pulse[2] = 0xFB;
-            //vTaskDelay(300);  //Delay to allow API comms to finish
-            //Nudge panel to send F1 request  
-            mark_pulse(address);  //<--does not seem to work...signal analysis needed
+            //Nudge panel to send F1 request
+            SendPacket pkt;
+            pkt.type = 2;
+            pkt.keypadaddress = address;
+            pkt.payload[0] = 0;
+            pkt.size = 0;
+            xQueueSend(sendQueue,&pkt,0);
+
     }
 }
 

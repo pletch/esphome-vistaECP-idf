@@ -64,7 +64,10 @@
         "bit": "cpp",
         "compare": "cpp",
         "xmemory": "cpp",
-        "ranges": "cpp"
+        "ranges": "cpp",
+        "span": "cpp",
+        "xstring": "cpp",
+        "xutility": "cpp"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM6"

@@ -57,10 +57,16 @@ struct ReceivedPacket
 
 struct SendPacket  
 {
-    int type; //0 = hex, 1 = text
+    int type{-1}; //0 = hex, 1 = text, 2 = no_ack_expected
     char payload[24];
     int keypadaddress;
     int size;
+};
+
+struct gpioTaskArgs  
+{
+    TaskHandle_t task_handle;
+    int pin;
 };
 
 
@@ -93,7 +99,9 @@ protected:
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
     void process98(const char * cbuf);
-    void mark_pulse(uint8_t address);
+    bool mark_pulse(uint8_t address);
+    static void gpio_isr_handler(void * args);
+    static void precise_delay(void * args);
 
     struct pendingUpdate
     {
@@ -115,7 +123,6 @@ protected:
     TaskHandle_t monitor_rx_task_Handle;
     QueueHandle_t receiveQueue;
     QueueHandle_t sendQueue;
-    uint64_t last_int;
-    static void gpio_isr_handler(void * args);
+
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
 };
