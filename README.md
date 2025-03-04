@@ -39,12 +39,12 @@ Fork is tailored for the needs of my system and shared here for the benefits of 
 Please no judgement on quality of code or approach.  I am merely a self-learned c++ hobbyist figuring this out as I go!
 
 Key differences from original project:
-- Arduino dependency removed and refactored for ESP-IDF.
+- Arduino dependency removed and refactored for ESP-IDF v5.3. Works with newer espressif cores such as C6.
 - Relay board emulation has been removed.
 - Config refactored with validation. Examine examples for specifying sensors as these are different from original project.
 - Sensors refactored to work with modified config approach.
-- Zone emulation specifier in yaml config automatically enables expander board emulation on appropriate channel.
-  (Note there is delay on emulated zones.  Zone data is only exchanged with the panel during polling.) <--Work in progress to fix.
+- Zone emulation specifier in yaml config automatically enables expander board emulation on appropriate address and corresponding group
+    of eight zone numbers.
 - Refactored to support workflow associated with Vistabus class using FreeRTOS tasks for UART comm and intertask comm via FreeRTOS Queues.
 - Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel.
 - Targeted only towards ESPHome API.  Stand-alone MQTT is removed in this version.
@@ -52,8 +52,7 @@ Key differences from original project:
     seem to respond to AUI commands from either original project or this forked version.
 - Web server interface component not integrated as is done in the upstream version.
 - Uses one or two (if monitoring TX wire for RF messages etc.) hardware UARTS on the ESP32 family rather than software GPIO bit-banging.
-- Due to the above, impact of control pulse timing differs and some commands headers are detected differently (eg. RFx related FE vs FB).
-- Will not work with older ESP8266. Untested on single core ESP32 family devices such as S2/C3.
+- Will not work with older ESP8266. Limited testing on single core ESP32 family devices such as S2/C3/C6.
 
 Special thanks to Dilbert for helping answer questions that have come up along the way! 
 
