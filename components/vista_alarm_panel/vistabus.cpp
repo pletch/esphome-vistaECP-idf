@@ -563,20 +563,20 @@ void VistaBus::rx_tx_task(void * args)
         else if (req_to_send && !pulse_marked)
             mark_failures++;
 
-        if (ack_failures == 5)
+        if (ack_failures == 3)
         {
-            ESP_LOGI("VistaBus", "Failure to receive F6 ACK after 5 tries.  Giving up.");
+            ESP_LOGI("VistaBus", "Failure to receive F6 ACK after 3 tries.  Giving up.");
             req_to_send = false;
             ack_failures = 0;
             mark_failures = 0;
-        };
-        if (mark_failures == 20)
+        }
+        if (mark_failures == 67) //1340 ms total / 20 ms task frequency
         {
-            ESP_LOGI("VistaBus", "Failure to mark pulse after 20 tries.  Giving up.");
+            ESP_LOGI("VistaBus", "Failure to mark pulse after 5 cycles.  Giving up.");
             req_to_send = false;
             ack_failures = 0;
             mark_failures =0;
-        };
+        }
         if (!req_to_send)
         {
             ack_failures = 0;
