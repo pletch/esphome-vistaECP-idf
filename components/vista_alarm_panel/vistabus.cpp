@@ -266,7 +266,6 @@ void IRAM_ATTR VistaBus::gpio_isr_handler(void * args)
 bool VistaBus::mark_pulse(uint8_t address)
 {
     uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_DISABLE);
-    uart_set_stop_bits(static_cast<uart_port_t>(this->uartNum),UART_STOP_BITS_1);
     char snd_data[3];
     bool sent_request = false;
     uint8_t which_pulse = 0;
@@ -295,38 +294,39 @@ bool VistaBus::mark_pulse(uint8_t address)
     gpioTaskArgs taskargs;
     taskargs.task_handle = this->rx_tx_task_Handle;
     taskargs.pin = this->rxPin;
-    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_ANYEDGE);
+    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_NEGEDGE);
     gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) &taskargs );
-        gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_ANYEDGE);
-        uint32_t result = 1;
-        while (result) 
-        { 
-            xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(400));   //find first falling edge. 
-                                                                    //'result' is the pin value and needs to be low to proceed.
-        } 
-        gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin),GPIO_INTR_POSEDGE);
-        bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(9)) == pdTRUE); //confirm still low after 9ms by waiting for timeout
-        if (!notified) 
+    uint32_t result = 1;
+
+    if (gpio_get_level(static_cast<gpio_num_t>(this->rxPin))) //pin is high
+    {
+    //gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin),GPIO_INTR_POSEDGE);
+    //bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(9)) == pdTRUE); //confirm still low after 9ms by waiting for timeout
+        if (!(xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(10)) == pdPASS)) //pin doesn't transition to low in 10 second window
         {
-        
-            bool rising_edge = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(5)) == pdTRUE); //first rising edge
-            if (rising_edge)
-            {           
-                uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1);
-        
-                xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(5)); //second rising edge              
-                if (snd_data[1] != 0)
-                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
-    
-                xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(5)); //third rising edge           
-                if (snd_data[2] != 0)
-                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
-                sent_request = true;
+            bool falling_edge = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(300)) == pdTRUE); // find start of 13ms low period
+            if (falling_edge && !result)
+            {   
+                gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_POSEDGE);
+                if (!(xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(10)) == pdPASS)) //if interrupt comes in before this, panel is sending
+                {
+                    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //first rising edge
+                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1); 
+
+                    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //second rising edge
+                    if (snd_data[1] != 0)
+                        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
+            
+                    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //third rising edge           
+                    if (snd_data[2] != 0)
+                        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
+                    sent_request = true;
+                }
             }
         }
+    } 
     gpio_isr_handler_remove(static_cast<gpio_num_t>(this->rxPin));
     uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_EVEN);
-    uart_set_stop_bits(static_cast<uart_port_t>(this->uartNum),UART_STOP_BITS_2);
     return sent_request;
 }
 
@@ -359,10 +359,11 @@ void VistaBus::rx_tx_task(void * args)
     int tempbuff_fill = 0;
     int cksum = 0;
     bool pulse_marked = false;
+    
     uint64_t pulse_mark_time = 0;
     while (1) 
     {
-        
+        int uart_delay = 500;
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
         {
             this->panel_connected = false;
@@ -377,13 +378,14 @@ void VistaBus::rx_tx_task(void * args)
         {
             req_to_send = xQueueReceive(this->sendQueue,&pkt_to_send,0) == pdPASS;
         }
-        if (req_to_send)
+        if (req_to_send && !pulse_marked)
         {
             pulse_marked = mark_pulse(pkt_to_send.keypadaddress);
             pulse_mark_time = esp_timer_get_time();
+            uart_delay = 20;
         }
-        
-        int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(250)); 
+            
+        int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(uart_delay)); 
         if (rxBytes > 0) 
         {
             this->panel_connected = true;
@@ -551,7 +553,7 @@ void VistaBus::rx_tx_task(void * args)
                 }
             }
         }
-        if (req_to_send && pulse_marked && (last_data_received - pulse_mark_time > 500*1000))
+        if (req_to_send && pulse_marked && (last_data_received - pulse_mark_time > 600*1000))
         {
             ack_failures++;
             mark_failures = 0;
