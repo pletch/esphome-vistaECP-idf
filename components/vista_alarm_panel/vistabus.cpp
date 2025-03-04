@@ -376,7 +376,31 @@ void VistaBus::rx_tx_task(void * args)
         }
         if (!req_to_send) 
         {
-            req_to_send = xQueueReceive(this->sendQueue,&pkt_to_send,0) == pdPASS;
+            bool pkt_queued = false;
+            while (uxQueueMessagesWaiting(sendQueue))
+            {
+                if (!pkt_queued)
+                {
+                    xQueueReceive(sendQueue,&pkt_to_send,0); //something in queue. Pop it out.
+                    pkt_queued = true;
+                    req_to_send = true;
+                }
+                else
+                {
+                    SendPacket next_pkt;
+                    xQueuePeek(sendQueue, &next_pkt,pdMS_TO_TICKS(20));
+                    if(next_pkt.keypadaddress == pkt_to_send.keypadaddress && (next_pkt.size + pkt_to_send.size) <= 24)
+                    {
+                        xQueueReceive(sendQueue, &next_pkt, 0);
+                        memcpy(pkt_to_send.payload + pkt_to_send.size, next_pkt.payload, next_pkt.size);
+                        pkt_to_send.size += next_pkt.size;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
         }
         if (req_to_send && !pulse_marked)
         {
@@ -413,7 +437,8 @@ void VistaBus::rx_tx_task(void * args)
                     char keys_to_send[24];
                     outbuffer[0] = (((++sequence<<6) & 0xc0) ^ 0xc0) | (pkt_to_send.keypadaddress & 0x3F);
                     outbuffer[1] = pkt_to_send.size+1;
-                    int checksum = 0;
+                    uint8_t chksum = 0;
+                    chksum += outbuffer[0] + outbuffer[1];
                     for (int i=2; i < pkt_to_send.size+2; i++)
                     {
                         if (pkt_to_send.type == 0) //write direct as hex
@@ -439,9 +464,9 @@ void VistaBus::rx_tx_task(void * args)
                             else if (pkt_to_send.payload[i-2] >= 0x41 && pkt_to_send.payload[i-2] <= 0x44)
                                 outbuffer[i] = (pkt_to_send.payload[i-2] - 0x25);
                         }
-                        checksum += outbuffer[i];
+                        chksum += outbuffer[i];
                     }
-                    outbuffer[pkt_to_send.size+2] = (0x100 - outbuffer[0] - (pkt_to_send.size + 1) - checksum ) & 0xff;
+                    outbuffer[pkt_to_send.size+2] = (chksum ^ 0xFF)+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
                     get_Packet(&received_packet,data, 0, 2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(150)); 
@@ -759,7 +784,6 @@ void VistaBus::process98(const char * cbuf)
             if (expander != NULL && expander->pending_update.zone != 0)
             {
                 char header[1];
-                header[0] = 0xFF ^ (0x01 << (address & 0x07)); //7F=07,FE=08, FD=09, FB=10, F7=11
                 lcbuf[0] = address;
                 lcbuf[1] = expSeq;
                 uint8_t z = expander->pending_update.zone & 0x07;
@@ -770,8 +794,7 @@ void VistaBus::process98(const char * cbuf)
                 {
                     chksum += lcbuf[x];
                 }
-                chksum += header[0];
-                chksum = (chksum ^ 0xFF)-(header[0] ^ 0xFF);
+                chksum = (chksum ^ 0xFF)+1;
                 lcbuf[lcbuflen-1] = chksum;
                 uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
                 expander->pending_update.zone = 0;
