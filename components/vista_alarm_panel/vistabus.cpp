@@ -553,13 +553,16 @@ void VistaBus::rx_tx_task(void * args)
                 }
             }
         }
+
         if (req_to_send && pulse_marked && (last_data_received - pulse_mark_time > 600*1000))
         {
             ack_failures++;
             mark_failures = 0;
+            pulse_marked = false;
         }
-        if (req_to_send && !pulse_marked)
+        else if (req_to_send && !pulse_marked)
             mark_failures++;
+
         if (ack_failures == 5)
         {
             ESP_LOGI("VistaBus", "Failure to receive F6 ACK after 5 tries.  Giving up.");
