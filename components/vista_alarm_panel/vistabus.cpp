@@ -861,23 +861,34 @@ void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
     emulatedExpander *expander = getExpander(address);
     if (expander != NULL)
     {
-            uint8_t expSeq;
-            uint8_t lcbuflen = 5;
-            char lcbuf[5];
-            char header[1];
-            uint8_t z = zone & 0x07;
-            lcbuf[2] = z ? 0 : 0x01;
-            expander->faultBits = (expander->faultBits && (0xFF ^ (0x01 << (8-z)))) ^ (fault << (8-z));
-            expander->pending_update.zone = zone;
-            expander->pending_update.fault = fault;
-            //Nudge panel to send F1 request
-            SendPacket pkt;
-            pkt.type = 2;
-            pkt.keypadaddress = address;
-            pkt.payload[0] = 0;
-            pkt.size = 0;
-            xQueueSend(sendQueue,&pkt,0);
+        uint8_t expSeq;
+        uint8_t lcbuflen = 5;
+        char lcbuf[5];
+        char header[1];
+        uint8_t z = zone & 0x07;
+        lcbuf[2] = z ? 0 : 0x01;
+        expander->faultBits = fault ? expander->faultBits | (0x01 << (8-z)) : expander->faultBits & ~(0x01 << (8-z));
+        expander->pending_update.zone = zone;
+        expander->pending_update.fault = fault;
+        //Nudge panel to send F1 request
+        SendPacket pkt;
+        pkt.type = 2;
+        pkt.keypadaddress = address;
+        pkt.payload[0] = 0;
+        pkt.size = 0;
+        xQueueSend(sendQueue,&pkt,0);
+    }
+}
 
+void VistaBus::setExpTamper(int32_t zone, bool tamper_active)
+{
+    uint8_t address = getExpanderAddress(zone);
+    emulatedExpander *expander = getExpander(address);
+    if (expander != NULL)
+    {
+        uint8_t z = zone & 0x07;
+        expander->tamperBits = tamper_active ? expander->tamperBits | (0x01 << (8-z)) : expander->tamperBits & ~(0x01 << (8-z));
+        expander->faultBits = tamper_active ? expander->faultBits | (0x01 << (8-z)) : expander->faultBits & ~(0x01 << (8-z));
     }
 }
 
@@ -885,16 +896,21 @@ void VistaBus::add_emulated_expander(uint8_t zone)
 {   
     uint8_t address = getExpanderAddress(zone);
     emulatedExpander *expander = getExpander(address);
+    uint8_t z = zone & 0x07;
     if (expander == NULL) //emulated expander does not exist, add it
     {   
         emulatedExpander new_expander;
         new_expander.address = getExpanderAddress(zone);
+        new_expander.tamperBits = new_expander.tamperBits & ~(0x01 << (8-z));
         this->emulated_expanders.push_back(new_expander);
         ESP_LOGI("VISTABUS","Adding new emulated expander on address:%d for emulated zone:%d",new_expander.address,zone);
         EXPemulation = true;
     }
     else //emulated expander already created
+    {
+        expander->tamperBits = expander->tamperBits & ~(0x01 << (8-z));
         ESP_LOGI("VISTABUS","Existing emulated expander on address:%d handling emulated zone:%d",expander->address,zone);
+    }
 }
 
 void VistaBus::rx_tx_task_start(void *args)

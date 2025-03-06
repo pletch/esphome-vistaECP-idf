@@ -6,7 +6,7 @@ Key differences from original project:
 - Arduino dependency removed and tailed for ESP-IDF.
 - Refactored to support workflow associated with Vistabus class.
 - Only targeted towards ESPHome API.  MQTT is removed in this version.
-- Expander emulation and relay emulation are not present / enabled. May be added back in future.
+- Relay emulation not implemented. Expander emulation is enabled with support for fault & tamper detection on zones.
 - Limited testing of expanded functionality such as AUI traffic handling.  My panel does not
     seem to respond to AUI commands from either original project or this forked version.
 
@@ -117,9 +117,6 @@ namespace esphome
                 it->rfserial = rf_serial;
                 it->rfloop = rf_loop;
 
-                //if(emulated)
-                //    emulated_zones.push_back(zone_number);
-
                 ESP_LOGI("","Adding binary zone sensor.  Zone: %d   rfserial:%lu   rfloop:%d",it->zone, it->rfserial, it->rfloop);
                 return;
             }
@@ -215,7 +212,7 @@ namespace esphome
 
             register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
-            register_service(&vistaECPHome::send_cmd_bytes, "send_cmd_bytes", {"addr", "hexdata"});
+            register_service(&vistaECPHome::send_cmd_bytes, "send_cmd_bytes", {"address", "hexdata"});
             register_service(&vistaECPHome::alarm_keypress_partition, "alarm_keypress_partition", {"keys", "partition"});
             register_service(&vistaECPHome::alarm_disarm, "alarm_disarm", {"code", "partition"});
             register_service(&vistaECPHome::alarm_arm_home, "alarm_arm_home", {"partition"});
@@ -224,13 +221,8 @@ namespace esphome
             register_service(&vistaECPHome::alarm_trigger_panic, "alarm_trigger_panic", {"code", "partition"});
             register_service(&vistaECPHome::alarm_trigger_fire, "alarm_trigger_fire", {"code", "partition"});
             register_service(&vistaECPHome::set_zone_fault, "set_zone_fault", {"zone", "fault"});
+            register_service(&vistaECPHome::set_emulated_zone_tamper, "set_emulated_zone_tamper_state", {"zone", "tamper active"});
 
-            // Disabling this for now.
-            // set addresses of expander emulators
-            //for (int x = 0; x < 9; x++)
-            //{
-            //  vista.zoneExpanders[x].expansionAddr = expanderAddr[x];
-            //}
             if(text_sensors_partition[0].system_status != NULL)
                 text_sensors_partition[0].system_status->process(STATUS_ONLINE);
             for (uint8_t p = 0; p < maxPartitions; p++)
@@ -296,6 +288,11 @@ namespace esphome
         void vistaECPHome::set_zone_fault(int32_t zone, bool fault)
         {
             vistabus.setExpFaultBits(zone, fault);
+        }
+
+        void vistaECPHome::set_emulated_zone_tamper(int32_t zone, bool tamper_active)
+        {
+            vistabus.setExpTamper(zone, tamper_active);
         }
 
         void vistaECPHome::set_maxPartitions(uint8_t mp)

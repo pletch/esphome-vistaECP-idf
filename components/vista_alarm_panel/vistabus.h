@@ -84,6 +84,7 @@ public:
     void emulateLRR(bool enabled);
     void add_emulated_expander(uint8_t zone);
     void setExpFaultBits(uint8_t zone, bool fault);
+    void setExpTamper(int32_t zone, bool tamper_active);
 
 protected:
     int rxPin, txPin;
@@ -113,6 +114,7 @@ protected:
     {   
         uint8_t address{0};
         char faultBits{0};
+        char tamperBits{0xFF};
         char seq{31};
         pendingUpdate pending_update;
     };

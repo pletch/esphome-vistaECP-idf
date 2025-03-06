@@ -391,6 +391,7 @@ namespace esphome
 
                 void createZoneFromId(const char * zid,uint8_t p=0);
                 void set_zone_fault(int32_t zone, bool fault);
+                void set_emulated_zone_tamper(int32_t zone, bool tamper_active);
                 void register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial, uint8_t rf_loop);
                 void register_status_sensor(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, const char * type);
                 void register_zone_text(vistaECPTextSensor *text_sensor, uint8_t partition_number, uint8_t zone_number);
@@ -408,7 +409,6 @@ namespace esphome
                 uint8_t partitionTargets;
 
                 void createZone(uint16_t z,uint8_t p=0);
-                //std::vector<uint8_t> emulated_zones{};
       
                 auiCmdType auiCmd;
                 std::vector<zoneType> alarmZones{};
