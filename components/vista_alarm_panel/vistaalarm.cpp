@@ -358,15 +358,21 @@ namespace esphome
 
             if (!partition)
                 partition = defaultPartition;
-            if (debug > 0)
-                ESP_LOGD(TAG, "Writing keys: %s to partition %li", keystring.c_str(), partition);
 
             uint8_t addr = 0;
             if (partition > maxPartitions || partition < 1)
                 return;
             addr = partitionKeypads[partition];
+            bool result = false;
             if (addr > 0 and addr < 24)
-                vistabus.write(keystring.c_str(), keystring.length(), addr);
+                result = vistabus.write(keystring.c_str(), keystring.length(), addr);
+            if (debug > 0)
+            {
+                if (result)
+                    ESP_LOGD(TAG, "Writing keys: %s to partition %li", keystring.c_str(), partition);
+                else
+                    ESP_LOGD(TAG, "Failed to write keys: %s to partition %li. Send Queue Full.", keystring.c_str(), partition);
+            }
         }
 
         void vistaECPHome::send_cmd_bytes(int32_t addr, std::string hexbytes)

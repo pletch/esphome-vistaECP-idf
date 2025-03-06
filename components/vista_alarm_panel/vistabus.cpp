@@ -5,7 +5,7 @@
 VistaBus::VistaBus()
 {
     this->receiveQueue = xQueueCreate(20,sizeof(ReceivedPacket)); 
-    this->sendQueue = xQueueCreate(6, sizeof(SendPacket));
+    this->sendQueue = xQueueCreate(8, sizeof(SendPacket));
     this->panel_connected = false;
     this->stop_requested = false;
     this->LRRemulation = false;
@@ -110,24 +110,8 @@ bool VistaBus::write(const char * data_to_write, int size, int keypadaddress)
     sendpkt.keypadaddress = keypadaddress;
     sendpkt.type = 1;
     sendpkt.size = size;
-    SendPacket queuedpkt;
     bool result = false;
-    if (xQueueReceive(sendQueue,&queuedpkt,0) == pdPASS) //something in queue. Pop it out.
-    {
-        if ((sendpkt.size + queuedpkt.size) <= 24)
-        {
-            memcpy(queuedpkt.payload+queuedpkt.size, sendpkt.payload, sendpkt.size);
-            queuedpkt.size += sendpkt.size;
-            result = xQueueSend(sendQueue, &queuedpkt, 0) == pdPASS;
-        }
-        else //No room to concatenate...keep separate
-        {
-            xQueueSend(sendQueue, &queuedpkt, 0);
-            result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
-        }
-    }
-    else
-        result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
+    result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
 
     return result;
 }
@@ -641,7 +625,7 @@ void VistaBus::monitor_rx_task(void * args)
             rcvd_extPkt.payload[0] = data[0];
             if (data[0]==0xFE) //Send known packets immediately
             {
-                int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
+                int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125)); //do not set delay to less than 125ms
                 if (res > 0)
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
             }
@@ -652,28 +636,28 @@ void VistaBus::monitor_rx_task(void * args)
                 rcvd_extPkt.payload[2]=data[0];
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(125));
                 rcvd_extPkt.payload[3] = data[0]; //length
-                get_Packet(&rcvd_extPkt, data, 4, rcvd_extPkt.payload[3], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
+                get_Packet(&rcvd_extPkt, data, 4, rcvd_extPkt.payload[3], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
 
             }
             else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //expect response
             {
-                get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
+                get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
 
             }
             else if(val >> 8 == 0x9E && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to 9E command
             {
-                get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
+                get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
 
             }
             else if (data[0] == 0xF0 || data[0] == 0x7F || data[0]==0xFB || data[0] == 0xFD || data[0] == 0xF7) //expanders such as 4219 7F=07,FE=08, FD=09, FB=10, F7=11
             {
-                int res = get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
+                int res = get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125)); //do not set delay to less than 125ms
                 if (res > 0)
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
 

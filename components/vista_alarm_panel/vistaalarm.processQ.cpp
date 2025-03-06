@@ -142,56 +142,63 @@ namespace esphome
                                 zoneStatusUpdate(zt);
                             }
                         }     
-                        else if (payload[0] == 0xFE && size == 7 && payload[1] == 0) // Honeywell 5881 uses address of 0 on Vista 15/20
+                        else if (payload[0] == 0xFE && payload[1] == 0 && size == 8) // Honeywell 5881 uses address of 0 on Vista 15/20
                         {
                             char rf_serial_char[14];
                             //char rf_serial_char_out[20];
                             // FE 00 54 83 8f 89 a0 = Open / Active for door sensor.  
                             // FE 00 54 83 8f 89 80 = Closed / Inactive
                             // fe 00 51 85 f4 03 04 = heartbeat
-                            uint32_t device_serial = ((payload[3] & 0xF) << 16) + (payload[4] << 8) + payload[5];
-                            snprintf(rf_serial_char, 14, "%3lu%04lu", device_serial / 10000, device_serial % 10000);
+                            uint8_t chksum = 0;
+                            for (int i = 2; i < 7; i++)
+                                chksum += payload[i];
+                            chksum = ~(chksum) + 1;
+                            if (chksum == payload[7])
+                            {
+                                uint32_t device_serial = ((payload[3] & 0xF) << 16) + (payload[4] << 8) + payload[5];
+                                snprintf(rf_serial_char, 14, "%3lu%04lu", device_serial / 10000, device_serial % 10000);
                             
-                            if (debug > 0)
-                                ESP_LOGI(TAG, "RFX: %s,%02x", rf_serial_char, payload[6]);
-                            if (!(payload[6] & 4) && !(payload[6] & 1))
-                            { // ignore heartbeat
-                                zoneType *zt = getRfSerialLookup(device_serial);
-                                if (zt != NULL)
-                                {
-                                    int mask;
-                                    switch (zt->rfloop)
+                                if (debug > 0)
+                                    ESP_LOGI(TAG, "RFX: %s,%02x", rf_serial_char, payload[6]);
+                                if (!(payload[6] & 4) && !(payload[6] & 1))
+                                { // ignore heartbeat
+                                    zoneType *zt = getRfSerialLookup(device_serial);
+                                    if (zt != NULL)
                                     {
-                                        case 1:
-                                            mask = 0x80;
-                                            break;
-                                        case 2:
-                                            mask = 0x20;
-                                            break;
-                                        case 3:
-                                            mask = 0x10;
-                                            break;
-                                        case 4:
-                                            mask = 0x40;
-                                            break;
-                                        default:
-                                            mask = 0x80;
-                                            break;
-                                    }
-                                    if (zt->active)
-                                    {
-                                        zt->time = esp_timer_get_time();
-                                        zt->open = payload[6] & mask ? true : false;
-                                        zt->rflowbat = payload[6] & 2 ? true : false; // low bat
-                                        //ESP_LOGD(TAG, "set rf low bat to %d", zt->rflowbat);
-                                        zoneStatusUpdate(zt);
+                                        int mask;
+                                        switch (zt->rfloop)
+                                        {
+                                            case 1:
+                                                mask = 0x80;
+                                                break;
+                                            case 2:
+                                                mask = 0x20;
+                                                break;
+                                            case 3:
+                                                mask = 0x10;
+                                                break;
+                                            case 4:
+                                                mask = 0x40;
+                                                break;
+                                            default:
+                                                mask = 0x80;
+                                                break;
+                                        }
+                                        if (zt->active)
+                                        {
+                                            zt->time = esp_timer_get_time();
+                                            zt->open = payload[6] & mask ? true : false;
+                                            zt->rflowbat = payload[6] & 2 ? true : false; // low bat
+                                            //ESP_LOGD(TAG, "set rf low bat to %d", zt->rflowbat);
+                                            zoneStatusUpdate(zt);
+                                        }
                                     }
                                 }
-                            }
-                            if (text_sensors_common.rf_messages != NULL)
-                            {
-                                std::string s(rf_serial_char);
-                                text_sensors_common.rf_messages->process(s);
+                                if (text_sensors_common.rf_messages != NULL)
+                                {
+                                    std::string s(rf_serial_char);
+                                    text_sensors_common.rf_messages->process(s);
+                                }
                             }
                         }
                         /* rf_serial_char
