@@ -271,7 +271,7 @@ bool VistaBus::mark_pulse(uint8_t address)
     uint8_t which_pulse = 0;
     if (address < 8)
     {
-        snd_data[0] = 0xFF ^ (0x01 << (address & 0x07));
+        snd_data[0] = ~(0x01 << (address & 0x07));
         snd_data[1] = 0;
         snd_data[2] = 0;
         which_pulse = 1;
@@ -279,7 +279,7 @@ bool VistaBus::mark_pulse(uint8_t address)
     else if (address < 17)
     {
         snd_data[0] = 0xFF;
-        snd_data[1] = 0xFF ^ (0x01 << (address & 0x07));
+        snd_data[1] = ~(0x01 << (address & 0x07));
         snd_data[2] = 0;
         which_pulse = 2;
     }
@@ -287,7 +287,7 @@ bool VistaBus::mark_pulse(uint8_t address)
     {
         snd_data[0] = 0xFF;
         snd_data[1] = 0xFF;
-        snd_data[2] = 0xFF ^ (0x01 << (address & 0x07));
+        snd_data[2] = ~(0x01 << (address & 0x07));
         which_pulse = 3;
     }
     //Use GPIO on rxPin to find pulse signal
@@ -300,8 +300,6 @@ bool VistaBus::mark_pulse(uint8_t address)
 
     if (gpio_get_level(static_cast<gpio_num_t>(this->rxPin))) //pin is high
     {
-    //gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin),GPIO_INTR_POSEDGE);
-    //bool notified = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(9)) == pdTRUE); //confirm still low after 9ms by waiting for timeout
         if (!(xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(10)) == pdPASS)) //pin doesn't transition to low in 10 second window
         {
             bool falling_edge = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(300)) == pdTRUE); // find start of 13ms low period
@@ -466,7 +464,7 @@ void VistaBus::rx_tx_task(void * args)
                         }
                         chksum += outbuffer[i];
                     }
-                    outbuffer[pkt_to_send.size+2] = (chksum ^ 0xFF)+1;
+                    outbuffer[pkt_to_send.size+2] = ~chksum+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
                     get_Packet(&received_packet,data, 0, 2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(150)); 
@@ -794,7 +792,7 @@ void VistaBus::process98(const char * cbuf)
                 {
                     chksum += lcbuf[x];
                 }
-                chksum = (chksum ^ 0xFF)+1;
+                chksum = ~chksum + 1;
                 lcbuf[lcbuflen-1] = chksum;
                 uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
                 expander->pending_update.zone = 0;
@@ -829,14 +827,14 @@ void VistaBus::process98(const char * cbuf)
                 lcbuf[0] = 0xF0;
                 lcbuf[1] = expSeq;
                 lcbuf[2] = expander->faultBits;                      
-                lcbuf[3] = 0x7E; 
+                lcbuf[3] = expander->tamperBits; 
                 uint8_t chksum = 0;
                 for (int x = 0; x < lcbuflen; x++)
                 {
                     chksum += lcbuf[x];
                 }
                 lcbuflen ++;
-                chksum = (chksum ^ 0xFF)+1;
+                chksum = ~chksum + 1;
                 lcbuf[lcbuflen-1] = chksum;
                 uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
             }

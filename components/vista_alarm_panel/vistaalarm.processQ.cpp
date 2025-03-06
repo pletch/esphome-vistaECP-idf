@@ -755,7 +755,7 @@ namespace esphome
                     chksum += lcbuf[x];
                 }
                 chksum -= 1;
-                chksum = chksum ^ 0xFF;
+                chksum = ~chksum;
                 lcbuf[lcbuflen] = (char)chksum;
                 lcbuflen++;
             }
