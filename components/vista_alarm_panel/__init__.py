@@ -5,7 +5,6 @@ import os
 import logging
 from esphome.components.esp32 import get_esp32_variant
 from esphome.helpers import copy_file_if_changed, sanitize, snake_case
-from esphome.components import binary_sensor
 from esphome.const import (
     CONF_ID
 )
