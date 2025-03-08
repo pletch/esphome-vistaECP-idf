@@ -40,8 +40,6 @@ static const char* get_chip_model(esp_chip_model_t model) {
             return "ESP32-H2";
         case CHIP_ESP32P4:
             return "ESP32-P4";
-        case CHIP_POSIX_LINUX:
-            return "POSIX/Linux Simulator";
         default:
             return "Unknown Model";
     }
@@ -315,7 +313,7 @@ bool VistaBus::mark_pulse(uint8_t address)
 void VistaBus::rx_tx_task(void * args)
 {
     static const char *TASK_TAG = "[VISTABUS]RX_TX";
-    esp_log_level_set(TASK_TAG, ESP_LOG_INFO);
+    //esp_log_level_set(TASK_TAG, ESP_LOG_INFO);
     uint8_t* data = (uint8_t*) malloc(RX_BUF_SIZE+1);
     struct ReceivedPacket received_packet;
     received_packet.type = 0;
@@ -600,7 +598,7 @@ void VistaBus::rx_tx_task(void * args)
 void VistaBus::monitor_rx_task(void * args)
 {  
     static const char *TASK_TAG = "[VISTABUS]MONITOR_RX";
-    esp_log_level_set(TASK_TAG, ESP_LOG_INFO);
+    //esp_log_level_set(TASK_TAG, ESP_LOG_INFO);
     uint8_t* data = (uint8_t*) malloc(128);
     struct ReceivedPacket rcvd_extPkt;
     rcvd_extPkt.type = 1;
