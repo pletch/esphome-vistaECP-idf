@@ -134,7 +134,7 @@ namespace esphome
                                     z += 40 + (payload[3] << 3);
                                     break;
                             }
-                            bool open = (payload[4] >> (z - 4)) & 0x01;
+                            bool open = (payload[4] >> 4) & 0x01;
                             zoneType *zt = getZone(z);
                             if (zt != NULL && zt->active)
                             {

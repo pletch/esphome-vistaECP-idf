@@ -99,7 +99,7 @@ protected:
     static void monitor_rx_task_start(void *args);
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
-    void process98(const char * cbuf);
+    void processFA(const char * cbuf);
     bool mark_pulse(uint8_t address);
     static void gpio_isr_handler(void * args);
     static void precise_delay(void * args);
@@ -125,6 +125,7 @@ protected:
     TaskHandle_t monitor_rx_task_Handle;
     QueueHandle_t receiveQueue;
     QueueHandle_t sendQueue;
+    QueueHandle_t uartevtQueue;
 
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
 };
