@@ -319,8 +319,7 @@ bool VistaBus::mark_pulse(uint8_t address)
 
 void VistaBus::rx_tx_task(void * args)
 {
-    static const char *TASK_TAG = "[VISTABUS]RX_TX";
-    //esp_log_level_set(TASK_TAG, ESP_LOG_INFO);
+    static const char *TASK_TAG = "VistaBus";
     uint8_t* data = (uint8_t*) malloc(RX_BUF_SIZE+1);
     struct ReceivedPacket received_packet;
     received_packet.type = 0;
@@ -397,7 +396,7 @@ void VistaBus::rx_tx_task(void * args)
             pulse_mark_time = esp_timer_get_time();
             uart_delay = 20;
         }
-        if (is_2400 && !pulse_marked)
+        if (is_2400)
             uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(uart_delay));
         uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
@@ -442,17 +441,17 @@ void VistaBus::rx_tx_task(void * args)
                             if (pkt_to_send.payload[i-2] >= 0x30 && pkt_to_send.payload[i-2] <= 0x39)
                                 outbuffer[i] = (pkt_to_send.payload[i-2] - 0x30);
                             else if (pkt_to_send.payload[i-2] == 0x23)
-                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0B);
+                                outbuffer[i] = 0x0B;
                             else if (pkt_to_send.payload[i-2] == 0x2A)
-                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0A);
+                                outbuffer[i] = 0x0A;
                             else if (pkt_to_send.payload[i-2] == 0x46)
-                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0C);
+                                outbuffer[i] = 0x0C;
                             else if (pkt_to_send.payload[i-2] == 0x4D)
-                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0D);
+                                outbuffer[i] = 0x0D;
                             else if (pkt_to_send.payload[i-2] == 0x50)
-                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0E);
+                                outbuffer[i] = 0x0E;
                             else if (pkt_to_send.payload[i-2] == 0x47)
-                                outbuffer[i] = (pkt_to_send.payload[i-2] = 0x0F);
+                                outbuffer[i] = 0x0F;
                             else if (pkt_to_send.payload[i-2] >= 0x41 && pkt_to_send.payload[i-2] <= 0x44)
                                 outbuffer[i] = (pkt_to_send.payload[i-2] - 0x25);
                         }
@@ -461,12 +460,28 @@ void VistaBus::rx_tx_task(void * args)
                     outbuffer[pkt_to_send.size+2] = ~chksum+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
-                    get_Packet(&received_packet,data, 0, 3, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(150));  //remove all zeroes from buffer
-
-                    if(received_packet.payload[1] == outbuffer[0]) 
+                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 3, pdMS_TO_TICKS(50)); //remove trailing zeros from buffer
+                    if(rxBytes)
                     {
+                        for (int i=0; i < rxBytes; i++)
+                        {
+                            if (data[i] == outbuffer[0])
+                            {
+                                req_to_send = false;
+                                pulse_marked = false;
+                                break;
+                            }
+                        }
+                        if (req_to_send)
+                        {
+                            ESP_LOGW("VistaBus", "Did not find expected byte in response of %d bytes.", rxBytes);
+                            req_to_send = false;
+                        }
+                    }
+                    else
+                    {
+                        ESP_LOGW("VistaBus", "Did not receive any response bytes from panel.");
                         req_to_send = false;
-                        pulse_marked = false;
                     }
                 } 
                 else //ACK was for another device.
@@ -475,7 +490,7 @@ void VistaBus::rx_tx_task(void * args)
                 }
                zero_total = 0;
             }
-            else if ( data[0] == 0xF7) //DISPLAY
+            else if ( data[0] == 0xF7 ) //DISPLAY
             {
                 get_Packet(&received_packet,data,1,F7_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY));
                 if(validChksum(received_packet.payload,0,45))
@@ -484,7 +499,7 @@ void VistaBus::rx_tx_task(void * args)
                 }
                 zero_total = 0;
             }
-            else if ( data[0] == 0xF2) //AUI
+            else if ( data[0] == 0xF2 ) //AUI
             {
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
                 received_packet.payload[1] = data[0];
@@ -576,7 +591,7 @@ void VistaBus::rx_tx_task(void * args)
             }
         }
 
-        if (req_to_send && pulse_marked && (last_data_received - pulse_mark_time > 600*1000))
+        if (req_to_send && pulse_marked)
         {
             ack_failures++;
             mark_failures = 0;
@@ -587,14 +602,14 @@ void VistaBus::rx_tx_task(void * args)
 
         if (ack_failures == 3)
         {
-            ESP_LOGI("VistaBus", "Failure to receive F6 ACK after 3 tries.  Giving up.");
+            ESP_LOGW("VistaBus", "Failure to receive F6 ACK after 3 successive pulse marks.  Giving up.");
             req_to_send = false;
             ack_failures = 0;
             mark_failures = 0;
         }
         if (mark_failures == 67) //1340 ms total / 20 ms task frequency
         {
-            ESP_LOGI("VistaBus", "Failure to mark pulse after 5 cycles.  Giving up.");
+            ESP_LOGW("VistaBus", "Failure to mark pulse after 5 cycles.  Giving up.");
             req_to_send = false;
             ack_failures = 0;
             mark_failures =0;
