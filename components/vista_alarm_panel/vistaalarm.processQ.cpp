@@ -29,7 +29,7 @@ namespace esphome
                 {
                     if (debug > 0 && type == 0)
                     {
-                        if (payload[0] == 0xF7)
+                        if (payload[0] == 0xF7 || payload[0] == 0xF8)
                             printPacket("CMD", payload, 13);
                         else
                             printPacket("CMD", payload, size);

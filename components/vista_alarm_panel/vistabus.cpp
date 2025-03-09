@@ -363,7 +363,7 @@ void VistaBus::rx_tx_task(void * args)
         {
             this->panel_connected = false;
         }
-        if (!req_to_send) 
+        if (!req_to_send && !is_2400) 
         {
             bool pkt_queued = false;
             while (uxQueueMessagesWaiting(sendQueue))
@@ -397,7 +397,7 @@ void VistaBus::rx_tx_task(void * args)
             pulse_mark_time = esp_timer_get_time();
             uart_delay = 20;
         }
-        if (is_2400)
+        if (is_2400 && !pulse_marked)
             uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(uart_delay));
         uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
@@ -461,7 +461,7 @@ void VistaBus::rx_tx_task(void * args)
                     outbuffer[pkt_to_send.size+2] = ~chksum+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
-                    get_Packet(&received_packet,data, 0, 2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(150)); 
+                    get_Packet(&received_packet,data, 0, 3, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(150));  //remove all zeroes from buffer
 
                     if(received_packet.payload[1] == outbuffer[0]) 
                     {
@@ -473,7 +473,7 @@ void VistaBus::rx_tx_task(void * args)
                 {        
 
                 }
-                zero_total = 0;
+               zero_total = 0;
             }
             else if ( data[0] == 0xF7) //DISPLAY
             {
@@ -535,7 +535,6 @@ void VistaBus::rx_tx_task(void * args)
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum),&received_packet.payload[1], 1);
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                zero_total = 0;
             }
             else if ( data[0] == 0xFB ) //5881EN traffic on Vista 20p (address 0)??
             {   
@@ -547,7 +546,10 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xF8 ) //Unknown Command
             {
-                get_Packet(&received_packet,data,1,11,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 2, pdMS_TO_TICKS(UART_DELAY));
+                received_packet.payload[1] = data[0];
+                received_packet.payload[2] = data[1];
+                get_Packet(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 zero_total = 0;
             }
@@ -565,7 +567,6 @@ void VistaBus::rx_tx_task(void * args)
                         zero_total = 0;
                     }
                 }    
-
             }
             else
             {
