@@ -341,9 +341,6 @@ void VistaBus::rx_tx_task(void * args)
     uint8_t ack_failures = 0;
     uint8_t mark_failures = 0;
     int sequence = 0;
-    char tempbuff[13];
-    int tempbuff_fill = 0;
-    int sum = 0;
     bool pulse_marked = false;
     bool is_2400 = false;
     uint8_t zero_total = 0;
@@ -554,7 +551,7 @@ void VistaBus::rx_tx_task(void * args)
             else if ( data[0] == 0xFB ) //5881EN traffic on Vista 20p (address 0)??
             {   
                 get_Packet(&received_packet,data,1,4,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
-                uint32_t val = 0x9E << 8 | (received_packet.payload[3]);
+                uint32_t val = 0xFB << 8 | (received_packet.payload[3]);
                 xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 zero_total = 0;
@@ -635,9 +632,6 @@ void VistaBus::monitor_rx_task(void * args)
     struct ReceivedPacket rcvd_extPkt;
     rcvd_extPkt.type = 1;
     uint32_t val = 0;
-    char tempbuff[13];
-    int tempbuff_fill = 0;
-    int cksum = 0;
 
     while (1) 
     {
@@ -678,7 +672,7 @@ void VistaBus::monitor_rx_task(void * args)
                 val = 0;
 
             }
-            else if(val >> 8 == 0x9E && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to 9E command
+            else if(val >> 8 == 0xFB && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to 9E command
             {
                 get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
@@ -693,29 +687,11 @@ void VistaBus::monitor_rx_task(void * args)
 
                 //emit_Packet(rcvd_extPkt.payload,rcvd_extPkt.size,TASK_TAG);
             }
-            else if (val == 0) //put byte in temp buffer to emit to log
+            else if (val == 0) //put in buffer for printing to log
             {
-                //if (tempbuff_fill == 0 && data[0] == 0) 
-                //{
-                    //don't accumulate leading zeros
-                //}
-                //else
-                //{
-                    tempbuff[tempbuff_fill] = data[0];
-                    tempbuff_fill++;
-                //}
-            }
-
-            if (tempbuff_fill == 1)  //don't clutter queue with 1 byte sequences
-            {
-                if (tempbuff[0] != cksum)
-                {
-                    memcpy(rcvd_extPkt.payload, tempbuff,tempbuff_fill);
-                    rcvd_extPkt.size = tempbuff_fill;
-                    xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(20));
-                }
-                tempbuff_fill = 0;
-                cksum = 0;
+                rcvd_extPkt.payload[0] = data[0];
+                rcvd_extPkt.size = 1;
+                xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(20));
             }
         }
     }
