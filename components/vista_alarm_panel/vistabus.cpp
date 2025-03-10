@@ -411,7 +411,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             if ( data[0] == 0xF6) //SEND ACK Received
             {                 
-                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY)); //Get Address
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 2, pdMS_TO_TICKS(UART_DELAY)); //Get Address
                 if(data[0] != 0)
                 {
                     uint32_t val = 0xF6 << 8 | data[0];
@@ -486,6 +486,7 @@ void VistaBus::rx_tx_task(void * args)
 
                 }
                zero_total = 0;
+               xQueueReset( uartevtQueue );
             }
             else if ( data[0] == 0xF7 ) //DISPLAY
             {
@@ -672,7 +673,7 @@ void VistaBus::monitor_rx_task(void * args)
                 val = 0;
 
             }
-            else if(val >> 8 == 0xFB && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to 9E command
+            else if(val >> 8 == 0xFB && (rcvd_extPkt.payload[0] == 0x21 || rcvd_extPkt.payload[0] == 0x24))  //responses to FB command
             {
                 get_Packet(&rcvd_extPkt, data, 1, 2, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
