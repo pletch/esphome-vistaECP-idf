@@ -107,7 +107,7 @@ namespace esphome
         }
 
 
-        void vistaECPHome::register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial, uint8_t rf_loop)
+        void vistaECPHome::register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial, uint8_t rf_loop, bool emulated)
         {
             auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [zone_number](zoneType &f)
                 { return f.zone == zone_number; });
@@ -117,7 +117,7 @@ namespace esphome
                 it->rfserial = rf_serial;
                 it->rfloop = rf_loop;
 
-                ESP_LOGI("","Adding binary zone sensor.  Zone: %d   rfserial:%lu   rfloop:%d",it->zone, it->rfserial, it->rfloop);
+                ESP_LOGI(TAG,"Adding binary zone sensor.  Zone: %d   rfserial:%lu   rfloop:%d",it->zone, it->rfserial, it->rfloop);
                 return;
             }
             else 
@@ -130,7 +130,13 @@ namespace esphome
                 zt.rfloop = rf_loop;
                 zt.active = true;
                 alarmZones.push_back(zt);
-                ESP_LOGI("","Registering zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
+                if (rf_serial == 0)
+                    if (emulated)
+                        ESP_LOGI(TAG,"Registering emulated hardwired zone.  Zone: %d",zt.zone);
+                    else
+                        ESP_LOGI(TAG,"Registering hardwired zone.  Zone: %d",zt.zone);
+                else
+                    ESP_LOGI(TAG,"Registering wireless zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
             } 
         }
 

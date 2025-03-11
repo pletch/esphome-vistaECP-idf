@@ -75,11 +75,13 @@ async def to_code(config):
 
     if CONF_ZONE in config:
         if CONF_RFSERIAL in config and CONF_RFLOOP in config:
-            cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],config[CONF_RFSERIAL],config[CONF_RFLOOP]))
-        else:
-            cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0))
+            cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],config[CONF_RFSERIAL],config[CONF_RFLOOP], False))
+        else:     
             if CONF_EMULATED_ZONE in config and config[CONF_EMULATED_ZONE] == True:
-                cg.add(hub.register_expander(config[CONF_ZONE]))         
+                cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0, True))
+                cg.add(hub.register_expander(config[CONF_ZONE]))
+            else:
+                cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0, False))         
     elif (config[CONF_STATUS_SENSOR] == "AC_POWER"):
         cg.add(hub.register_ac(var))
     elif (config[CONF_STATUS_SENSOR] == "BATTERY"):
