@@ -344,6 +344,7 @@ void VistaBus::rx_tx_task(void * args)
     bool pulse_marked = false;
     bool is_2400 = false;
     uint8_t zero_total = 0;
+    char last_byte[1] = {0};
     
     uint64_t pulse_mark_time = 0;
     while (1) 
@@ -495,6 +496,7 @@ void VistaBus::rx_tx_task(void * args)
                 {
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                 }
+                last_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if ( data[0] == 0xF2 ) //AUI
@@ -506,6 +508,7 @@ void VistaBus::rx_tx_task(void * args)
                 {
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
+                last_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if ( data[0] == 0xFA ) //EXP
@@ -518,8 +521,9 @@ void VistaBus::rx_tx_task(void * args)
                 if (EXPemulation)
                     this->processFA(received_packet.payload);
                 get_Packet(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
-                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0)); 
-                zero_total = 0;         
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+                last_byte[0] = received_packet.payload[received_packet.size-1]; 
+                zero_total = 0;       
             }
             else if ( data[0] == 0xF9 ) //LRR
             {   
@@ -528,6 +532,7 @@ void VistaBus::rx_tx_task(void * args)
                 received_packet.payload[1] = data[0];
                 received_packet.payload[2] = data[1];
                 get_Packet(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
+                
                 if (received_packet.payload[3] == 0x53)
                 {
                     uint32_t val = 0xF9 << 8 | (received_packet.payload[1] + 0x40);
@@ -548,6 +553,8 @@ void VistaBus::rx_tx_task(void * args)
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum),&received_packet.payload[1], 1);
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+                last_byte[0] = received_packet.payload[received_packet.size-1];
+                zero_total = 0;
             }
             else if ( data[0] == 0xFB ) //5881EN traffic on Vista 20p (address 0)??
             {   
@@ -555,6 +562,7 @@ void VistaBus::rx_tx_task(void * args)
                 uint32_t val = 0xFB << 8 | (received_packet.payload[3]);
                 xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+                last_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if ( data[0] == 0xF8 ) //Unknown Command
@@ -564,6 +572,7 @@ void VistaBus::rx_tx_task(void * args)
                 received_packet.payload[2] = data[1];
                 get_Packet(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+                last_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if (data[0] == 0)
@@ -575,17 +584,20 @@ void VistaBus::rx_tx_task(void * args)
                 {
                 if (event.type == UART_BREAK)
                     {
-                        if (zero_total == 1)
+                        if (zero_total == 1 && last_byte[0] == 0)
                             is_2400 = true;
                         zero_total = 0;
                     }
-                }    
+                }
+                last_byte[0] = 0;   
             }
             else
             {
                 received_packet.payload[0] = data[0];
                 received_packet.size = 1;
                 xQueueSend(this->receiveQueue, &received_packet,pdMS_TO_TICKS(20));
+                last_byte[0] = received_packet.payload[received_packet.size-1];
+                zero_total = 0;
             }
         }
 
