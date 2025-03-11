@@ -344,7 +344,7 @@ void VistaBus::rx_tx_task(void * args)
     bool pulse_marked = false;
     bool is_2400 = false;
     uint8_t zero_total = 0;
-    char last_byte[1] = {0};
+    char prior_byte[1] = {0};
     
     uint64_t pulse_mark_time = 0;
     while (1) 
@@ -458,7 +458,8 @@ void VistaBus::rx_tx_task(void * args)
                     outbuffer[pkt_to_send.size+2] = ~chksum+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 3, pdMS_TO_TICKS(50)); //remove trailing zeros from buffer
+                    //rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 3, pdMS_TO_TICKS(50)); //remove trailing zeros from buffer
+                    rxBytes = get_Packet(&received_packet,data,0,2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(50));
                     if(rxBytes)
                     {
                         for (int i=0; i < rxBytes; i++)
@@ -467,6 +468,9 @@ void VistaBus::rx_tx_task(void * args)
                             {
                                 req_to_send = false;
                                 pulse_marked = false;
+                                prior_byte[0] = received_packet.payload[0] = data[i];
+                                received_packet.size = 1;
+                                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                                 break;
                             }
                         }
@@ -475,6 +479,7 @@ void VistaBus::rx_tx_task(void * args)
                             ESP_LOGW("VistaBus", "Did not find expected byte in response of %d bytes.", rxBytes);
                             req_to_send = false;
                         }
+                        
                     }
                     else
                     {
@@ -496,7 +501,7 @@ void VistaBus::rx_tx_task(void * args)
                 {
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                 }
-                last_byte[0] = received_packet.payload[received_packet.size-1];
+                prior_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if ( data[0] == 0xF2 ) //AUI
@@ -508,7 +513,7 @@ void VistaBus::rx_tx_task(void * args)
                 {
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
-                last_byte[0] = received_packet.payload[received_packet.size-1];
+                prior_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if ( data[0] == 0xFA ) //EXP
@@ -522,7 +527,7 @@ void VistaBus::rx_tx_task(void * args)
                     this->processFA(received_packet.payload);
                 get_Packet(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                last_byte[0] = received_packet.payload[received_packet.size-1]; 
+                prior_byte[0] = received_packet.payload[received_packet.size-1]; 
                 zero_total = 0;       
             }
             else if ( data[0] == 0xF9 ) //LRR
@@ -553,7 +558,7 @@ void VistaBus::rx_tx_task(void * args)
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum),&received_packet.payload[1], 1);
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                last_byte[0] = received_packet.payload[received_packet.size-1];
+                prior_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if ( data[0] == 0xFB ) //5881EN traffic on Vista 20p (address 0)??
@@ -562,7 +567,7 @@ void VistaBus::rx_tx_task(void * args)
                 uint32_t val = 0xFB << 8 | (received_packet.payload[3]);
                 xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                last_byte[0] = received_packet.payload[received_packet.size-1];
+                prior_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if ( data[0] == 0xF8 ) //Unknown Command
@@ -572,7 +577,7 @@ void VistaBus::rx_tx_task(void * args)
                 received_packet.payload[2] = data[1];
                 get_Packet(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                last_byte[0] = received_packet.payload[received_packet.size-1];
+                prior_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
             else if (data[0] == 0)
@@ -584,19 +589,19 @@ void VistaBus::rx_tx_task(void * args)
                 {
                 if (event.type == UART_BREAK)
                     {
-                        if (zero_total == 1 && last_byte[0] == 0)
+                        if (zero_total == 1 && prior_byte[0] == 0)
                             is_2400 = true;
                         zero_total = 0;
                     }
                 }
-                last_byte[0] = 0;   
+                prior_byte[0] = 0;   
             }
             else
             {
                 received_packet.payload[0] = data[0];
                 received_packet.size = 1;
                 xQueueSend(this->receiveQueue, &received_packet,pdMS_TO_TICKS(20));
-                last_byte[0] = received_packet.payload[received_packet.size-1];
+                prior_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
         }
@@ -640,7 +645,7 @@ void VistaBus::rx_tx_task(void * args)
 void VistaBus::monitor_rx_task(void * args)
 {  
     static const char *TASK_TAG = "[VISTABUS]MONITOR_RX";
-    //esp_log_level_set(TASK_TAG, ESP_LOG_INFO);
+    esp_log_level_set(TASK_TAG, ESP_LOG_INFO);
     uint8_t* data = (uint8_t*) malloc(128);
     struct ReceivedPacket rcvd_extPkt;
     rcvd_extPkt.type = 1;
