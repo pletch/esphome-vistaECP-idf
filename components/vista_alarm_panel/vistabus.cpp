@@ -217,19 +217,6 @@ static bool validChksum(const char * cbuf, int start, int len)
     return false;
 }
 
-/*static void emit_Packet(const char * cbuf, int len, const char * tag)  
-{
-    char s[256];
-    memset(s,'\0',sizeof(s));
-    for (int i = 0; i < len-1; i++) 
-    {
-        char st[3];
-        sprintf(st,"%02x",static_cast<unsigned char>(cbuf[i]));
-        strcat(s," ");
-        strcat(s,st);
-    }
-    ESP_LOGI("","Packet: %s",s);    
-}*/
 
 static int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout)
 {
@@ -454,22 +441,18 @@ void VistaBus::rx_tx_task(void * args)
                     outbuffer[pkt_to_send.size+2] = ~chksum+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
-                    //rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 3, pdMS_TO_TICKS(50)); //remove trailing zeros from buffer
-                    rxBytes = get_Packet(&received_packet,data,0,2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(50));
+                    rxBytes = get_Packet(&received_packet,data,0,1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(50));
                     if(rxBytes)
                     {
-                        for (int i=0; i < rxBytes; i++)
+                        if (data[0] == outbuffer[0])
                         {
-                            if (data[i] == outbuffer[0])
-                            {
-                                req_to_send = false;
-                                pulse_marked = false;
-                                prior_byte[0] = received_packet.payload[0] = data[i];
-                                received_packet.size = 1;
-                                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
-                                break;
-                            }
+                            req_to_send = false;
+                            pulse_marked = false;
+                            prior_byte[0] = received_packet.payload[0] = data[0];
+                            received_packet.size = 1;
+                            xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                         }
+
                         if (req_to_send)
                         {
                             ESP_LOGW("VistaBus", "Did not find expected byte in response of %d bytes.", rxBytes);
@@ -699,8 +682,6 @@ void VistaBus::monitor_rx_task(void * args)
                 int res = get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125)); //do not set delay to less than 125ms
                 if (res > 0)
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
-
-                //emit_Packet(rcvd_extPkt.payload,rcvd_extPkt.size,TASK_TAG);
             }
             else if (val == 0) //put in buffer for printing to log
             {
