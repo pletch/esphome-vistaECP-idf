@@ -67,7 +67,9 @@
         "ranges": "cpp",
         "span": "cpp",
         "xstring": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "codecvt": "cpp",
+        "xlocbuf": "cpp"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM6"

@@ -57,6 +57,7 @@ namespace esphome
                             {
                                 forceRefreshGlobal = true;
                             }
+                            ESP_LOGI(TAG,"Raw char  %02X %02X %02X", statusFlags.prompt1[0], statusFlags.prompt1[1], statusFlags.prompt1[2]);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt1);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
                             ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
@@ -698,6 +699,37 @@ namespace esphome
 
             statusFlags->backlight = ((cbuf[12] & 0x80) > 0);
             cbuf[12] = (cbuf[12] & 0x7F);
+            // cbuf[36] = 0xEF;  //Extended ascii code to test with
+            // Translate single unicode code point to multibyte UTF8
+            // Not sure what encoding all the OUS panel options might use
+            // At least for Swedish, doesn't work exactly right but keeps HA from
+            // disconnecting on invalid character.
+            // As an example, code point EF is given from panel when it should be F6
+            // for small o with diaeresis
+            for (int i=0; i< 15;i++)
+            {
+                if (cbuf[i+12] > 126) 
+                {
+                    char buf[16];
+                    memcpy(buf, &cbuf[i+1+12],16 - i - 1); 
+                    cbuf[i+12+1] = 0x80 | (cbuf[i+12] & 0x3F);
+                    cbuf[i+12] = 0xC0 | (cbuf[i+12] >> 6);
+                    memcpy(&cbuf[i+12+2], buf, 16 - i - 2);
+                    i++;
+                }
+            }
+            for (int i=0; i<15;i++)
+            {
+                if (cbuf[i+28] > 126)
+                {
+                    char buf[16];
+                    memcpy(buf, &cbuf[i+28+1],16 - i - 1);
+                    cbuf[i+28+1] = 0x80 | (cbuf[i+28] & 0x3F);
+                    cbuf[i+28] = 0xC0 | (cbuf[i+28] >> 6);
+                    memcpy(&cbuf[i+28+2], buf, 16 - i - 2);
+                    i++;
+                }
+            }
             memcpy(statusFlags->prompt1, &cbuf[12], 16);
             statusFlags->prompt1[16] = 0;
             memcpy(statusFlags->prompt2, &cbuf[28], 16);
