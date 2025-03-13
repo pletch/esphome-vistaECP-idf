@@ -132,19 +132,29 @@ namespace esphome
                     if (idx && idx < 4)
                         partitionKeypads[idx] = addr;
                 }
+                void set_alarm_state(std::string const &state, std::string code = "", int partition = DEFAULTPARTITION);
 
                 void set_defaultPartition(uint8_t dp) { defaultPartition = dp; }
                 void set_debug(uint8_t db) { debug = db; }
                 void set_ttl(uint32_t t) { TTL = t; };
                 float get_setup_priority() const override { return setup_priority::LATE; }
 
-                std::vector<binary_sensor::BinarySensor *> bMap;
-                std::vector<text_sensor::TextSensor *> tMap;
+                bool connected()
+                {
+                    return vistabus.connected();
+                }
 
-                bool displaySystemMsg = false;
-                bool forceRefreshGlobal, forceRefreshZones, forceRefresh;
-                sysState currentSystemState,
-                previousSystemState;
+                void set_zone_fault(int32_t zone, bool fault);
+                void set_emulated_zone_tamper(int32_t zone, bool tamper_active);
+                void register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial, uint8_t rf_loop, bool emulated);
+                void register_status_sensor(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, const char * type);
+                void register_zone_text(vistaECPTextSensor *text_sensor, uint8_t partition_number, uint8_t zone_number);
+                void register_text_sensor(vistaECPTextSensor *text_sensor, uint8_t partition, const char * type);
+                void register_ac(vistaECPBinarySensor *binary_sensor) {ac_bin_sensor = binary_sensor;}
+                void register_bat(vistaECPBinarySensor *binary_sensor) {bat_bin_sensor = binary_sensor;}
+                void register_expander(uint8_t zone) {vistabus.add_emulated_expander(zone);}
+
+                void setup() override;
                 void stop();
 
             protected:
@@ -226,6 +236,9 @@ namespace esphome
                     int data;
                     uint8_t partition;
                 };
+
+                std::vector<binary_sensor::BinarySensor *> bMap;
+                std::vector<text_sensor::TextSensor *> tMap;
 
                 struct textSensorPartition
                 {
@@ -313,7 +326,6 @@ namespace esphome
                     .rflowbat = false
                 };
 
-
                 struct textSensor
                 {
                     vistaECPTextSensor *text_sensor;
@@ -327,7 +339,6 @@ namespace esphome
                     .type = NULL
                 };
 
-
                 uint64_t lowBatteryTime;
 
                 struct alarmStatusType
@@ -337,7 +348,6 @@ namespace esphome
                     uint16_t zone;
                     char prompt[17];
                 };
-
 
                 struct lightStates
                 {
@@ -370,6 +380,12 @@ namespace esphome
                     bool refreshLights;
                 };
 
+                bool displaySystemMsg = false;
+                bool forceRefreshGlobal, forceRefreshZones, forceRefresh;
+                sysState currentSystemState,
+                previousSystemState;
+                partitionStateType *partitionStates;
+
                 void AUIupdateZoneState(zoneType *zt, int p, bool state, uint64_t t);
                 char * AUIparseMessage(char *cmd);
                 void AUIprocessZoneList(char *list);
@@ -377,32 +393,6 @@ namespace esphome
                 void AUIprocessF2(char * cbuf);
                 void loadZones();
 
-            public:
-                partitionStateType *partitionStates;
-
-                void disconnectVista()
-                {
-                    vistabus.stop();
-                }
-                bool connected()
-                {
-                    return vistabus.connected();
-                }
-
-                void createZoneFromId(const char * zid,uint8_t p=0);
-                void set_zone_fault(int32_t zone, bool fault);
-                void set_emulated_zone_tamper(int32_t zone, bool tamper_active);
-                void register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial, uint8_t rf_loop, bool emulated);
-                void register_status_sensor(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, const char * type);
-                void register_zone_text(vistaECPTextSensor *text_sensor, uint8_t partition_number, uint8_t zone_number);
-                void register_text_sensor(vistaECPTextSensor *text_sensor, uint8_t partition, const char * type);
-                void register_ac(vistaECPBinarySensor *binary_sensor) {ac_bin_sensor = binary_sensor;}
-                void register_bat(vistaECPBinarySensor *binary_sensor) {bat_bin_sensor = binary_sensor;}
-                void register_expander(uint8_t zone) {vistabus.add_emulated_expander(zone);}
-
-                void setup() override;
-
-            protected:
                 std::string previousZoneStatusMsg;
 
                 alarmStatusType fireStatus, panicStatus, alarmStatus;
@@ -431,45 +421,26 @@ namespace esphome
                 void refreshLRRStatusFlags(char * cbuf, struct lrrstatusFlagType * LRRstatusFlags); 
 
                 void AUIset_panel_time();
-
                 void alarm_disarm(std::string code, int32_t partition);
-
                 void alarm_arm_home(int32_t partition);
-
                 void alarm_arm_night(int32_t partition);
-
                 void alarm_arm_away(int32_t partition);
-
                 void alarm_trigger_fire(std::string code, int32_t partition);
-
                 void alarm_trigger_panic(std::string code, int32_t partition);
-
                 void alarm_keypress(std::string keystring);
-
                 void alarm_keypress_partition(std::string keystring, int32_t partition);
                 void send_cmd_bytes(int32_t addr, std::string hexbytes);
 
-            protected:
                 bool isInt(std::string s, int base);
-
                 int toDec(int n);
-
                 long int toInt(std::string s, int base);
-
                 bool areEqual(char *a1, char *a2, uint8_t len);
 
                 int getZoneFromPrompt(char *p1);
                 //std::string getNameFromPrompt(char *p1, char *p2);
-
-
                 void printPacket(const char *label, char cbuf[], int len);
-
                 void updateDisplayLines(uint8_t partition);
 
-            public:
-                void set_alarm_state(std::string const &state, std::string code = "", int partition = DEFAULTPARTITION);
-
-            protected:
                 int getZoneFromChannel(uint8_t deviceAddress, uint8_t channel);
 
                 void getPartitionsFromMask();
