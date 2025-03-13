@@ -58,7 +58,6 @@ namespace esphome
     {
 
         extern VistaBus vistabus;
-        extern const char *const TAG;
 
         enum sysState
         {
@@ -158,6 +157,7 @@ namespace esphome
                 void stop();
 
             protected:
+                const char *const TAG = "v-a";
                 uint64_t TTL = 3000000;
                 uint64_t last_refresh = 0;
                 uint8_t debug = 0;

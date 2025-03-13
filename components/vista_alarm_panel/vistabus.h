@@ -86,6 +86,9 @@ public:
     void setExpTamper(int32_t zone, bool tamper_active);
 
 protected:
+    const char* const RX_TX_TAG = "v-b:rx_tx";
+    const char* const TAG = "v-b";
+    const char* const MONITOR_TAG = "v-b:monitor_ext";
     int rxPin, txPin;
     int uartNum;
     int extuartNum;
