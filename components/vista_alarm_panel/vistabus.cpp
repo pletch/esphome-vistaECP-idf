@@ -257,27 +257,23 @@ bool VistaBus::mark_pulse(uint8_t address)
     uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_DISABLE);
     char snd_data[3];
     bool sent_request = false;
-    uint8_t which_pulse = 0;
     if (address < 8)
     {
         snd_data[0] = ~(0x01 << (address & 0x07));
         snd_data[1] = 0;
         snd_data[2] = 0;
-        which_pulse = 1;
     }
     else if (address < 17)
     {
         snd_data[0] = 0xFF;
         snd_data[1] = ~(0x01 << (address & 0x07));
         snd_data[2] = 0;
-        which_pulse = 2;
     }
     else
     {
         snd_data[0] = 0xFF;
         snd_data[1] = 0xFF;
         snd_data[2] = ~(0x01 << (address & 0x07));
-        which_pulse = 3;
     }
     //Use GPIO on rxPin to find pulse signal
     gpioTaskArgs taskargs;
@@ -558,6 +554,7 @@ void VistaBus::rx_tx_task(void * args)
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum),&received_packet.payload[1], 1);
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+                vTaskDelay(pdMS_TO_TICKS(25)); //Delay to put command/response/ack in sequence in log
                 prior_byte[0] = received_packet.payload[received_packet.size-1];
                 zero_total = 0;
             }
@@ -685,7 +682,7 @@ void VistaBus::monitor_rx_task(void * args)
             }
             else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //expect response
             {
-                get_Packet(&rcvd_extPkt, data, 1, 6, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(125));
+                get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(UART_DELAY));
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
 
