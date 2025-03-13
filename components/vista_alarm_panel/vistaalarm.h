@@ -135,7 +135,7 @@ namespace esphome
 
                 void set_defaultPartition(uint8_t dp) { defaultPartition = dp; }
                 void set_debug(uint8_t db) { debug = db; }
-                void set_ttl(uint32_t t) { TTL = t; };
+                void set_ttl(uint32_t t) { TTL = t * 1000 * 1000; };
                 float get_setup_priority() const override { return setup_priority::LATE; }
 
                 bool connected()
@@ -158,7 +158,7 @@ namespace esphome
 
             protected:
                 const char *const TAG = "v-a";
-                uint64_t TTL = 3000000;
+                uint64_t TTL = 30000000;
                 uint64_t last_refresh = 0;
                 uint8_t debug = 0;
                 char last_F7[48];

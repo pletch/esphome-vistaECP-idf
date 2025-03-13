@@ -23,8 +23,6 @@ namespace esphome
     {
 
         VistaBus vistabus;
-
-        const char *const TAG = "vista_alarm";
         vistaECPHome *alarmPanelPtr;
 
         void vistaECPHome::stop()

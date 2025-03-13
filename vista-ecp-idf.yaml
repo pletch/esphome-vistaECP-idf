@@ -34,7 +34,7 @@ vista_alarm_panel:
   monitorpin: "22" #GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
   uart2: "2" #Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
 
-  ttl: "30000"  # time  to live  in ms for zone/fire status before expiring;
+  ttl: "30"  # time to live in seconds for zone/fire status before expiring;
   quickarm: "false"
   lrrsupervisor: "false" # set to true if we don't have an LRR monitoring supervisor so we can emulate one to get the statuses. 
 

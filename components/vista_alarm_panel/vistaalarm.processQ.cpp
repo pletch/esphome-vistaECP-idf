@@ -307,7 +307,7 @@ namespace esphome
                     zoneType *zt = getZone(statusFlags.zone);
                     if (zt != NULL)
                     {
-                    ESP_LOGD("test","alarm found for zone %d,status=%d",statusFlags.zone,zt->alarm );
+                    ESP_LOGD(TAG,"alarm found for zone %d,status=%d",statusFlags.zone,zt->alarm );
                     if (!zt->alarm && zt->active)
                         {
                             zt->alarm = true;
@@ -330,7 +330,7 @@ namespace esphome
                     zoneType *zt = getZone(statusFlags.zone);
                     if (zt != NULL)
                     {
-                        ESP_LOGD("test", "check found for zone %d,status=%d", statusFlags.zone, zt->check);
+                        ESP_LOGD(TAG, "check found for zone %d,status=%d", statusFlags.zone, zt->check);
                         if (!zt->check && zt->active)
                         {
                             zt->check = true;
