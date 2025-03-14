@@ -57,7 +57,6 @@ namespace esphome
                             {
                                 forceRefreshGlobal = true;
                             }
-                            ESP_LOGI(TAG,"Raw char  %02X %02X %02X", statusFlags.prompt1[0], statusFlags.prompt1[1], statusFlags.prompt1[2]);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt1);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
                             ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
