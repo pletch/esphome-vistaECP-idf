@@ -707,35 +707,42 @@ namespace esphome
             // disconnecting on invalid character.
             // As an example, byte EF is given from panel when it should be F6
             // for small o with diaeresis. Byte E1 is given when it should be
-            // byte E4.  
-            for (int i=1; i<16;i++)
+            // byte E4.
+            char tempbuf[32];
+            memset(tempbuf,0,32);
+            memcpy(tempbuf,&cbuf[12],16);
+            for (int i=1; i<32; i++)
             {
-                if (cbuf[i+12] > 0x7F) 
+                if (!tempbuf[i])
+                    break;
+                if (tempbuf[i] > 0x7F) 
                 {
-                    char buf[16];
-                    memcpy(buf, &cbuf[i+1+12],16 - i - 1); 
-                    cbuf[i+12+1] = 0x80 | (cbuf[i+12] & 0x3F);
-                    cbuf[i+12] = 0xC0 | (cbuf[i+12] >> 6);
-                    memcpy(&cbuf[i+12+2], buf, 16 - i - 2);
+                    char buf[32];
+                    memcpy(buf, &tempbuf[i+1],32 - i - 1);
+                    tempbuf[i+1] = 0x80 | (tempbuf[i] & 0x3F);
+                    tempbuf[i] = 0xC0 | (tempbuf[i] >> 6);
+                    memcpy(&tempbuf[i+2], buf, 32 - i - 2);
                     i++;
                 }
             }
-            for (int i=0; i<16;i++)
+            memcpy(statusFlags->prompt1, tempbuf, 32);
+            memset(tempbuf,0,32);
+            memcpy(tempbuf,&cbuf[28],16);
+            for (int i=0; i<32; i++)
             {
-                if (cbuf[i+28] > 0x7F)
+                if (!tempbuf[i])
+                    break;
+                if (tempbuf[i] > 0x7F) 
                 {
-                    char buf[16];
-                    memcpy(buf, &cbuf[i+28+1],16 - i - 1);
-                    cbuf[i+28+1] = 0x80 | (cbuf[i+28] & 0x3F);
-                    cbuf[i+28] = 0xC0 | (cbuf[i+28] >> 6);
-                    memcpy(&cbuf[i+28+2], buf, 16 - i - 2);
+                    char buf[32];
+                    memcpy(buf, &tempbuf[i+1],32 - i - 1);
+                    tempbuf[i+1] = 0x80 | (tempbuf[i] & 0x3F);
+                    tempbuf[i] = 0xC0 | (tempbuf[i] >> 6);
+                    memcpy(&tempbuf[i+2], buf, 32 - i - 2);
                     i++;
                 }
             }
-            memcpy(statusFlags->prompt1, &cbuf[12], 16);
-            statusFlags->prompt1[16] = 0;
-            memcpy(statusFlags->prompt2, &cbuf[28], 16);
-            statusFlags->prompt2[16] = 0;
+            memcpy(statusFlags->prompt2, tempbuf, 32);
         }
 
         void vistaECPHome::refreshLRRStatusFlags(char * cbuf, struct lrrstatusFlagType * lrrstatusFlags) 

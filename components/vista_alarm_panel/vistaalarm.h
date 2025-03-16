@@ -223,8 +223,8 @@ namespace esphome
                     bool panicAlarm;
                     char keypad[4];
                     int zone;
-                    char prompt1[18];
-                    char prompt2[18];
+                    char prompt1[32];
+                    char prompt2[32];
                     char promptPos;
                     uint8_t attempts = 10;
                 };
