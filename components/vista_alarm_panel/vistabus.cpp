@@ -809,8 +809,8 @@ void VistaBus::processFA(const char * cbuf)
                 lcbuflen = 4;       
                 lcbuf[0] = 0xF0;
                 lcbuf[1] = expSeq;
-                lcbuf[2] = expander->faultBits;                      
-                lcbuf[3] = expander->tamperBits; 
+                lcbuf[2] = expander->fault_NO_Bits;                      
+                lcbuf[3] = expander->fault_NC_Bits; 
                 uint8_t chksum = 0;
                 for (int x = 0; x < lcbuflen; x++)
                 {
@@ -848,7 +848,7 @@ void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
         char header[1];
         uint8_t z = zone & 0x07;
         lcbuf[2] = z ? 0 : 0x01;
-        expander->faultBits = fault ? expander->faultBits | (0x01 << (8-z)) : expander->faultBits & ~(0x01 << (8-z));
+        expander->fault_NO_Bits = fault ? expander->fault_NO_Bits | (0x01 << (8-z)) : expander->fault_NO_Bits & ~(0x01 << (8-z));
         expander->pending_update.zone = zone;
         expander->pending_update.fault = fault;
         //Nudge panel to send F1 request
@@ -868,8 +868,8 @@ void VistaBus::setExpTamper(int32_t zone, bool tamper_active)
     if (expander != NULL)
     {
         uint8_t z = zone & 0x07;
-        expander->tamperBits = tamper_active ? expander->tamperBits | (0x01 << (8-z)) : expander->tamperBits & ~(0x01 << (8-z));
-        expander->faultBits = tamper_active ? expander->faultBits | (0x01 << (8-z)) : expander->faultBits & ~(0x01 << (8-z));
+        expander->fault_NC_Bits = tamper_active ? expander->fault_NC_Bits | (0x01 << (8-z)) : expander->fault_NC_Bits & ~(0x01 << (8-z));
+        expander->fault_NO_Bits = tamper_active ? expander->fault_NO_Bits | (0x01 << (8-z)) : expander->fault_NO_Bits & ~(0x01 << (8-z));
     }
 }
 
@@ -882,14 +882,14 @@ void VistaBus::add_emulated_expander(uint8_t zone)
     {   
         emulatedExpander new_expander;
         new_expander.address = getExpanderAddress(zone);
-        new_expander.tamperBits = new_expander.tamperBits & ~(0x01 << (8-z));
+        new_expander.fault_NC_Bits = new_expander.fault_NC_Bits & ~(0x01 << (8-z));
         this->emulated_expanders.push_back(new_expander);
         ESP_LOGI(TAG,"Adding new emulated expander on address:%d for emulated zone:%d",new_expander.address,zone);
         EXPemulation = true;
     }
     else //emulated expander already created
     {
-        expander->tamperBits = expander->tamperBits & ~(0x01 << (8-z));
+        expander->fault_NC_Bits = expander->fault_NC_Bits & ~(0x01 << (8-z));
         ESP_LOGI(TAG,"Existing emulated expander on address:%d handling emulated zone:%d",expander->address,zone);
     }
 }

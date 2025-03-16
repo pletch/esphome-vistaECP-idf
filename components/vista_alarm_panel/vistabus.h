@@ -115,8 +115,8 @@ protected:
     struct emulatedExpander  
     {   
         uint8_t address{0};
-        char faultBits{0};
-        char tamperBits{0xFF};
+        char fault_NO_Bits{0};
+        char fault_NC_Bits{0xFF};
         char seq{31};
         pendingUpdate pending_update;
     };
