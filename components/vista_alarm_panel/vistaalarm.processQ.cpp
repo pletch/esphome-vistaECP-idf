@@ -698,16 +698,19 @@ namespace esphome
 
             statusFlags->backlight = ((cbuf[12] & 0x80) > 0);
             cbuf[12] = (cbuf[12] & 0x7F);
-            // cbuf[36] = 0xEF;  //Extended ascii code to test with
-            // Translate single unicode code point to multibyte UTF8
-            // Not sure what encoding all the OUS panel options might use
+            //cbuf[14] = 0xE1;
+            //cbuf[36] = 0xEF;  //Extended ascii code to test with
+            // Translate single extended ascii or unicode code point to multibyte UTF8
+            // Not sure what encoding all the OUS panel options might use.  Possibly
+            // some sort of custom mapping to extended codes?
             // At least for Swedish, doesn't work exactly right but keeps HA from
             // disconnecting on invalid character.
-            // As an example, code point EF is given from panel when it should be F6
-            // for small o with diaeresis
-            for (int i=0; i< 15;i++)
+            // As an example, byte EF is given from panel when it should be F6
+            // for small o with diaeresis. Byte E1 is given when it should be
+            // byte E4.  
+            for (int i=1; i<16;i++)
             {
-                if (cbuf[i+12] > 126) 
+                if (cbuf[i+12] > 0x7F) 
                 {
                     char buf[16];
                     memcpy(buf, &cbuf[i+1+12],16 - i - 1); 
@@ -717,9 +720,9 @@ namespace esphome
                     i++;
                 }
             }
-            for (int i=0; i<15;i++)
+            for (int i=0; i<16;i++)
             {
-                if (cbuf[i+28] > 126)
+                if (cbuf[i+28] > 0x7F)
                 {
                     char buf[16];
                     memcpy(buf, &cbuf[i+28+1],16 - i - 1);
