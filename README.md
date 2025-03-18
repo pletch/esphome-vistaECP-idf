@@ -1,5 +1,5 @@
 # Honeywell Resideo Vista ECP ESPHome IDF external component
-- 
+ 
 ## This version is a highly modified FORK of the vista-ecp project!!
 
 Original project:  https://github.com/Dilbert66/esphome-vistaECP
