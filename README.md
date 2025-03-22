@@ -10,7 +10,7 @@ Note that this fork compiles using ESP-IDF rather than Arduino framework in ESPH
 
 Fork is shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein as explained in the license documentation.
 
-### Key differences from original project:
+###Key differences from original project:
 - Efficient use of limited embedded CPU cycles through use of hardware UART and FreeRTOS multitasking. This includes complete fidelity of packet response handling including 2400 baud preamble bytes.
 - OTA updates and OTA logging work reliably without requiring disabling of keybus interaction. 
 - Arduino dependency removed and refactored for ESP-IDF v5.3. Works with newer espressif cores such as C6.
@@ -27,11 +27,11 @@ Fork is shared here for the benefits of any others that might want to use it.  N
 - Will not work with older ESP8266. Limited testing on single core ESP32 family devices such as S2/C3/C6.
 - Lots of unused residual code, bitwise operations, and variable handling cleaned up.
 
->[!Warning]  There may be features / capabilities carried over from original project but unused by me that are not tested.
-> Specifics include:
-> - Long Range Radio emulation
-> - AUI command handling.  
->     - My system has an actual LRR and I didn't want to disconnect to test this. My former Safewatch Pro 3000 doesn't seem to respond to AUI commands as expected with neither the original implementation or this fork.
+# ⚠️Caution:  There may be features / capabilities carried over from original project but unused by me that are not tested.
+Specifics include: 
+- Long Range Radio emulation
+- AUI command handling.  
+   - My system has an actual LRR and I didn't want to disconnect to test this. My former Safewatch Pro 3000 doesn't seem to respond to AUI commands as expected with neither the original implementation or this fork.
 
-If you wish to use this fork and find something misbehaving, please let me know and I'll do my best to fix it!
+## If you wish to use this fork and find something misbehaving, please let me know and I'll do my best to fix it!
 
