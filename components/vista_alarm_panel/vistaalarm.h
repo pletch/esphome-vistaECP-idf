@@ -69,7 +69,6 @@ namespace esphome
             schime,
             sbat,
             scheck,
-            scanceled,
             sarmednight,
             sdisarmed,
             striggered,
@@ -80,8 +79,7 @@ namespace esphome
             sinstant,
             sready,
             sarmed,
-            sarming,
-            spending
+            sarming
         };
 
         enum reqStates
@@ -115,7 +113,7 @@ namespace esphome
 
             public:
                 vistaECPHome(char kpaddr = KP_ADDR, int receivePin = RX_PIN, int transmitPin = TX_PIN, int uartnum1 = DEF_UART1, 
-                            int monitorTxPin = MONITOR_PIN, int uartnum2 = DEF_UART2, int maxzones = MAX_ZONES, int maxpartitions = MAX_PARTITIONS);
+                            int monitorTxPin = MONITOR_PIN, int uartnum2 = DEF_UART2);
 
                 void set_accessCode(const char *ac) { accessCode = ac; }
                 void set_rfSerialLookup(const char *rf) { rfSerialLookup = rf; }
@@ -124,12 +122,13 @@ namespace esphome
                 void set_lrrSupervisor(bool ls) { lrrSupervisor = ls; }
                 void set_auiaddr(uint8_t addr) { auiAddr = addr; };
 
-                void set_maxZones(int mz) { maxZones = mz; }
-                void set_maxPartitions(uint8_t mp);
+                void initialize_partition_sensors();
                 void set_partitionKeypad(uint8_t idx, uint8_t addr)
                 {
-                    if (idx && idx < 4)
-                        partitionKeypads[idx] = addr;
+                    partitionType new_partition;
+                    new_partition.assigned_keypad = addr;
+                    new_partition.partition = idx;
+                    known_partitions.push_back(new_partition);
                 }
                 void set_alarm_state(std::string const &state, std::string code = "", int partition = DEFAULTPARTITION);
 
@@ -154,6 +153,7 @@ namespace esphome
                 void register_expander(uint8_t zone) {vistabus.add_emulated_expander(zone);}
 
                 void setup() override;
+                void update() override;
                 void stop();
 
             protected:
@@ -168,8 +168,6 @@ namespace esphome
                 int uart1 = -1;
                 int monitorPin = 0;
                 int uart2 = -1;
-                int maxZones = 0;
-                int maxPartitions = 0;
                 uint8_t auiAddr = 0;
                 bool AUIsendTime();
                 char auiSeq = 8;
@@ -178,6 +176,44 @@ namespace esphome
                 static void processReceiveQueue_task_start(void *args);
                 TaskHandle_t processReceiveQHandle;
                 bool api_connection_state;
+
+                struct lightStates
+                {
+                    bool away;
+                    bool stay;
+                    bool night;
+                    bool instant;
+                    bool bypass;
+                    bool ready;
+                    bool ac;
+                    bool chime;
+                    bool bat;
+                    bool alarm;
+                    bool check;
+                    bool fire;
+                    bool trouble;
+                    bool armed;
+                };
+
+                lightStates currentLightState,previousLightState;
+
+                struct partitionStateType
+                {
+                    sysState previousSystemState;
+                    lightStates previousLightState;
+                    int lastbeeps;
+                    bool refreshStatus;
+                    bool refreshLights;
+                };
+
+                struct partitionType
+                {
+                    uint8_t partition = 0;
+                    uint8_t assigned_keypad = 0;
+                    partitionStateType partition_state;
+                };
+
+                std::vector<partitionType> known_partitions{};
 
                 struct auiCmdType
                 {
@@ -191,40 +227,38 @@ namespace esphome
 
                 struct statusFlagType
                 {
-                    char beeps : 3;
-                    bool armedStay;
-                    bool armedAway;
-                    bool night;
-                    bool instant;
-                    bool chime;
-                    bool acPower;
-                    bool acLoss;
-                    bool ready;
-                    bool entryDelay;
-                    bool programMode;
-                    bool zoneBypass;
-                    bool zoneAlarm;
-                    bool alarm;
-                    bool check;
-                    bool systemFlag;
-                    bool lowBattery;
-                    bool systemTrouble;
-                    bool fire;
-                    bool fireZone;
-                    bool backlight;
-                    bool armed;
-                    bool away;
-                    bool bypass;
-                    bool inAlarm;
-                    bool noAlarm;
-                    bool exitDelay;
-                    bool cancel;
-                    bool fault;
-                    bool panicAlarm;
+                    uint8_t beeps = 0;
+                    bool armedStay = false;
+                    bool armedAway = false;
+                    bool night = false;
+                    bool instant = false;
+                    bool chime = false;
+                    bool acPower = false;
+                    bool acLoss = false;
+                    bool ready = false;
+                    bool entryDelay = false;
+                    bool programMode = false;
+                    bool zoneBypass = false;
+                    bool zoneAlarm = false;
+                    bool alarm = false;
+                    bool check = false;
+                    bool systemFlag = false;
+                    bool lowBattery = false;
+                    bool systemTrouble = false;
+                    bool fire = false;
+                    bool fireZone = false;
+                    bool backlight = false;
+                    bool armed = false;
+                    bool away = false;
+                    bool bypass = false;
+                    bool inAlarm = false;
+                    bool fault = false;
+                    bool panicAlarm = false;
                     char keypad[4];
+                    uint8_t partition = 0;
                     int zone;
-                    char prompt1[32];
-                    char prompt2[32];
+                    char prompt1[32] = {0};
+                    char prompt2[32] = {0};
                     char promptPos;
                     uint8_t attempts = 10;
                 };
@@ -277,13 +311,8 @@ namespace esphome
                 const char *rfSerialLookup;
                 bool quickArm;
 
-                bool lrrSupervisor, vh;
-                char *partitionKeypads;
+                bool lrrSupervisor;
                 int defaultPartition = DEFAULTPARTITION;
-                char expanderAddr[9] = {};
-
-                uint8_t *partitions;
-                std::string topic_prefix, topic;
 
                 struct zoneType
                 {
@@ -298,10 +327,6 @@ namespace esphome
                     bool bypass;
                     bool alarm;
                     bool check;
-                    bool fire;
-                    bool panic;
-                    bool trouble;
-                    bool lowbat;
                     bool active;
                     bool rflowbat;
                 };
@@ -318,10 +343,6 @@ namespace esphome
                     .bypass = false,
                     .alarm = false,
                     .check = false,
-                    .fire = false,
-                    .panic = false,
-                    .trouble = false,
-                    .lowbat = false,
                     .active = false,
                     .rflowbat = false
                 };
@@ -346,45 +367,14 @@ namespace esphome
                     uint64_t time;
                     bool state;
                     uint16_t zone;
-                    char prompt[17];
                 };
 
-                struct lightStates
-                {
-                    bool away;
-                    bool stay;
-                    bool night;
-                    bool instant;
-                    bool bypass;
-                    bool ready;
-                    bool ac;
-                    bool chime;
-                    bool bat;
-                    bool alarm;
-                    bool check;
-                    bool fire;
-                    bool canceled;
-                    bool trouble;
-                    bool armed;
-                };
 
-                lightStates currentLightState,
-                previousLightState;
-
-                struct partitionStateType
-                {
-                    sysState previousSystemState;
-                    lightStates previousLightState;
-                    int lastbeeps;
-                    bool refreshStatus;
-                    bool refreshLights;
-                };
 
                 bool displaySystemMsg = false;
-                bool forceRefreshGlobal, forceRefreshZones, forceRefresh;
-                sysState currentSystemState,
-                previousSystemState;
-                partitionStateType *partitionStates;
+                bool forceRefreshGlobal = false;
+                bool forceRefreshZones, forceRefresh;
+                sysState currentSystemState,previousSystemState;
 
                 void AUIupdateZoneState(zoneType *zt, int p, bool state, uint64_t t);
                 char * AUIparseMessage(char *cmd);
@@ -407,9 +397,7 @@ namespace esphome
 
                 std::queue<auiCmdType> auiQueue{};
 
-                zoneType nz;
                 zoneType *getZone(uint16_t z);
-
                 zoneType *getRfSerialLookup(uint32_t serialCode);
 
                 void zoneStatusUpdate(zoneType *zt);
@@ -440,13 +428,6 @@ namespace esphome
                 //std::string getNameFromPrompt(char *p1, char *p2);
                 void printPacket(const char *label, char cbuf[], int len);
                 void updateDisplayLines(uint8_t partition);
-
-                int getZoneFromChannel(uint8_t deviceAddress, uint8_t channel);
-
-                void getPartitionsFromMask();
-
-                public:
-                void update() override;
 
         };
         extern vistaECPHome *alarmPanelPtr;

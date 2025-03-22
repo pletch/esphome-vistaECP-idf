@@ -7,8 +7,6 @@ substitutions:
 vista_alarm_panel:
   id: $panelId
   accesscode: $accesscode #Only comes into effect if needed for arming and quickarm is not set
-  maxzones: "48" #maximum amount of zones that your panel supports
-  maxpartitions: "1" #maximum amount of partitions that your panel supports
  
   defaultpartition: "1" #set to your main partition
   vistadebuglevel: "3" #component debug level for messages
@@ -64,7 +62,7 @@ esp32:
   variant: esp32
   framework:
     version: 5.3.1
-    platform_version: 6.9.0
+    platform_version: 53.03.13
     sdkconfig_options: {"CONFIG_FREERTOS_HZ":"1000","CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD":"y"}
     type: esp-idf
 

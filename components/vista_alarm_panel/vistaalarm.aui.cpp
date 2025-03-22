@@ -93,7 +93,7 @@ namespace esphome
             sprintf(cmd, "%s#63*|%02d%02d%01d%02d%02d%02d*", accessCode, hour, rtc.minute, ampm, rtc.year % 100, 
                 rtc.month, rtc.day_of_month);
 
-            int addr = partitionKeypads[defaultPartition];
+            int addr = known_partitions[0].partition;
             vistabus.write(cmd,30, addr);
 #endif
         }

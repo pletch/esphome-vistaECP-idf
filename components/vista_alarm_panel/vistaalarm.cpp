@@ -27,24 +27,18 @@ namespace esphome
 
         void vistaECPHome::stop()
         {
-        vistabus.stop();
-        vTaskDelete(processReceiveQHandle);
-        processReceiveQHandle = NULL;
+            vistabus.stop();
+            vTaskDelete(processReceiveQHandle);
+            processReceiveQHandle = NULL;
         }
 
-
-        vistaECPHome::vistaECPHome(char kpaddr, int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2, int maxzones, int maxpartitions) : keypadAddr1(kpaddr),
-                                                                                                                                                        rxPin(receivePin),
-                                                                                                                                                        txPin(transmitPin),
-                                                                                                                                                        uart1(uartnum1),
-                                                                                                                                                        monitorPin(monitorTxPin),
-                                                                                                                                                        uart2(uartnum2),
-                                                                                                                                                        maxZones(maxzones),
-                                                                                                                                                        maxPartitions(maxpartitions)
+        vistaECPHome::vistaECPHome(char kpaddr, int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2) : keypadAddr1(kpaddr),
+                                                                                                                                    rxPin(receivePin),
+                                                                                                                                    txPin(transmitPin),
+                                                                                                                                    uart1(uartnum1),
+                                                                                                                                    monitorPin(monitorTxPin),
+                                                                                                                                    uart2(uartnum2)
         {
-            partitionKeypads = new char[maxPartitions + 1];
-            partitions = new uint8_t[maxPartitions];
-            partitionStates = new partitionStateType[maxPartitions];
             alarmPanelPtr = this;
             api_connection_state = false;
         }
@@ -58,21 +52,14 @@ namespace esphome
                                          : "C";
                 msg = zt->bypass ? "B" : zt->alarm ? "A"
                                            : "";
-                lb = zt->lowbat || zt->rflowbat ? "L" : "";
+                lb = zt->rflowbat ? "L" : "";
                 msg.append(zs1).append(lb);
                 zt->text_sensor->process(msg);
             }
 
             if (zt->binary_sensor != NULL)
-            {
-                if (zt->zone <= maxZones)
-                {                   
-                    zt->binary_sensor->process(zt->open || zt->check);
-                }
-                else
-                {
-                    zt->binary_sensor->process(zt->check || zt->open || zt->alarm || zt->trouble);
-                }
+            {       
+                zt->binary_sensor->process(zt->open || zt->check);
             }
         }
 
@@ -229,9 +216,8 @@ namespace esphome
 
             if(text_sensors_partition[0].system_status != NULL)
                 text_sensors_partition[0].system_status->process(STATUS_ONLINE);
-            for (uint8_t p = 0; p < maxPartitions; p++)
+            for (uint8_t p = 0; p < known_partitions.size(); p++)
             {
-                partitions[p] = 0;
                 if (text_sensors_partition[p].system_status != NULL)
                     text_sensors_partition[p].system_status->process(STATUS_NOT_READY);             
                 if (text_sensors_partition[p].beeps != NULL)
@@ -299,10 +285,9 @@ namespace esphome
             vistabus.setExpTamper(zone, tamper_active);
         }
 
-        void vistaECPHome::set_maxPartitions(uint8_t mp)
+        void vistaECPHome::initialize_partition_sensors()
         {
-            maxPartitions = mp;
-            for (int i=0; i < mp; i++)
+            for (int i=0; i < known_partitions.size(); i++)
             {
                 textSensorPartition ts;
                 statusSensorPartition ss;
@@ -364,9 +349,9 @@ namespace esphome
                 partition = defaultPartition;
 
             uint8_t addr = 0;
-            if (partition > maxPartitions || partition < 1)
+            if (partition > 3 || partition < 1)
                 return;
-            addr = partitionKeypads[partition];
+            addr = known_partitions[partition - 1].assigned_keypad;
             bool result = false;
             if (addr > 0 and addr < 24)
                 result = vistabus.write(keystring.c_str(), keystring.length(), addr);
@@ -515,15 +500,26 @@ namespace esphome
             if (code.length() != 4 || !isInt(code, 10))
                 code = accessCode; // ensure we get a numeric 4 digit code
 
-            uint8_t addr = 0;
-            if (partition > maxPartitions || partition < 1)
+            if (partition > 3 || partition < 1)
                 return;
-            addr = partitionKeypads[partition];
+                
+            uint8_t kpi = 0;
+            for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+            {
+                if (partition == it->partition)
+                    break;
+                kpi++;
+            }
+
+            uint8_t addr = 0;
+
+            addr = known_partitions[kpi].assigned_keypad;
             if (addr < 1 || addr > 23)
                 return;
 
+
             // Arm stay
-            if (state.compare("S") == 0 && !partitionStates[partition - 1].previousLightState.armed)
+            if (state.compare("S") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
             {
                 if (quickArm)
                     vistabus.write("#3",2, addr);
@@ -536,7 +532,7 @@ namespace esphome
                 }
             }
             // Arm away
-            else if ((state.compare("A") == 0 || state.compare("W") == 0) && !partitionStates[partition - 1].previousLightState.armed)
+            else if ((state.compare("A") == 0 || state.compare("W") == 0) && !known_partitions[kpi].partition_state.previousLightState.armed)
             {
                 if (quickArm)
                     vistabus.write("#2",2, addr);
@@ -548,7 +544,7 @@ namespace esphome
                     vistabus.write(send_str,5, addr);
                 }
             }
-            else if (state.compare("I") == 0 && !partitionStates[partition - 1].previousLightState.armed)
+            else if (state.compare("I") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
             {
                 if (quickArm)
                     vistabus.write("#7",2, addr);
@@ -560,7 +556,7 @@ namespace esphome
                     vistabus.write(send_str,5, addr);
                 }
             }
-            else if (state.compare("N") == 0 && !partitionStates[partition - 1].previousLightState.armed)
+            else if (state.compare("N") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
             {
                 if (quickArm)
                     vistabus.write("#33",3, addr);
@@ -610,58 +606,6 @@ namespace esphome
                     memcpy(send_str,code.c_str(),4);
                     memcpy(send_str+4,"1",1);
                     vistabus.write(send_str,5, addr);
-                }
-            }
-        }
-
-        int vistaECPHome::getZoneFromChannel(uint8_t deviceAddress, uint8_t channel)
-        {
-            switch (deviceAddress)
-            {
-                case 7:
-                    return channel + 8;
-                case 8:
-                    return channel + 16;
-                case 9:
-                    return channel + 24;
-                case 10:
-                    return channel + 32;
-                case 11:
-                    return channel + 40;
-                default:
-                    return 0;
-            }
-        }
-
-        void vistaECPHome::assignPartitionToZone(zoneType *zt)
-        {
-
-            for (int p = 1; p < 4; p++)
-            {
-                if (partitions[p - 1])
-                {
-                    ESP_LOGD(TAG, "Assigning partition %d, to zone %d", p, zt->zone);
-                    zt->partition = p;
-                    break;
-                }
-            }
-        }
-
-        void vistaECPHome::getPartitionsFromMask()
-        {
-            partitionTargets = 0;
-            memset(partitions, 0, maxPartitions);
-            for (uint8_t p = 1; p <= maxPartitions; p++)
-            {
-                for (int8_t i = 3; i >= 0; i--)
-                {
-                    int8_t shift = partitionKeypads[p] - (8 * i);
-                    if (shift >= 0 && (statusFlags.keypad[i] & (0x01 << shift)))
-                    {
-                        partitionTargets = partitionTargets + 1;
-                        partitions[p - 1] = 1;
-                        break;
-                    }
                 }
             }
         }

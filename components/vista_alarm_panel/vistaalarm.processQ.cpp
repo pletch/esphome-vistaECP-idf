@@ -15,7 +15,6 @@ namespace esphome
     {
         void vistaECPHome::processReceiveQueue(void *args)
         {
-            forceRefreshGlobal = true;
             while (1)
             {               
                 AUIprocessQueue();
@@ -57,10 +56,10 @@ namespace esphome
                             {
                                 forceRefreshGlobal = true;
                             }
+                            ESP_LOGI(TAG, "Partition: %u", statusFlags.partition);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt1);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
                             ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
-                        //forceRefreshZones = true;
                         }
                         else if (payload[0]==0xF2)
                         {
@@ -214,30 +213,27 @@ namespace esphome
                     }
                 }
                 // done other cmd processing.    Process f7 now
-                if (!forceRefreshGlobal)
+                if (!forceRefreshGlobal || statusFlags.partition == 0)
                     continue;
         
                 last_refresh = esp_timer_get_time();
-                getPartitionsFromMask();
-                for (uint8_t partition = 1; partition <= maxPartitions; partition++)
+
+                uint8_t kpi = 0;
+                for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
                 {
-                    if (partitions[partition - 1])
-                    {
-                        forceRefresh = partitionStates[partition - 1].refreshStatus || forceRefreshGlobal;
-                        ESP_LOGI(TAG, "Partition: %02X", partition);
+                    if (statusFlags.partition == it->partition)
+                        break;
+                    kpi++;
+                }
 
-                        updateDisplayLines(partition);
-                        if (partitionStates[partition - 1].lastbeeps != (statusFlags.beeps || forceRefresh) && text_sensors_partition[partition-1].beeps != NULL)
-                        {
-                            text_sensors_partition[partition-1].beeps->process(std::to_string(statusFlags.beeps));
-                        }
-
-                        partitionStates[partition - 1].lastbeeps = statusFlags.beeps;
-
-                        if (statusFlags.systemFlag && strstr(statusFlags.prompt2, HITSTAR))
-                            alarm_keypress_partition("*", partition);
-                    }
-                    //forceRefreshZones = true;
+                if (statusFlags.partition == known_partitions[kpi].partition)
+                {
+                    updateDisplayLines(statusFlags.partition);
+                    if (known_partitions[kpi].partition_state.lastbeeps != statusFlags.beeps && text_sensors_partition[known_partitions[kpi].partition - 1].beeps != NULL)
+                            text_sensors_partition[known_partitions[kpi].partition - 1].beeps->process(std::to_string(statusFlags.beeps));
+                    known_partitions[kpi].partition_state.lastbeeps = statusFlags.beeps;
+                    if (statusFlags.systemFlag && strstr(statusFlags.prompt2, HITSTAR))
+                        alarm_keypress_partition("*", known_partitions[kpi].partition);
                 }
 
                 currentSystemState = sunavailable;
@@ -287,46 +283,25 @@ namespace esphome
                     currentLightState.armed = true;
                 }
                 // zone fire status
-                // int tz;
                 if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.fireZone)
                 {
-                    if (payload[5] > 0x90)
-                        getZoneFromPrompt(statusFlags.prompt1);
                     fireStatus.zone = statusFlags.zone;
                     fireStatus.time = esp_timer_get_time();
                     fireStatus.state = true;
-                    zoneType *zt = getZone(statusFlags.zone);
-                    if (zt != NULL)
-                        zt->fire = true;
                 }
                 // zone alarm status
                 if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.alarm)
                 {
-                    if (payload[5] > 0x90)
-                        getZoneFromPrompt(statusFlags.prompt1);
-                    zoneType *zt = getZone(statusFlags.zone);
-                    if (zt != NULL)
-                    {
-                    ESP_LOGD(TAG,"alarm found for zone %d,status=%d",statusFlags.zone,zt->alarm );
-                    if (!zt->alarm && zt->active)
-                        {
-                            zt->alarm = true;
-                            zoneStatusUpdate(zt);
-                        }
-                        if (!zt->partition && zt->active)
-                            assignPartitionToZone(zt);
-                        zt->time = esp_timer_get_time();
-                        alarmStatus.zone = statusFlags.zone;
-                        alarmStatus.time = zt->time;
-                        alarmStatus.state = true;
-                    }
+                    ESP_LOGD(TAG,"alarm found for zone %d",statusFlags.zone);
+
+                    alarmStatus.zone = statusFlags.zone;
+                    alarmStatus.time = esp_timer_get_time();
+                    alarmStatus.state = true;
                 }
                 // device check status
                 if (statusFlags.check)
                 {
                     updateSystemState = true; // we also get system flags when a device has a check flag
-                    if (payload[5] > 0x90)
-                        getZoneFromPrompt(statusFlags.prompt1);
                     zoneType *zt = getZone(statusFlags.zone);
                     if (zt != NULL)
                     {
@@ -340,7 +315,7 @@ namespace esphome
                             zoneStatusUpdate(zt);
                         }
                         if (!zt->partition && zt->active)
-                            assignPartitionToZone(zt);
+                            zt->partition = known_partitions[kpi].partition;
                         zt->time = esp_timer_get_time();
                     }
                 }
@@ -349,11 +324,6 @@ namespace esphome
                 if (!statusFlags.systemFlag && !statusFlags.check && !statusFlags.bypass && !statusFlags.alarm && 
                     !(statusFlags.instant || statusFlags.armedAway || statusFlags.armedStay || statusFlags.night))
                 {
-                    if (payload[5] > 0x90)
-                    {
-                        getZoneFromPrompt(statusFlags.prompt1);
-                    }
-
                     zoneType *zt = getZone(statusFlags.zone);
                     if (zt != NULL)
                     {
@@ -371,9 +341,6 @@ namespace esphome
                 if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.bypass && !statusFlags.alarm && 
                     !(statusFlags.instant || statusFlags.armedAway || statusFlags.armedStay || statusFlags.night))
                 {
-                    if (payload[5] > 0x90)
-                        getZoneFromPrompt(statusFlags.prompt1);
-
                     zoneType *zt = getZone(statusFlags.zone);
                     if (zt != NULL)
                     {
@@ -436,32 +403,17 @@ namespace esphome
                 if ((chkTime - fireStatus.time) > TTL)
                 {
                     fireStatus.state = false;
-                    if (fireStatus.zone > 0 && fireStatus.zone <= maxZones)
-                    {
-                        zoneType *zt = getZone(fireStatus.zone);
-                        if (zt != NULL)
-                            zt->fire = false;
-                    }
+                    fireStatus.zone = 0;
                 }
                 if ((chkTime - alarmStatus.time) > TTL)
                 {
                     alarmStatus.state = false;
-                    if (alarmStatus.zone > 0 && alarmStatus.zone <= maxZones)
-                    {
-                        zoneType *zt = getZone(alarmStatus.zone);
-                        if (zt != NULL)
-                            zt->alarm = false;
-                    }
+                    alarmStatus.zone = 0;
                 }
                 if ((chkTime - panicStatus.time) > TTL)
                 {
                     panicStatus.state = false;
-                    if (panicStatus.zone > 0 && panicStatus.zone <= maxZones)
-                    {
-                        zoneType *zt = getZone(panicStatus.zone);
-                        if (zt != NULL)
-                            zt->panic = false;
-                    }
+                    panicStatus.zone = 0;
                 }
                 if ((chkTime - lowBatteryTime) > TTL)
                     currentLightState.bat = false;
@@ -471,88 +423,82 @@ namespace esphome
 
                 currentLightState.alarm = alarmStatus.state;
 
-                for (uint8_t partition = 1; partition <= maxPartitions; partition++)
+                if (statusFlags.partition == known_partitions[kpi].partition && (statusFlags.systemFlag || updateSystemState))
                 {
-                    if ((partitions[partition - 1] && partitionTargets == 1) && (statusFlags.systemFlag || updateSystemState))
-                    {
-                    // system status message
-                        forceRefresh = partitionStates[partition - 1].refreshStatus || forceRefreshGlobal;
-
-                        if ((currentSystemState != partitionStates[partition - 1].previousSystemState || forceRefresh) && text_sensors_partition[partition-1].system_status != NULL)
-                        switch (currentSystemState)
-                        { 
-                            case striggered:
-                                text_sensors_partition[partition-1].system_status->process(STATUS_TRIGGERED);
-                                break;
-                            case sarmedaway:
-                                text_sensors_partition[partition-1].system_status->process(STATUS_ARMED);
-                                break;
-                            case sarmednight:
-                                text_sensors_partition[partition-1].system_status->process(STATUS_NIGHT);
-                                break;
-                            case sarmedstay:
-                                text_sensors_partition[partition-1].system_status->process(STATUS_STAY);
-                                break;
-                            case sunavailable:
-                                text_sensors_partition[partition-1].system_status->process(STATUS_NOT_READY);
-                                break;
-                            case sdisarmed:
-                                text_sensors_partition[partition-1].system_status->process(STATUS_OFF);
-                                break;
-                            default:
-                                text_sensors_partition[partition-1].system_status->process(STATUS_NOT_READY);
-                                break;
-                        }
-                        partitionStates[partition - 1].previousSystemState = currentSystemState;
-                        partitionStates[partition - 1].refreshStatus = false;
+                    forceRefresh = known_partitions[kpi].partition_state.refreshStatus || forceRefreshGlobal;
+                    if ((currentSystemState != known_partitions[kpi].partition_state.previousSystemState || forceRefresh) && 
+                                text_sensors_partition[known_partitions[kpi].partition-1].system_status != NULL)
+                    switch (currentSystemState)
+                    { 
+                        case striggered:
+                            text_sensors_partition[known_partitions[kpi].partition-1].system_status->process(STATUS_TRIGGERED);
+                            break;
+                        case sarmedaway:
+                            text_sensors_partition[known_partitions[kpi].partition-1].system_status->process(STATUS_ARMED);
+                            break;
+                        case sarmednight:
+                            text_sensors_partition[known_partitions[kpi].partition-1].system_status->process(STATUS_NIGHT);
+                            break;
+                        case sarmedstay:
+                            text_sensors_partition[known_partitions[kpi].partition-1].system_status->process(STATUS_STAY);
+                            break;
+                        case sunavailable:
+                            text_sensors_partition[known_partitions[kpi].partition-1].system_status->process(STATUS_NOT_READY);
+                            break;
+                        case sdisarmed:
+                            text_sensors_partition[known_partitions[kpi].partition-1].system_status->process(STATUS_OFF);
+                            break;
+                        default:
+                            text_sensors_partition[known_partitions[kpi].partition-1].system_status->process(STATUS_NOT_READY);
+                            break;
                     }
+                    known_partitions[kpi].partition_state.previousSystemState = currentSystemState;
+                    known_partitions[kpi].partition_state.refreshStatus = false;
                 }
 
-                for (uint8_t partition = 1; partition <= maxPartitions; partition++)
+
+                if (statusFlags.partition == known_partitions[kpi].partition )
                 {
-                    if ((partitions[partition - 1] && partitionTargets == 1))
+                    previousLightState = known_partitions[kpi].partition_state.previousLightState;
+
+                    forceRefresh = known_partitions[kpi].partition_state.refreshLights || forceRefreshGlobal;
+
+                    // ESP_LOGD("test","refreshing partition statuse partitions: %d,force refresh=%d",partition,forceRefresh);
+                    if ((currentLightState.fire != previousLightState.fire || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].fire != NULL)
+                        status_sensors_partition[known_partitions[kpi].partition - 1].fire->process(currentLightState.fire);
+                    if ((currentLightState.alarm != previousLightState.alarm || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].alm != NULL)
+                        status_sensors_partition[known_partitions[kpi].partition - 1].alm->process(currentLightState.alarm);
+                    if ((currentLightState.trouble != previousLightState.trouble || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].trbl != NULL)
+                        status_sensors_partition[known_partitions[kpi].partition - 1].trbl->process(currentLightState.trouble);
+                    if ((currentLightState.chime != previousLightState.chime || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].chm != NULL)
+                        status_sensors_partition[known_partitions[kpi].partition - 1].chm->process(currentLightState.chime);
+
+
+                    if (statusFlags.systemFlag || updateSystemState)
                     {
-                        // publish status on change only - keeps api traffic down
-                        previousLightState = partitionStates[partition - 1].previousLightState;
-
-                        forceRefresh = partitionStates[partition - 1].refreshLights || forceRefreshGlobal;
-
-                        // ESP_LOGD("test","refreshing partition statuse partitions: %d,force refresh=%d",partition,forceRefresh);
-                        if ((currentLightState.fire != previousLightState.fire || forceRefresh) && status_sensors_partition[partition - 1].fire != NULL)
-                            status_sensors_partition[partition - 1].fire->process(currentLightState.fire);
-                        if ((currentLightState.alarm != previousLightState.alarm || forceRefresh) && status_sensors_partition[partition - 1].alm != NULL)
-                            status_sensors_partition[partition - 1].alm->process(currentLightState.alarm);
-                        if ((currentLightState.trouble != previousLightState.trouble || forceRefresh) && status_sensors_partition[partition - 1].trbl != NULL)
-                            status_sensors_partition[partition - 1].trbl->process(currentLightState.trouble);
-                        if ((currentLightState.chime != previousLightState.chime || forceRefresh) && status_sensors_partition[partition - 1].chm != NULL)
-                            status_sensors_partition[partition - 1].chm->process(currentLightState.chime);
-
-
-                        if (statusFlags.systemFlag || updateSystemState)
-                        {
-                            if ((currentLightState.away != previousLightState.away || forceRefresh) && status_sensors_partition[partition - 1].arma != NULL)
-                                status_sensors_partition[partition - 1].arma->process(currentLightState.away);
-                            if ((currentLightState.stay != previousLightState.stay || forceRefresh) && status_sensors_partition[partition -1 ].arms != NULL)
-                                status_sensors_partition[partition - 1].arms->process(currentLightState.stay);
-                            if ((currentLightState.night != previousLightState.night || forceRefresh) && status_sensors_partition[partition - 1].armn != NULL)
-                                status_sensors_partition[partition - 1].armn->process(currentLightState.night);
-                            if ((currentLightState.instant != previousLightState.instant || forceRefresh) && status_sensors_partition[partition - 1].armi != NULL)
-                                status_sensors_partition[partition - 1].armi->process(currentLightState.instant);
-                            if ((currentLightState.armed != previousLightState.armed || forceRefresh) && status_sensors_partition[partition - 1].arm != NULL)
-                                status_sensors_partition[partition - 1].arm->process(currentLightState.armed);
-                        }
-                        if ((currentLightState.bypass != previousLightState.bypass || forceRefresh) && status_sensors_partition[partition - 1].byp != NULL)
-                            status_sensors_partition[partition - 1].byp->process(currentLightState.bypass);
-                        if ((currentLightState.ready != previousLightState.ready || forceRefresh) && status_sensors_partition[partition - 1].rdy != NULL)
-                            status_sensors_partition[partition - 1].rdy->process(currentLightState.ready);
-                        if ((currentLightState.bat != previousLightState.bat || forceRefresh) && ac_bin_sensor != NULL)
-                            ac_bin_sensor->process(currentLightState.ac);
-                        if ((currentLightState.bat != previousLightState.bat || forceRefresh) && bat_bin_sensor != NULL)
-                            bat_bin_sensor->process(currentLightState.bat);
-                        partitionStates[partition - 1].previousLightState = currentLightState;
-                        partitionStates[partition - 1].refreshLights = false;
+                        if ((currentLightState.away != previousLightState.away || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].arma != NULL)
+                            status_sensors_partition[known_partitions[kpi].partition - 1].arma->process(currentLightState.away);
+                        if ((currentLightState.stay != previousLightState.stay || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition -1 ].arms != NULL)
+                            status_sensors_partition[known_partitions[kpi].partition - 1].arms->process(currentLightState.stay);
+                        if ((currentLightState.night != previousLightState.night || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].armn != NULL)
+                            status_sensors_partition[known_partitions[kpi].partition - 1].armn->process(currentLightState.night);
+                        if ((currentLightState.instant != previousLightState.instant || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].armi != NULL)
+                            status_sensors_partition[known_partitions[kpi].partition - 1].armi->process(currentLightState.instant);
+                        if ((currentLightState.armed != previousLightState.armed || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].arm != NULL)
+                            status_sensors_partition[known_partitions[kpi].partition - 1].arm->process(currentLightState.armed);
                     }
+                    if ((currentLightState.bypass != previousLightState.bypass || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].byp != NULL)
+                        status_sensors_partition[known_partitions[kpi].partition - 1].byp->process(currentLightState.bypass);
+                    if ((currentLightState.ready != previousLightState.ready || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].rdy != NULL)
+                        status_sensors_partition[known_partitions[kpi].partition - 1].rdy->process(currentLightState.ready);
+                    if ((currentLightState.bat != previousLightState.bat || forceRefresh) && ac_bin_sensor != NULL)
+                        ac_bin_sensor->process(currentLightState.ac);
+                    if ((currentLightState.bat != previousLightState.bat || forceRefresh) && bat_bin_sensor != NULL)
+                        bat_bin_sensor->process(currentLightState.bat);
+                    known_partitions[kpi].partition_state.previousLightState = currentLightState;
+                    known_partitions[kpi].partition_state.refreshLights = false;
                 }
+
                 std::string zoneStatusMsg = "";
                 char s1[16];
                 // clears restored zones after timeout
@@ -562,7 +508,18 @@ namespace esphome
                     if (!x.active || !x.partition)
                         continue;
 
-                    if (!x.bypass && x.open && partitionStates[x.partition - 1].previousLightState.ready)
+                    kpi = 0;
+                    for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+                    {
+                        if (x.partition == it->partition)
+                            break;
+                        kpi++;
+                    }
+
+                    if (kpi == known_partitions.size())
+                        continue;
+
+                    if (!x.bypass && x.open && known_partitions[kpi].partition_state.previousLightState.ready)
                     {
                         x.open = false;
                         x.check = false;
@@ -570,12 +527,12 @@ namespace esphome
                         zoneStatusUpdate(&x);
                     }
 
-                    if (x.bypass && !partitionStates[x.partition - 1].previousLightState.bypass)
+                    if (x.bypass && !known_partitions[kpi].partition_state.previousLightState.bypass)
                     {
                         x.bypass = false;
                     }
 
-                    if (x.alarm && !partitionStates[x.partition - 1].previousLightState.alarm)
+                    if (x.alarm && !known_partitions[kpi].partition_state.previousLightState.alarm)
                     {
                         x.alarm = false;
                     }
@@ -627,7 +584,7 @@ namespace esphome
                             sprintf(s1, "CK:%d", x.zone);
                         zoneStatusMsg.append(s1);
                     }
-                    if (x.lowbat || x.rflowbat)
+                    if (x.rflowbat)
                     { // low rf battery
                         if (zoneStatusMsg != "")
                             sprintf(s1, ",LB:%d", x.zone);
@@ -665,6 +622,17 @@ namespace esphome
             statusFlags->keypad[2] = cbuf[3]; // 16 - 23
 
             statusFlags->keypad[3] = cbuf[4]; // 24 - 31.
+
+            statusFlags->partition = 0;
+
+            for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+            {
+                if (cbuf[(it->assigned_keypad >> 3) + 1] & (0x01 << (it->assigned_keypad & 0x07)))
+                {
+                    statusFlags->partition = it->partition;
+                    break;
+                }
+            }
 
             statusFlags->zone = (int)toDec(cbuf[5]);
 

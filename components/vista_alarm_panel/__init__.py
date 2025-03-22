@@ -15,8 +15,6 @@ alarm_panel_ns = cg.esphome_ns.namespace('alarm_panel')
 AlarmComponent = alarm_panel_ns.class_('vistaECPHome', cg.PollingComponent)
 
 CONF_ACCESSCODE="accesscode"
-CONF_MAXZONES="maxzones"
-CONF_MAXPARTITIONS="maxpartitions"
 CONF_DEFAULTPARTITION="defaultpartition"
 CONF_DEBUGLEVEL="vistadebuglevel"
 CONF_KEYPAD1="keypadaddr1"
@@ -42,9 +40,7 @@ CONF_CLEAN="clean_build"
 CONFIG_SCHEMA = cv.Schema(
     {
     cv.GenerateID(): cv.declare_id(AlarmComponent),
-    cv.Optional(CONF_ACCESSCODE,default=""): cv.string  ,
-    cv.Optional(CONF_MAXPARTITIONS,default=1): cv.int_range(min=1, max=8),
-    cv.Optional(CONF_MAXZONES,default=32): cv.int_range(min=8, max=128), 
+    cv.Optional(CONF_ACCESSCODE,default=""): cv.string,
     cv.Optional(CONF_DEFAULTPARTITION, default=1): cv.int_range(min=1, max=8),
     cv.Optional(CONF_DEBUGLEVEL): cv.int_, 
     cv.Optional(CONF_KEYPAD1,default=17): cv.int_, 
@@ -69,24 +65,21 @@ async def to_code(config):
     old_dir = CORE.relative_build_path("src")    
     if config[CONF_CLEAN] or os.path.exists(old_dir+'/vistaalarm.h'):
         real_clean_build()
-    var = cg.new_Pvariable(config[CONF_ID],config[CONF_KEYPAD1],config[CONF_RXPIN],config[CONF_TXPIN],config[CONF_UART1],config[CONF_MONITORPIN],config[CONF_UART2],config[CONF_MAXZONES],config[CONF_MAXPARTITIONS])
+    var = cg.new_Pvariable(config[CONF_ID],config[CONF_KEYPAD1],config[CONF_RXPIN],config[CONF_TXPIN],config[CONF_UART1],config[CONF_MONITORPIN],config[CONF_UART2])
     
     if CONF_ACCESSCODE in config:
         cg.add(var.set_accessCode(config[CONF_ACCESSCODE]));
-    if CONF_MAXZONES in config:
-        cg.add(var.set_maxZones(config[CONF_MAXZONES]));
-    if CONF_MAXPARTITIONS in config:
-        cg.add(var.set_maxPartitions(config[CONF_MAXPARTITIONS]));
     if CONF_DEFAULTPARTITION in config:
         cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]));
     if CONF_DEBUGLEVEL in config:
         cg.add(var.set_debug(config[CONF_DEBUGLEVEL]));
-    if CONF_KEYPAD1 in config:
+    if CONF_KEYPAD1 in config and config[CONF_KEYPAD1] != 0:
         cg.add(var.set_partitionKeypad(1,config[CONF_KEYPAD1]));
-    if CONF_KEYPAD2 in config:
+    if CONF_KEYPAD2 in config and config[CONF_KEYPAD2] != 0:
         cg.add(var.set_partitionKeypad(2,config[CONF_KEYPAD2]));
-    if CONF_KEYPAD3 in config:
+    if CONF_KEYPAD3 in config and config[CONF_KEYPAD3] != 0:
         cg.add(var.set_partitionKeypad(3,config[CONF_KEYPAD3]));
+    cg.add(var.initialize_partition_sensors());
     if CONF_TTL in config:
         cg.add(var.set_ttl(config[CONF_TTL]));        
     if CONF_QUICKARM in config:
