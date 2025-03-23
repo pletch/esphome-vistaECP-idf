@@ -56,7 +56,10 @@ namespace esphome
                             {
                                 forceRefreshGlobal = true;
                             }
-                            ESP_LOGI(TAG, "Partition: %u", statusFlags.partition);
+                            if (statusFlags.partition == 0) 
+                                ESP_LOGW(TAG, "No keypad associated with this partition in YAML definition.");
+                            else
+                                ESP_LOGI(TAG, "Partition: %u", statusFlags.partition);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt1);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
                             ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
@@ -217,6 +220,8 @@ namespace esphome
                     continue;
         
                 last_refresh = esp_timer_get_time();
+                
+                
 
                 uint8_t kpi = 0;
                 for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
