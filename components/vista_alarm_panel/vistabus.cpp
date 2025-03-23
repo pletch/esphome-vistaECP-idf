@@ -262,40 +262,20 @@ bool VistaBus::mark_pulse(uint8_t address)
         snd_data[1] = 0xFF;
         snd_data[2] = ~(0x01 << (address & 0x07));
     }
-    //Use GPIO on rxPin to find pulse signal
-    gpioTaskArgs taskargs;
-    taskargs.task_handle = this->rx_tx_task_Handle;
-    taskargs.pin = this->rxPin;
-    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_NEGEDGE);
-    gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) &taskargs );
-    uint32_t result = 1;
+    //Use GPIO interrupts on rxPin to find send pulses.
 
-    if (gpio_get_level(static_cast<gpio_num_t>(this->rxPin))) //pin is high
-    {
-        if (!(xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(10)) == pdPASS)) //pin doesn't transition to low in 10 second window
-        {
-            bool falling_edge = (xTaskNotifyWait(0xFFFFFFFF,0,&result,pdMS_TO_TICKS(300)) == pdTRUE); // find start of 13ms low period
-            if (falling_edge && !result)
-            {   
-                gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_POSEDGE);
-                if (!(xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(10)) == pdPASS)) //if interrupt comes in before this, panel is sending
-                {
-                    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //first rising edge
-                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1); 
+    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //first rising edge
+    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1); 
 
-                    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //second rising edge
-                    if (snd_data[1] != 0)
-                        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
+    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //second rising edge
+    if (snd_data[1] != 0)
+        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
             
-                    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //third rising edge           
-                    if (snd_data[2] != 0)
-                        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
-                    sent_request = true;
-                }
-            }
-        }
-    } 
-    gpio_isr_handler_remove(static_cast<gpio_num_t>(this->rxPin));
+    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //third rising edge           
+    if (snd_data[2] != 0)
+        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
+    sent_request = true;
+
     uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_EVEN);
     return sent_request;
 }
@@ -324,9 +304,6 @@ void VistaBus::rx_tx_task(void * args)
     uint8_t mark_failures = 0;
     int sequence = 0;
     bool pulse_marked = false;
-    bool is_2400 = false;
-    uint8_t zero_total = 0;
-    char prior_byte[1] = {0};
     
     uint64_t pulse_mark_time = 0;
     while (1) 
@@ -342,7 +319,7 @@ void VistaBus::rx_tx_task(void * args)
         {
             this->panel_connected = false;
         }
-        if (!req_to_send && !is_2400) 
+        if (!req_to_send) 
         {
             bool pkt_queued = false;
             while (uxQueueMessagesWaiting(sendQueue))
@@ -370,17 +347,49 @@ void VistaBus::rx_tx_task(void * args)
                 }
             }
         }
-        if (req_to_send && !pulse_marked)
+
+        int rxBytes = 0;
+        uart_event_t event;
+        xQueueReceive(uartevtQueue, (void *)&event, uart_delay);
+        switch (event.type)
         {
-            pulse_marked = mark_pulse(pkt_to_send.keypadaddress);
-            pulse_mark_time = esp_timer_get_time();
-            uart_delay = 20;
+            case UART_DATA:
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, 0);
+                break;
+            case UART_BREAK:
+                gpioTaskArgs taskargs;
+                taskargs.task_handle = this->rx_tx_task_Handle;
+                taskargs.pin = this->rxPin;
+                gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_NEGEDGE);
+                gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) &taskargs );
+                if (xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(310)) == pdPASS)
+                {
+                    uint64_t start = esp_timer_get_time();
+                    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_POSEDGE);
+                    if (xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(10)) == pdPASS)
+                    {
+                        uint64_t end = esp_timer_get_time();
+                        if (end - start > 5000 && end - start < 7000 )
+                        {
+                            uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(4)); //flush leading zero
+                            uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
+                            rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(10));
+                            uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
+                        }
+                    }
+                    else if (req_to_send && !pulse_marked)
+                    {
+                        pulse_marked = mark_pulse(pkt_to_send.keypadaddress);
+                        pulse_mark_time = esp_timer_get_time();
+                        uart_delay = 20;
+                    }
+                }
+                gpio_isr_handler_remove(static_cast<gpio_num_t>(this->rxPin));
+                break;
+            default:
+                break;
         }
-        if (is_2400)
-            uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
-        int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(uart_delay));
-        uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
-        is_2400 = false; 
+
         if (rxBytes > 0) 
         {
             this->panel_connected = true;
@@ -447,7 +456,6 @@ void VistaBus::rx_tx_task(void * args)
                         {
                             req_to_send = false;
                             pulse_marked = false;
-                            prior_byte[0] = received_packet.payload[0] = data[0];
                             received_packet.size = 1;
                             xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                         }
@@ -469,8 +477,6 @@ void VistaBus::rx_tx_task(void * args)
                 {        
 
                 }
-               zero_total = 0;
-               xQueueReset( uartevtQueue );
             }
             else if ( data[0] == 0xF7 ) //DISPLAY
             {
@@ -479,8 +485,6 @@ void VistaBus::rx_tx_task(void * args)
                 {
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                 }
-                prior_byte[0] = received_packet.payload[received_packet.size-1];
-                zero_total = 0;
             }
             else if ( data[0] == 0xF2 ) //AUI
             {
@@ -491,8 +495,6 @@ void VistaBus::rx_tx_task(void * args)
                 {
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
-                prior_byte[0] = received_packet.payload[received_packet.size-1];
-                zero_total = 0;
             }
             else if ( data[0] == 0xFA ) //EXP
             {                    
@@ -504,9 +506,7 @@ void VistaBus::rx_tx_task(void * args)
                 if (EXPemulation)
                     this->processFA(received_packet.payload);
                 get_Packet(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
-                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                prior_byte[0] = received_packet.payload[received_packet.size-1]; 
-                zero_total = 0;       
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
             }
             else if ( data[0] == 0xF9 ) //LRR
             {   
@@ -537,8 +537,6 @@ void VistaBus::rx_tx_task(void * args)
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 vTaskDelay(pdMS_TO_TICKS(25)); //Delay to put command/response/ack in sequence in log
-                prior_byte[0] = received_packet.payload[received_packet.size-1];
-                zero_total = 0;
             }
             else if ( data[0] == 0xFB ) //5881EN traffic on Vista 20p (address 0)??
             {   
@@ -546,8 +544,6 @@ void VistaBus::rx_tx_task(void * args)
                 uint32_t val = 0xFB << 8 | (received_packet.payload[3]);
                 xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                prior_byte[0] = received_packet.payload[received_packet.size-1];
-                zero_total = 0;
             }
             else if ( data[0] == 0xF8 ) //Unknown Command
             {
@@ -556,32 +552,16 @@ void VistaBus::rx_tx_task(void * args)
                 received_packet.payload[2] = data[1];
                 get_Packet(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY));
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                prior_byte[0] = received_packet.payload[received_packet.size-1];
-                zero_total = 0;
             }
             else if (data[0] == 0)
             {
-                //every time we read a zero, track if break preceded.
-                zero_total++;
-                uart_event_t event;
-                while (xQueueReceive(uartevtQueue, (void *)&event, 0) == pdPASS)
-                {
-                if (event.type == UART_BREAK)
-                    {
-                        if (zero_total == 1 && prior_byte[0] == 0)
-                            is_2400 = true;
-                        zero_total = 0;
-                    }
-                }
-                prior_byte[0] = 0;   
+                //send single zeros to void!
             }
             else
             {
                 received_packet.payload[0] = data[0];
                 received_packet.size = 1;
                 xQueueSend(this->receiveQueue, &received_packet,pdMS_TO_TICKS(20));
-                prior_byte[0] = received_packet.payload[received_packet.size-1];
-                zero_total = 0;
             }
         }
 
