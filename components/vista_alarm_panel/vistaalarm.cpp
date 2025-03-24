@@ -177,21 +177,28 @@ namespace esphome
 
         void vistaECPHome::register_text_sensor(vistaECPTextSensor *text_sensor, uint8_t partition_number, const char * type)
         {
-            if (strncmp(type,"SYSTEM_STATUS", 13) == 0)
-                text_sensors_partition[partition_number-1].system_status = text_sensor;
-            else if (strncmp(type, "LRR_MESSAGES", 12) == 0)
-                text_sensors_common.lrr_messages = text_sensor;
-            else if (strncmp(type, "RF_MESSAGES", 11) == 0)
-                text_sensors_common.rf_messages = text_sensor;
-            else if (strncmp(type, "LINE1", 5) == 0)
-                text_sensors_partition[partition_number-1].line1 = text_sensor;
-            else if (strncmp(type, "LINE2", 5) == 0)
-                text_sensors_partition[partition_number-1].line2 = text_sensor;
-            else if (strncmp(type, "ZONE_STATUS", 11)== 0)
-                text_sensors_common.zone_status = text_sensor;
-            else if (strncmp(type, "BEEPS", 5) == 0)
-                text_sensors_partition[partition_number-1].beeps = text_sensor;
-            ESP_LOGI("","Registering text sensor %s for partition %d.",type, partition_number);
+            if (partition_number-1 < known_partitions.size())
+            {
+                if (strncmp(type,"SYSTEM_STATUS", 13) == 0)
+                    text_sensors_partition[partition_number-1].system_status = text_sensor;
+                else if (strncmp(type, "LRR_MESSAGES", 12) == 0)
+                    text_sensors_common.lrr_messages = text_sensor;
+                else if (strncmp(type, "RF_MESSAGES", 11) == 0)
+                    text_sensors_common.rf_messages = text_sensor;
+                else if (strncmp(type, "LINE1", 5) == 0)
+                    text_sensors_partition[partition_number-1].line1 = text_sensor;
+                else if (strncmp(type, "LINE2", 5) == 0)
+                    text_sensors_partition[partition_number-1].line2 = text_sensor;
+                else if (strncmp(type, "ZONE_STATUS", 11)== 0)
+                    text_sensors_common.zone_status = text_sensor;
+                else if (strncmp(type, "BEEPS", 5) == 0)
+                    text_sensors_partition[partition_number-1].beeps = text_sensor;
+                ESP_LOGI("","Registering text sensor %s for partition %d.",type, partition_number);
+            }
+            else
+            {
+                ESP_LOGW("","No keypad assigned to partition %d. Aborting %s text sensor registration.",partition_number, type);
+            }
         }
 
 
