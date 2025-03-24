@@ -357,6 +357,7 @@ void VistaBus::rx_tx_task(void * args)
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, 0);
                 break;
             case UART_BREAK:
+                xQueueReset(uartevtQueue);
                 gpioTaskArgs taskargs;
                 taskargs.task_handle = this->rx_tx_task_Handle;
                 taskargs.pin = this->rxPin;
@@ -454,15 +455,14 @@ void VistaBus::rx_tx_task(void * args)
                     outbuffer[pkt_to_send.size+2] = ~chksum+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
-                    rxBytes = get_Packet(&received_packet,data,0,1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(50));
+                    rxBytes = get_Packet(&received_packet,data,0,2, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(50));
                     if(rxBytes)
                     {
                         if (data[0] == outbuffer[0])
                         {
                             req_to_send = false;
                             pulse_marked = false;
-                            received_packet.size = 1;
-                            xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
+                            xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));               
                         }
 
                         if (req_to_send)
