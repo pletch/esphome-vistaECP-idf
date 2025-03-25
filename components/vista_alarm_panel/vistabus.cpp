@@ -4,7 +4,7 @@
 
 VistaBus::VistaBus()
 {
-    this->receiveQueue = xQueueCreate(20,sizeof(ReceivedPacket)); 
+    this->receiveQueue = xQueueCreate(25,sizeof(ReceivedPacket)); 
     this->sendQueue = xQueueCreate(8, sizeof(SendPacket));
     this->panel_connected = false;
     this->stop_requested = false;
@@ -177,7 +177,7 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     }
     else
     {
-        ESP_ERROR_CHECK(uart_driver_install(u_n, RX_BUF_SIZE + 8, 0, 10, &uartevtQueue, intr_alloc_flags));
+        ESP_ERROR_CHECK(uart_driver_install(u_n, RX_BUF_SIZE + 8, 0, 20, &uartevtQueue, intr_alloc_flags));
     }
 
     ESP_ERROR_CHECK(uart_param_config(u_n, &uart_config));
