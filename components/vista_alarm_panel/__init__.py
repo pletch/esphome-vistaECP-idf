@@ -1,10 +1,9 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.core import CORE
+from esphome.components import esp32
 import os
 import logging
-from esphome.components.esp32 import get_esp32_variant
-from esphome.helpers import copy_file_if_changed, sanitize, snake_case
 from esphome.const import (
     CONF_ID
 )
@@ -37,31 +36,52 @@ CONF_QUICKARM="quickarm"
 CONF_LRR="lrrsupervisor"
 CONF_CLEAN="clean_build"
 
-CONFIG_SCHEMA = cv.Schema(
-    {
-    cv.GenerateID(): cv.declare_id(AlarmComponent),
-    cv.Optional(CONF_ACCESSCODE,default=""): cv.string,
-    cv.Optional(CONF_DEFAULTPARTITION, default=1): cv.int_range(min=1, max=8),
-    cv.Optional(CONF_DEBUGLEVEL): cv.int_, 
-    cv.Optional(CONF_KEYPAD1,default=17): cv.int_, 
-    cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
-    cv.Optional(CONF_KEYPAD3,default=0): cv.int_, 
-    cv.Optional(CONF_AUIADDR,default=0): cv.int_,
-    cv.Optional(CONF_RXPIN): cv.int_, 
-    cv.Optional(CONF_TXPIN): cv.int_,
-    cv.Optional(CONF_UART1): cv.int_, 
-    cv.Optional(CONF_MONITORPIN): cv.int_,
-    cv.Optional(CONF_UART2): cv.int_,
-    cv.Optional(CONF_TTL): cv.int_, 
-    cv.Optional(CONF_QUICKARM): cv.boolean, 
-    cv.Optional(CONF_LRR): cv.boolean, 
-    cv.Optional(CONF_CLEAN,default='false'): cv.boolean,     
-    }
+def validate_keypads(config):
+    if (config[CONF_KEYPAD1] == 0 
+        and config[CONF_KEYPAD2] == 0
+        and config[CONF_KEYPAD3] == 0):
+        raise cv.Invalid("All partition keypads assigned 0. At least one must be assigned a valid address")
+    return config
+
+def validate_c6_uarts(config):
+    if (esp32.get_esp32_variant() == esp32.const.VARIANT_ESP32C6 
+        and (config[CONF_UART1] == 2 
+        or config[CONF_UART2] == 2)):
+        raise cv.Invalid("LP UART on ESP32-C6 is not currently supported.  Please use HW UARTs 0/1")
+    return config
+
+CONFIG_SCHEMA = cv.All(
+    cv.Schema(
+        {
+            cv.GenerateID(): cv.declare_id(AlarmComponent),
+            cv.Optional(CONF_ACCESSCODE,default=""): cv.string,
+            cv.Optional(CONF_DEFAULTPARTITION, default=1): cv.int_range(min=1, max=8),
+            cv.Optional(CONF_DEBUGLEVEL): cv.int_, 
+            cv.Optional(CONF_KEYPAD1,default=17): cv.int_, 
+            cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
+            cv.Optional(CONF_KEYPAD3,default=0): cv.int_, 
+            cv.Optional(CONF_AUIADDR,default=0): cv.int_,
+            cv.Required(CONF_RXPIN): cv.int_, 
+            cv.Required(CONF_TXPIN): cv.int_,
+            cv.Required(CONF_UART1): cv.int_, 
+            cv.Optional(CONF_MONITORPIN, default=-1): cv.int_,
+            cv.Optional(CONF_UART2, default=-1): cv.int_,
+            cv.Optional(CONF_TTL,default=30): cv.int_, 
+            cv.Optional(CONF_QUICKARM): cv.boolean, 
+            cv.Optional(CONF_LRR): cv.boolean, 
+            cv.Optional(CONF_CLEAN,default='false'): cv.boolean,     
+        }
+    ).extend(cv.COMPONENT_SCHEMA),
+    validate_keypads,
+    validate_c6_uarts,
 )
+
+
 
 async def to_code(config):
 
-    cg.add_define("USE_VISTA_PANEL")  
+    esp32.add_idf_sdkconfig_option("CONFIG_FREERTOS_HZ", 1000)
+    esp32.add_idf_sdkconfig_option("CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD", True) 
     old_dir = CORE.relative_build_path("src")    
     if config[CONF_CLEAN] or os.path.exists(old_dir+'/vistaalarm.h'):
         real_clean_build()
@@ -73,22 +93,20 @@ async def to_code(config):
         cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]));
     if CONF_DEBUGLEVEL in config:
         cg.add(var.set_debug(config[CONF_DEBUGLEVEL]));
-    if CONF_KEYPAD1 in config and config[CONF_KEYPAD1] != 0:
+    if config[CONF_KEYPAD1] != 0:
         cg.add(var.set_partitionKeypad(1,config[CONF_KEYPAD1]));
-    if CONF_KEYPAD2 in config and config[CONF_KEYPAD2] != 0:
+    if config[CONF_KEYPAD2] != 0:
         cg.add(var.set_partitionKeypad(2,config[CONF_KEYPAD2]));
-    if CONF_KEYPAD3 in config and config[CONF_KEYPAD3] != 0:
+    if config[CONF_KEYPAD3] != 0:
         cg.add(var.set_partitionKeypad(3,config[CONF_KEYPAD3]));
     cg.add(var.initialize_partition_sensors());
-    if CONF_TTL in config:
-        cg.add(var.set_ttl(config[CONF_TTL]));        
+    cg.add(var.set_ttl(config[CONF_TTL]));        
     if CONF_QUICKARM in config:
         cg.add(var.set_quickArm(config[CONF_QUICKARM]));        
     if CONF_LRR in config:
         cg.add(var.set_lrrSupervisor(config[CONF_LRR]));      
     if CONF_AUIADDR in config:
         cg.add(var.set_auiaddr(config[CONF_AUIADDR]));
-
     await cg.register_component(var, config)
     
 def real_clean_build():

@@ -51,19 +51,13 @@ external_components:
 esphome:
   name: $name
   friendly_name: $friendlyName
-#Example of how to set the panel time from the esp time on bootup  
-  #on_boot:
-    #priority: 600
-    #then:
-      #- lambda: |-
-         #   $panelId->set_panel_time();  
+
 esp32:
   board: esp-wrover-kit
   variant: esp32
   framework:
     version: 5.3.1
     platform_version: 53.03.13
-    sdkconfig_options: {"CONFIG_FREERTOS_HZ":"1000","CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD":"y"}
     type: esp-idf
 
 wifi:
