@@ -15,7 +15,7 @@ Fork is shared here for the benefits of any others that might want to use it.  N
 - OTA updates and OTA logging work reliably without requiring disabling of keybus interaction. 
 - Arduino dependency removed and refactored for ESP-IDF v5.3. Works with newer espressif cores such as C6.
 - Relay board emulation has been removed. Expander emulation remains.
-- Config refactored with validation. Carefully examine examples in the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
+- Config refactored with validation. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
 - Sensors refactored to work with modified config approach.
 - Zone emulation specifier in yaml config automatically enables expander board emulation on appropriate address and corresponding group
     of eight zone numbers.  No need to explictly declare expander address in YAML.
