@@ -99,8 +99,10 @@ namespace esphome
                                         //zn=getZoneName(z);
                                         //zn = "null"; //fix this later
                                     }
-
-                                    snprintf(msg,100, "CID_%d%03d: %s %s %s%s, Partition %d", q,c, &lrrString[1], uf.c_str(), zn.c_str(), qual.c_str(),p);
+                                    if (p)
+                                        snprintf(msg,100, "CID_%d%03d: %s %s %s%s, Partition %d", q,c, &lrrString[1], uf.c_str(), zn.c_str(), qual.c_str(),p);
+                                    else
+                                        snprintf(msg,100, "CID_%d%03d: %s %s %s%s", q,c, &lrrString[1], uf.c_str(), zn.c_str(), qual.c_str());
 
                                     if(text_sensors_common.lrr_messages != NULL)
                                         text_sensors_common.lrr_messages->process(msg);
