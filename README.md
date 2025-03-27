@@ -10,12 +10,12 @@ Note that this fork compiles using ESP-IDF rather than Arduino framework in ESPH
 
 Fork is shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein as explained in the license documentation.
 
-###Key differences from original project:
+### Key differences from original project:
 - Efficient use of limited embedded CPU cycles through use of hardware UART and FreeRTOS multitasking. This includes complete fidelity of packet response handling including 2400 baud preamble bytes.
 - OTA updates and OTA logging work reliably without requiring disabling of keybus interaction. 
 - Arduino dependency removed and refactored for ESP-IDF v5.3. Works with newer espressif cores such as C6.
 - Relay board emulation has been removed. Expander emulation remains.
-- Config refactored with validation. Examine examples for specifying sensors as these are different from original project.
+- Config refactored with validation. Carefully examine examples in the [example YAML file] (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
 - Sensors refactored to work with modified config approach.
 - Zone emulation specifier in yaml config automatically enables expander board emulation on appropriate address and corresponding group
     of eight zone numbers.  No need to explictly declare expander address in YAML.
