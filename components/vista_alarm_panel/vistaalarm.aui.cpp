@@ -173,12 +173,16 @@ namespace esphome
                 {
                     zt->open = state;
                     zoneStatusUpdate(zt);
+#ifdef DEBUG_LOG
                     ESP_LOGD(TAG, "Setting open zone %d to %d,  partition %d", zt->zone, state, p);
+#endif
                 }
                 else if (auiCmd.state == rsbypasszones)
                 {
                     zt->bypass = state;
+#ifdef DEBUG_LOG
                     ESP_LOGD(TAG, "Setting bypass zone %d to %d, partition %d", zt->zone, state, p);
+#endif
                 }
             }
         }
@@ -194,7 +198,9 @@ namespace esphome
             bytes[12] = auiCmd.state == rsopenzones ? 0x32 : 0x35;
             auiCmd.pending = true;
             auiCmd.time=esp_timer_get_time();
+#ifdef DEBUG_LOG
             ESP_LOGD(TAG, "Sending zone status request %d, header %02X, auiAddr %d", auiCmd.state, bytes[1], auiAddr);
+#endif
             vistabus.writedirect(bytes,21,auiAddr);
         }
 
@@ -206,8 +212,9 @@ namespace esphome
                 s = list;
             }
             s.append(",");
-
+#ifdef DEBUG_LOG
             ESP_LOGD(TAG, "Zones: %s", s.c_str());
+#endif
             uint8_t p = auiCmd.partition - 0x30; // set 0x31 - 0x34 to 1 - 4 range
 
             // Search all occurences of integers or ranges
@@ -296,8 +303,10 @@ namespace esphome
 
         void vistaECPHome::AUIprocessF2(char *cbuf)
         {
+#ifdef DEBUG_LOG        
             if (auiCmd.state != rsidle)
                 ESP_LOGD(TAG, "AUI cmd state: %d, pending: %d", auiCmd.state, auiCmd.pending);
+#endif
             if (((cbuf[2] >> 1) & auiAddr) && (cbuf[7] & 0xf0) == 0x60 && cbuf[8] == 0x63 && cbuf[9] == 0x02)
             { // partition update broadcast
                 char *m = AUIparseMessage(cbuf);
@@ -336,7 +345,9 @@ namespace esphome
                 if (m == NULL)
                     return;
                 auiCmd.time = esp_timer_get_time();
+#ifdef DEBUG_LOG
                 ESP_LOGD(TAG, "success message from %d", auiCmd.state);
+#endif
                 auiCmd.pending = false;
                 if (auiCmd.state == rsopenzones || auiCmd.state == rsbypasszones)
                 {
@@ -362,7 +373,9 @@ namespace esphome
                     return;
                 auiCmd.time = esp_timer_get_time();
                 auiCmd.pending = false;
+#ifdef DEBUG_LOG
                 ESP_LOGD(TAG, "failure message from %d", auiCmd.state);
+#endif
                 if (auiCmd.state == rszoneinfo)
                 {
                     auiCmd.record++;

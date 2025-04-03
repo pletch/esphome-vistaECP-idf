@@ -157,10 +157,10 @@ namespace esphome
                             if (chksum == payload[7])
                             {
                                 uint32_t device_serial = ((payload[3] & 0xF) << 16) + (payload[4] << 8) + payload[5];
-                                snprintf(rf_serial_char, 14, "%3lu%04lu", device_serial / 10000, device_serial % 10000);
-                            
-                                if (debug > 0)
+                                snprintf(rf_serial_char, 14, "%3lu%04lu", device_serial / 10000, device_serial % 10000);                        
+#ifdef DEBUG_LOG
                                     ESP_LOGI(TAG, "RFX: %s,%02x", rf_serial_char, payload[6]);
+#endif
                                 if (!(payload[6] & 4) && !(payload[6] & 1))
                                 { // ignore heartbeat
                                     zoneType *zt = getRfSerialLookup(device_serial);
@@ -190,7 +190,6 @@ namespace esphome
                                             zt->time = esp_timer_get_time();
                                             zt->open = payload[6] & mask ? true : false;
                                             zt->rflowbat = payload[6] & 2 ? true : false; // low bat
-                                            //ESP_LOGD(TAG, "set rf low bat to %d", zt->rflowbat);
                                             zoneStatusUpdate(zt);
                                         }
                                     }
@@ -296,7 +295,9 @@ namespace esphome
                 // zone alarm status
                 if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.alarm)
                 {
+#ifdef DEBUG_LOG
                     ESP_LOGD(TAG,"alarm found for zone %d",statusFlags.zone);
+#endif
 
                     alarmStatus.zone = statusFlags.zone;
                     alarmStatus.time = esp_timer_get_time();
@@ -309,7 +310,9 @@ namespace esphome
                     zoneType *zt = getZone(statusFlags.zone);
                     if (zt != NULL)
                     {
+#ifdef DEBUG_LOG
                         ESP_LOGD(TAG, "check found for zone %d,status=%d", statusFlags.zone, zt->check);
+#endif
                         if (!zt->check && zt->active)
                         {
                             zt->check = true;
@@ -460,14 +463,12 @@ namespace esphome
                     known_partitions[kpi].partition_state.refreshStatus = false;
                 }
 
-
                 if (statusFlags.partition == known_partitions[kpi].partition )
                 {
                     previousLightState = known_partitions[kpi].partition_state.previousLightState;
 
                     forceRefresh = known_partitions[kpi].partition_state.refreshLights || forceRefreshGlobal;
 
-                    // ESP_LOGD("test","refreshing partition statuse partitions: %d,force refresh=%d",partition,forceRefresh);
                     if ((currentLightState.fire != previousLightState.fire || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].fire != NULL)
                         status_sensors_partition[known_partitions[kpi].partition - 1].fire->process(currentLightState.fire);
                     if ((currentLightState.alarm != previousLightState.alarm || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].alm != NULL)

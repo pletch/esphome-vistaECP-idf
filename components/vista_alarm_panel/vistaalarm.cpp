@@ -365,7 +365,7 @@ namespace esphome
             if (result)
                 ESP_LOGD(TAG, "Writing keys: %s to partition %li", keystring.c_str(), partition);
             else
-                ESP_LOGD(TAG, "Failed to write keys: %s to partition %li. Send Queue Full.", keystring.c_str(), partition);
+                ESP_LOGE(TAG, "Failed to write keys: %s to partition %li. Send Queue Full.", keystring.c_str(), partition);
         }
 
         void vistaECPHome::send_cmd_bytes(int32_t addr, std::string hexbytes)
@@ -470,12 +470,16 @@ namespace esphome
             {
                 strncpy(z_text,p1+start,len);
                 int z = toInt(z_text, 10);
+#ifdef DEBUG_LOG
                 ESP_LOGD(TAG, "zone match=%d", z);
+#endif
                 return z;
             }
             else
             {
+#ifdef DEBUG_LOG
                 ESP_LOGD(TAG, "No zone match");
+#endif
             }
             return 0;
         }
@@ -488,11 +492,13 @@ namespace esphome
             ESPTime rtc = now();
             sprintf(s2, "(%s) [%02d:%02d:%02d]", label, rtc.hour, rtc.minute, rtc.second);
             bool abbr = false;
-            if (log_level >= ESP_LOG_DEBUG && len > 18 && log_level != ESP_LOG_VERBOSE)
+#ifndef DEBUG_LOG
+            if (len > 18)
             {
                 len = 18;
                 abbr = true;
             }
+#endif
             for (int c = 0; c < len; c++)
             {
                 sprintf(s1, "%02X ", cbuf[c]);
@@ -500,8 +506,7 @@ namespace esphome
             }
             if (abbr)
                 s = s.append("...");
-            if (log_level >= ESP_LOG_DEBUG)
-                ESP_LOGI(TAG, "%s %s", s2, s.c_str());
+            ESP_LOGD(TAG, "%s %s", s2, s.c_str());
 
         }
 

@@ -6,35 +6,35 @@ substitutions:
   
 vista_alarm_panel:
   id: $panelId
-  accesscode: $accesscode #Only comes into effect if needed for arming and quickarm is not set
+  access_code: $accesscode #Only comes into effect if needed for arming and quickarm is not set
  
-  defaultpartition: "1" #set to your main partition
-  vistadebuglevel: "3" #component debug level for messages
+  default_partition: "1" #set to your main partition
+  debug_logging: "false"  #enables additional logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm component (if configured) 
+                          #logging level and vista-alarm must be set to DEBUG or higher in logging component section to output all messages.
 
   #assign a new virtual keypad address to each active partition using programs *190 - *196
   #and enter it below.  For unused partitions, use 0 as the keypad address.
-  keypadaddr1: "20" #partition 1 virtual keyapd
-  keypadaddr2: "0" #partition 2 virtual keypad. set to 0 to disable
-  keypadaddr3: "0" #partition 3 virtual keypad. set to 0 to disable
+  keypad_addr_1: "20" #partition 1 virtual keyapd
+  keypad_addr_2: "0" #partition 2 virtual keypad. set to 0 to disable
+  keypad_addr_3: "0" #partition 3 virtual keypad. set to 0 to disable
 
   #AUI address from program field *189 to use for zone status queries (open/close and bypass). 
   #Ensure it is not assigned to a real keypad or to Total Connect 2.0. For those panels, you can select auiaddr: 5 or 6.
   #As a final option, you can assign it to the same address as your existing AUI display address of 1
-  #Note: Older vista20 panels only have addresses 1 and 2 while newer will have 1,2,5 and 6. For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program #93, device programming
-  
-  auiaddr: "0" #use auiaddr: 5 or 6 if you already have address 2 assigned to Total Connect or another keypad
+  #Note: Older vista20 panels only have addresses 1 and 2 while newer will have 1,2,5 and 6. For Vista128,Vista250 commercial panels, 
+  #ensure the address used is setup as an AUI keypad in program #93, device programming
+  aui_addr: "0" #use auiaddr: 5 or 6 if you already have address 2 assigned to Total Connect or another keypad
  
-  ##esp32
-  rxpin: "21" #GPIO pin to use for data receive (yellow line) 
-  txpin: "23" #GPIO pin to use for data transmit (green line)
-  uart1: "1" #Hardware UART number to use for tx/rx.
+  rx_pin: "21" #GPIO pin to use for data receive (yellow line) 
+  tx_pin: "23" #GPIO pin to use for data transmit (green line)
+  uart_1: "1" #Hardware UART number to use for tx/rx.
 
-  monitorpin: "22" #GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
-  uart2: "2" #Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
+  monitor_pin: "22" #GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
+  uart_2: "2" #Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
 
   ttl: "30"  # time to live in seconds for zone/fire status before expiring;
   quickarm: "false"
-  lrrsupervisor: "false" # set to true if we don't have an LRR monitoring supervisor so we can emulate one to get the statuses. 
+  lrr_supervisor: "false" # set to true if we don't have an LRR monitoring supervisor so we can emulate one to get the statuses. 
 
   clean_build: "false" #default is false.  only set to true if getting duplication errors in linking step. Once you compile, reset it back to false.  
 
@@ -42,7 +42,6 @@ vista_alarm_panel:
 #copy the code to directory "my_components" in your main esphome directory
 # see here for more info: https://esphome.io/components/external_components    
 external_components:
-  #- source: github://Dilbert66/esphome-components@dev #uncomment to use github repository
   - source: github://pletch/esphome-vistaECP-idf
   #- source:  components #uncomment to use local directory  
     components: [vista_alarm_panel] 
@@ -70,9 +69,10 @@ time:
   
 # Enable logging
 logger:
-  baud_rate: 115200
+  baud_rate: 115200   
   level: DEBUG
-  #baud_rate: 0
+  logs:
+    vista-alarm: DEBUG    #set this as desired to suppress/enable log messages for vista-alarm component
 
 safe_mode: 
 

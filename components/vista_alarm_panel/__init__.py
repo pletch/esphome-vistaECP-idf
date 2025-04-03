@@ -13,27 +13,21 @@ _LOGGER = logging.getLogger(__name__)
 alarm_panel_ns = cg.esphome_ns.namespace('alarm_panel')
 AlarmComponent = alarm_panel_ns.class_('vistaECPHome', cg.PollingComponent)
 
-CONF_ACCESSCODE="accesscode"
-CONF_DEFAULTPARTITION="defaultpartition"
-CONF_DEBUGLEVEL="vistadebuglevel"
-CONF_KEYPAD1="keypadaddr1"
-CONF_KEYPAD2="keypadaddr2"
-CONF_KEYPAD3="keypadaddr3"
-CONF_AUIADDR="auiaddr"
-CONF_RXPIN="rxpin"
-CONF_TXPIN="txpin"
-CONF_MONITORPIN="monitorpin"
-CONF_UART1="uart1"
-CONF_UART2="uart2"
-CONF_EXPANDER1="expanderaddr1"
-CONF_EXPANDER2="expanderaddr2"
-CONF_RELAY1="relayaddr1"
-CONF_RELAY2="relayaddr2"
-CONF_RELAY3="relayaddr3"
-CONF_RELAY4="relayaddr4"
+CONF_ACCESSCODE="access_code"
+CONF_DEFAULTPARTITION="default_partition"
+CONF_DEBUGLOG="debug_logging"
+CONF_KEYPAD1="keypad_addr_1"
+CONF_KEYPAD2="keypad_addr_2"
+CONF_KEYPAD3="keypad_addr_3"
+CONF_AUIADDR="aui_addr"
+CONF_RXPIN="rx_pin"
+CONF_TXPIN="tx_pin"
+CONF_MONITORPIN="monitor_pin"
+CONF_UART1="uart_1"
+CONF_UART2="uart_2"
 CONF_TTL="ttl"
 CONF_QUICKARM="quickarm"
-CONF_LRR="lrrsupervisor"
+CONF_LRR="lrr_supervisor"
 CONF_CLEAN="clean_build"
 
 def validate_keypads(config):
@@ -56,7 +50,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(): cv.declare_id(AlarmComponent),
             cv.Optional(CONF_ACCESSCODE,default=""): cv.string,
             cv.Optional(CONF_DEFAULTPARTITION, default=1): cv.int_range(min=1, max=8),
-            cv.Optional(CONF_DEBUGLEVEL): cv.int_, 
+            cv.Optional(CONF_DEBUGLOG,default=False): cv.boolean,
             cv.Optional(CONF_KEYPAD1,default=17): cv.int_, 
             cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD3,default=0): cv.int_, 
@@ -88,25 +82,25 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID],config[CONF_KEYPAD1],config[CONF_RXPIN],config[CONF_TXPIN],config[CONF_UART1],config[CONF_MONITORPIN],config[CONF_UART2])
     
     if CONF_ACCESSCODE in config:
-        cg.add(var.set_accessCode(config[CONF_ACCESSCODE]));
+        cg.add(var.set_accessCode(config[CONF_ACCESSCODE]))
     if CONF_DEFAULTPARTITION in config:
-        cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]));
-    if CONF_DEBUGLEVEL in config:
-        cg.add(var.set_debug(config[CONF_DEBUGLEVEL]));
+        cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]))
+    if config[CONF_DEBUGLOG]:
+        cg.add_define("DEBUG_LOG")
     if config[CONF_KEYPAD1] != 0:
-        cg.add(var.set_partitionKeypad(1,config[CONF_KEYPAD1]));
+        cg.add(var.set_partitionKeypad(1,config[CONF_KEYPAD1]))
     if config[CONF_KEYPAD2] != 0:
-        cg.add(var.set_partitionKeypad(2,config[CONF_KEYPAD2]));
+        cg.add(var.set_partitionKeypad(2,config[CONF_KEYPAD2]))
     if config[CONF_KEYPAD3] != 0:
-        cg.add(var.set_partitionKeypad(3,config[CONF_KEYPAD3]));
-    cg.add(var.initialize_partition_sensors());
-    cg.add(var.set_ttl(config[CONF_TTL]));        
+        cg.add(var.set_partitionKeypad(3,config[CONF_KEYPAD3]))
+    cg.add(var.initialize_partition_sensors())
+    cg.add(var.set_ttl(config[CONF_TTL]))       
     if CONF_QUICKARM in config:
-        cg.add(var.set_quickArm(config[CONF_QUICKARM]));        
+        cg.add(var.set_quickArm(config[CONF_QUICKARM]))       
     if CONF_LRR in config:
-        cg.add(var.set_lrrSupervisor(config[CONF_LRR]));      
+        cg.add(var.set_lrrSupervisor(config[CONF_LRR]))      
     if CONF_AUIADDR in config:
-        cg.add(var.set_auiaddr(config[CONF_AUIADDR]));
+        cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
     await cg.register_component(var, config)
     
 def real_clean_build():
