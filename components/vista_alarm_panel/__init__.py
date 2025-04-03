@@ -81,7 +81,7 @@ CONFIG_SCHEMA = cv.All(
 async def to_code(config):
 
     esp32.add_idf_sdkconfig_option("CONFIG_FREERTOS_HZ", 1000)
-    esp32.add_idf_sdkconfig_option("CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD", True) 
+    esp32.add_idf_sdkconfig_option("CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD", True)
     old_dir = CORE.relative_build_path("src")    
     if config[CONF_CLEAN] or os.path.exists(old_dir+'/vistaalarm.h'):
         real_clean_build()

@@ -42,9 +42,7 @@ Date: 2-Feb-2025
 #define RX_BUF_SIZE (128)
 #define UART_RX_TASK_STACK_SIZE (3072)
 #define UART_RX_EXT_TASK_STACK_SIZE (3072)
-#define STOP_BIT_SETTING UART_STOP_BITS_2
 #define UART_DELAY 10
-
 
 
 struct ReceivedPacket  
@@ -86,9 +84,7 @@ public:
     void setExpTamper(int32_t zone, bool tamper_active);
 
 protected:
-    const char* const RX_TX_TAG = "v-b:rx_tx";
-    const char* const TAG = "v-b";
-    const char* const MONITOR_TAG = "v-b:monitor_ext";
+    const char* const TAG = "vistabus";
     int rxPin, txPin;
     int uartNum;
     int extuartNum;

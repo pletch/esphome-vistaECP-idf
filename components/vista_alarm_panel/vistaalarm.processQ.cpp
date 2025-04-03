@@ -26,18 +26,15 @@ namespace esphome
 
                 if (vistabus.read_packet(payload,size,type, true)) 
                 {
-                    if (debug > 0 && type == 0)
-                    {
-                        if (payload[0] == 0xF7 || payload[0] == 0xF8)
-                            printPacket("CMD", payload, 13);
-                        else
+                        if (type == 0)
+                        {
                             printPacket("CMD", payload, size);
-                    }
+                        }
 
-                    if (debug > 0 && type == 1)
-                    {
-                        printPacket("EXT", payload, size);
-                    }
+                        if (type == 1)
+                        {
+                            printPacket("EXT", payload, size);
+                        }
 
                     if (type == 0) //yellow wire
                     {

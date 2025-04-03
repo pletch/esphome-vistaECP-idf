@@ -159,7 +159,7 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
         .baud_rate = 4800,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_EVEN,
-        .stop_bits = STOP_BIT_SETTING,
+        .stop_bits = UART_STOP_BITS_2,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
         .rx_flow_ctrl_thresh = 0,
         .source_clk = UART_SCLK_DEFAULT,
@@ -493,14 +493,14 @@ void VistaBus::rx_tx_task(void * args)
 
                         if (req_to_send)
                         {
-                            ESP_LOGW(RX_TX_TAG, "Did not find expected byte in response of %d bytes.", rxBytes);
+                            ESP_LOGW(TAG, "Did not find expected byte in response of %d bytes.", rxBytes);
                             req_to_send = false;
                         }
                         
                     }
                     else
                     {
-                        ESP_LOGW(RX_TX_TAG, "Did not receive any response bytes from panel.");
+                        ESP_LOGW(TAG, "Did not receive any response bytes from panel.");
                         req_to_send = false;
                     }
                 } 
@@ -607,14 +607,14 @@ void VistaBus::rx_tx_task(void * args)
 
         if (ack_failures == 3)
         {
-            ESP_LOGW(RX_TX_TAG, "Failure to receive F6 ACK after 3 successive pulse marks.  Giving up.");
+            ESP_LOGW(TAG, "Failure to receive F6 ACK after 3 successive pulse marks.  Giving up.");
             req_to_send = false;
             ack_failures = 0;
             mark_failures = 0;
         }
         if (mark_failures == 67) //1340 ms total / 20 ms task frequency
         {
-            ESP_LOGW(RX_TX_TAG, "Failure to mark pulse after 5 cycles.  Giving up.");
+            ESP_LOGW(TAG, "Failure to mark pulse after 5 cycles.  Giving up.");
             req_to_send = false;
             ack_failures = 0;
             mark_failures =0;
@@ -627,7 +627,7 @@ void VistaBus::rx_tx_task(void * args)
         }
     }
     free(data);
-    ESP_LOGI(RX_TX_TAG, "Stopping Task");
+    ESP_LOGI(TAG, "Stopping Task");
     this->rx_tx_task_Handle = NULL;
     vTaskDelete(NULL);
 }
@@ -698,7 +698,7 @@ void VistaBus::monitor_rx_task(void * args)
         }
     }
     free(data);
-    ESP_LOGI(MONITOR_TAG, "Stopping Task");
+    ESP_LOGI(TAG, "Stopping Task");
     this->monitor_rx_task_Handle = NULL;
     vTaskDelete(NULL);
 }

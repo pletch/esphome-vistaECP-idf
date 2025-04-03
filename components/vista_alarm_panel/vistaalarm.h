@@ -6,6 +6,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/components/time/real_time_clock.h"
 #include "esphome/components/api/custom_api_device.h"
+#include "esphome/components/logger/logger.h"
 #include "esphome/core/defines.h"
 
 #include "vistabus.h"
@@ -157,7 +158,8 @@ namespace esphome
                 void stop();
 
             protected:
-                const char *const TAG = "v-a";
+                const char *const TAG = "vista-alarm";
+                esp_log_level_t log_level = ESP_LOG_DEBUG;
                 uint64_t TTL = 30000000;
                 uint64_t last_refresh = 0;
                 uint8_t debug = 0;

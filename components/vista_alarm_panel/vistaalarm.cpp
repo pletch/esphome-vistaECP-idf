@@ -197,7 +197,7 @@ namespace esphome
             }
             else
             {
-                ESP_LOGW("","No keypad assigned to partition %d. Aborting %s text sensor registration.",partition_number, type);
+                ESP_LOGE("","No keypad assigned to partition %d. Aborting %s text sensor registration.",partition_number, type);
             }
         }
 
@@ -362,13 +362,10 @@ namespace esphome
             bool result = false;
             if (addr > 0 and addr < 24)
                 result = vistabus.write(keystring.c_str(), keystring.length(), addr);
-            if (debug > 0)
-            {
-                if (result)
-                    ESP_LOGD(TAG, "Writing keys: %s to partition %li", keystring.c_str(), partition);
-                else
-                    ESP_LOGD(TAG, "Failed to write keys: %s to partition %li. Send Queue Full.", keystring.c_str(), partition);
-            }
+            if (result)
+                ESP_LOGD(TAG, "Writing keys: %s to partition %li", keystring.c_str(), partition);
+            else
+                ESP_LOGD(TAG, "Failed to write keys: %s to partition %li. Send Queue Full.", keystring.c_str(), partition);
         }
 
         void vistaECPHome::send_cmd_bytes(int32_t addr, std::string hexbytes)
@@ -486,19 +483,26 @@ namespace esphome
         void vistaECPHome::printPacket(const char *label, char cbuf[], int len)
         {
             char s1[4];
-
             std::string s = "";
-
             char s2[25];
             ESPTime rtc = now();
-            sprintf(s2, "[%02d:%02d:%02d]", rtc.hour, rtc.minute, rtc.second);
-
+            sprintf(s2, "(%s) [%02d:%02d:%02d]", label, rtc.hour, rtc.minute, rtc.second);
+            bool abbr = false;
+            if (log_level >= ESP_LOG_DEBUG && len > 18 && log_level != ESP_LOG_VERBOSE)
+            {
+                len = 18;
+                abbr = true;
+            }
             for (int c = 0; c < len; c++)
             {
                 sprintf(s1, "%02X ", cbuf[c]);
                 s = s.append(s1);
             }
-            ESP_LOGI(label, "%s %s", s2, s.c_str());
+            if (abbr)
+                s = s.append("...");
+            if (log_level >= ESP_LOG_DEBUG)
+                ESP_LOGI(TAG, "%s %s", s2, s.c_str());
+
         }
 
         void vistaECPHome::set_alarm_state(std::string const &state, std::string code, int partition)
