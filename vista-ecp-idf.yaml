@@ -9,8 +9,9 @@ vista_alarm_panel:
   access_code: $accesscode #Only comes into effect if needed for arming and quickarm is not set
  
   default_partition: "1" #set to your main partition
-  debug_logging: "false"  #enables additional logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm component (if configured) 
-                          #logging level and vista-alarm must be set to DEBUG or higher in logging component section to output all messages.
+  debug_logging: "false"  #enables additional bus activity logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm  
+                          #component (if configured) logging level must be set to DEBUG or higher in logging component section
+                          #to output all messages. 
 
   #assign a new virtual keypad address to each active partition using programs *190 - *196
   #and enter it below.  For unused partitions, use 0 as the keypad address.

@@ -493,9 +493,9 @@ namespace esphome
             sprintf(s2, "(%s) [%02d:%02d:%02d]", label, rtc.hour, rtc.minute, rtc.second);
             bool abbr = false;
 #ifndef DEBUG_LOG
-            if (len > 18)
+            if (len > 17)
             {
-                len = 18;
+                len = 17;
                 abbr = true;
             }
 #endif
