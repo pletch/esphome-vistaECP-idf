@@ -335,7 +335,7 @@ void VistaBus::rx_tx_task(void * args)
     uint64_t pulse_mark_time = 0;
     while (1) 
     {
-        int uart_delay = 500;
+        int uart_delay = 350;
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
         {
             this->panel_connected = false;
@@ -384,7 +384,6 @@ void VistaBus::rx_tx_task(void * args)
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, 0);
                 break;
             case UART_BREAK:
-                //xQueueReset(uartevtQueue);
                 gpioTaskArgs taskargs;
                 taskargs.task_handle = this->rx_tx_task_Handle;
                 taskargs.pin = this->rxPin;
@@ -409,7 +408,6 @@ void VistaBus::rx_tx_task(void * args)
                     {
                         pulse_marked = mark_pulse(pkt_to_send.keypadaddress);
                         pulse_mark_time = esp_timer_get_time();
-                        uart_delay = 20;
                         rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(10), uartevtQueue);
                     }
                 }
@@ -418,7 +416,8 @@ void VistaBus::rx_tx_task(void * args)
             default:
                 break;
         }
-
+        if (req_to_send)
+            uart_delay = 20;
         if (rxBytes > 0) 
         {
             this->panel_connected = true;
