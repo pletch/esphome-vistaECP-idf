@@ -34,7 +34,7 @@ def validate_keypads(config):
     if (config[CONF_KEYPAD1] == 0 
         and config[CONF_KEYPAD2] == 0
         and config[CONF_KEYPAD3] == 0):
-        raise cv.Invalid("All partition keypads assigned 0. At least one must be assigned a valid address")
+        raise cv.Invalid("All partition keypads assigned 0. At minimum one 'keypad_addr_#' must be defined in YAML and assigned a valid address")
     return config
 
 def validate_c6_uarts(config):
@@ -51,7 +51,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ACCESSCODE,default=""): cv.string,
             cv.Optional(CONF_DEFAULTPARTITION, default=1): cv.int_range(min=1, max=8),
             cv.Optional(CONF_DEBUGLOG,default=False): cv.boolean,
-            cv.Optional(CONF_KEYPAD1,default=17): cv.int_, 
+            cv.Optional(CONF_KEYPAD1,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD3,default=0): cv.int_, 
             cv.Optional(CONF_AUIADDR,default=0): cv.int_,

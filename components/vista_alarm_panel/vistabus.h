@@ -29,9 +29,6 @@ Date: 2-Feb-2025
 #include "esp_timer.h"
 #include "hal/uart_ll.h"
 
-
-#define MONITORTX
-
 #define F6_ACK_MESSAGE_LENGTH 4
 #define F7_MESSAGE_LENGTH 45
 #define F9_MESSAGE_LENGTH 12

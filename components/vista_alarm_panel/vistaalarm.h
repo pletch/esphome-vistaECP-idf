@@ -16,22 +16,6 @@
 
 // for documentation see project at https://github.com/Dilbert66/esphome-vistaecp
 
-#define KP_ADDR 17 // only used as a default if not set in the yaml
-#define MAX_ZONES 32
-#define MAX_PARTITIONS 3
-#define DEFAULTPARTITION 1
-
-// default pins to use for serial comms to the panel
-// The pinouts below are only examples. You can choose any other gpio pin that is available and not a strapping pin used for boot.
-// These have proven to work fine.
-
-// esp32 use gpio pins 4,13,16-39
-#define RX_PIN 21
-#define TX_PIN 23
-#define DEF_UART1 1
-#define MONITOR_PIN 22 // pin used to monitor the green TX line (3.3 level dropped from 12 volts via voltage divider)
-#define DEF_UART2 2
-
 #define BIT_MASK_BYTE1_BEEP 0x07
 #define BIT_MASK_BYTE1_NIGHT 0x10
 
@@ -113,8 +97,8 @@ namespace esphome
         {
 
             public:
-                vistaECPHome(char kpaddr = KP_ADDR, int receivePin = RX_PIN, int transmitPin = TX_PIN, int uartnum1 = DEF_UART1, 
-                            int monitorTxPin = MONITOR_PIN, int uartnum2 = DEF_UART2);
+                vistaECPHome(char kpaddr, int receivePin, int transmitPin, int uartnum1, 
+                            int monitorTxPin, int uartnum2);
 
                 void set_accessCode(const char *ac) { accessCode = ac; }
                 void set_rfSerialLookup(const char *rf) { rfSerialLookup = rf; }
@@ -131,7 +115,7 @@ namespace esphome
                     new_partition.partition = idx;
                     known_partitions.push_back(new_partition);
                 }
-                void set_alarm_state(std::string const &state, std::string code = "", int partition = DEFAULTPARTITION);
+                void set_alarm_state(std::string const &state, std::string code, int partition);
 
                 void set_defaultPartition(uint8_t dp) { defaultPartition = dp; }
                 void set_debug(uint8_t db) { debug = db; }
@@ -314,7 +298,7 @@ namespace esphome
                 bool quickArm;
 
                 bool lrrSupervisor;
-                int defaultPartition = DEFAULTPARTITION;
+                int defaultPartition;
 
                 struct zoneType
                 {
