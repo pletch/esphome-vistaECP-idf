@@ -696,6 +696,7 @@ namespace esphome
                     break;
                 if (tempbuf[i] > 0x7F) 
                 {
+                    tempbuf[i] = shift_extended_char(tempbuf[i]);
                     char buf[32];
                     memcpy(buf, &tempbuf[i+1],32 - i - 1);
                     tempbuf[i+1] = 0x80 | (tempbuf[i] & 0x3F);
@@ -713,6 +714,7 @@ namespace esphome
                     break;
                 if (tempbuf[i] > 0x7F) 
                 {
+                    tempbuf[i] = shift_extended_char(tempbuf[i]);
                     char buf[32];
                     memcpy(buf, &tempbuf[i+1],32 - i - 1);
                     tempbuf[i+1] = 0x80 | (tempbuf[i] & 0x3F);

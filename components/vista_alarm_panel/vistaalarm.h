@@ -11,6 +11,7 @@
 
 #include "vistabus.h"
 #include "LRRstrings.h"
+#include "translation.h"
 #include <string>
 #include "paneltext.h"
 
