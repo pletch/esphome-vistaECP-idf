@@ -346,31 +346,27 @@ void VistaBus::rx_tx_task(void * args)
         {
             this->panel_connected = false;
         }
-        if (!req_to_send) 
+        
+        while (uxQueueMessagesWaiting(sendQueue))
         {
-            bool pkt_queued = false;
-            while (uxQueueMessagesWaiting(sendQueue))
+            if (!req_to_send)
             {
-                if (!pkt_queued)
+                xQueueReceive(sendQueue,&pkt_to_send,0); //something in queue. Pop it out.
+                req_to_send = true;
+            }
+            else
+            {
+                SendPacket next_pkt;
+                xQueuePeek(sendQueue, &next_pkt,pdMS_TO_TICKS(20));
+                if(next_pkt.keypadaddress == pkt_to_send.keypadaddress && (next_pkt.size + pkt_to_send.size) <= 24)
                 {
-                    xQueueReceive(sendQueue,&pkt_to_send,0); //something in queue. Pop it out.
-                    pkt_queued = true;
-                    req_to_send = true;
+                    xQueueReceive(sendQueue, &next_pkt, 0);
+                    memcpy(pkt_to_send.payload + pkt_to_send.size, next_pkt.payload, next_pkt.size);
+                    pkt_to_send.size += next_pkt.size;
                 }
                 else
                 {
-                    SendPacket next_pkt;
-                    xQueuePeek(sendQueue, &next_pkt,pdMS_TO_TICKS(20));
-                    if(next_pkt.keypadaddress == pkt_to_send.keypadaddress && (next_pkt.size + pkt_to_send.size) <= 24)
-                    {
-                        xQueueReceive(sendQueue, &next_pkt, 0);
-                        memcpy(pkt_to_send.payload + pkt_to_send.size, next_pkt.payload, next_pkt.size);
-                        pkt_to_send.size += next_pkt.size;
-                    }
-                    else
-                    {
-                        break;
-                    }
+                    break;
                 }
             }
         }
