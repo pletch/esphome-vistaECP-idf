@@ -6,8 +6,6 @@
 #include "esphome/core/helpers.h"
 #include "esphome/components/time/real_time_clock.h"
 #include "esphome/components/api/custom_api_device.h"
-#include "esphome/components/logger/logger.h"
-#include "esphome/core/defines.h"
 
 #include "vistabus.h"
 #include "LRRstrings.h"
