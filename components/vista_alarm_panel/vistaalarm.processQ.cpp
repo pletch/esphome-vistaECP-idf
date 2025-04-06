@@ -25,23 +25,16 @@ namespace esphome
                 bool F7_no_change = true;
 
                 if (vistabus.read_packet(payload,size,type, true)) 
-                {
-#ifndef DEBUG_LOG
-                    if (size > 1)
+                {    
+                    if (type == 0)
                     {
-#endif    
-                        if (type == 0)
-                        {
-                            printPacket("PANEL", payload, size);
-                        }
-
-                        if (type == 1)
-                        {
-                            printPacket("EXT-D", payload, size);
-                        }
-#ifndef DEBUG_LOG
+                        printPacket("PANEL", payload, size);
                     }
-#endif
+
+                    if (type == 1)
+                    {
+                        printPacket("EXT-D", payload, size);
+                    }
                     if (type == 0) //yellow wire
                     {
                         if (payload[0]==0xF7)

@@ -588,9 +588,11 @@ void VistaBus::rx_tx_task(void * args)
             }
             else
             {
+#ifdef DEBUG_LOG
                 received_packet.payload[0] = data[0];
                 received_packet.size = 1;
                 xQueueSend(this->receiveQueue, &received_packet,pdMS_TO_TICKS(20));
+#endif
             }
         }
 
@@ -689,9 +691,11 @@ void VistaBus::monitor_rx_task(void * args)
             }
             else //put in buffer for printing to log
             {
+#ifdef DEBUG_LOG
                 rcvd_extPkt.payload[0] = data[0];
                 rcvd_extPkt.size = 1;
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(20));
+#endif
             }
         }
     }

@@ -507,7 +507,6 @@ namespace esphome
             if (abbr)
                 s = s.append("...");
             ESP_LOGD(TAG, "%s %s", s2, s.c_str());
-
         }
 
         void vistaECPHome::set_alarm_state(std::string const &state, std::string code, int partition)
