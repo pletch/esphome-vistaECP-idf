@@ -23,28 +23,6 @@ VistaBus::~VistaBus()
     vQueueDelete(this->sendQueue);
 }
 
-static const char* get_chip_model(esp_chip_model_t model) {
-    switch (model) {
-        case CHIP_ESP32:
-            return "ESP32";
-        case CHIP_ESP32S2:
-            return "ESP32-S2";
-        case CHIP_ESP32S3:
-            return "ESP32-S3";
-        case CHIP_ESP32C3:
-            return "ESP32-C3";
-        case CHIP_ESP32C2:
-            return "ESP32-C2";
-        case CHIP_ESP32C6:
-            return "ESP32-C6";
-        case CHIP_ESP32H2:
-            return "ESP32-H2";
-        case CHIP_ESP32P4:
-            return "ESP32-P4";
-        default:
-            return "Unknown Model";
-    }
-}
 
 void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int monitorpin = -1) 
 {
@@ -53,11 +31,6 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
     this->txPin = txpin;
     this->extuartNum = extuartnum;
     this->monitorPin = monitorpin;
-
-    esp_chip_info_t esp_variant;
-    esp_chip_info(&esp_variant);
-
-    ESP_LOGI("Chip Info", "Chip Model: %s", get_chip_model(esp_variant.model));
 
     if (this->receiveQueue == NULL || this->sendQueue == NULL)
     {

@@ -22,7 +22,6 @@ Date: 2-Feb-2025
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
 #include "esp_system.h"
-#include "esp_chip_info.h"
 #include "esp_log.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
