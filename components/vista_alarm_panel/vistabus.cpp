@@ -23,7 +23,6 @@ VistaBus::~VistaBus()
     vQueueDelete(this->sendQueue);
 }
 
-
 void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int monitorpin = -1) 
 {
     this->uartNum = uartnum;
@@ -105,6 +104,71 @@ bool VistaBus::connected()
 void VistaBus::emulateLRR(bool enabled) 
 {
     LRRemulation = enabled;
+}
+
+static bool example_rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
+{
+    BaseType_t high_task_wakeup = pdFALSE;
+    QueueHandle_t receive_queue = (QueueHandle_t)user_data;
+    // send the received RMT symbols to the parser task
+    xQueueSendFromISR(receive_queue, edata, &high_task_wakeup);
+    // return whether any task is woken up
+    return high_task_wakeup == pdTRUE;
+}
+
+void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
+{
+    rmt_channel_handle_t rx_chan = NULL;
+    rmt_rx_channel_config_t rx_chan_config = {
+        .gpio_num = rx_pin,                    // GPIO number
+        .clk_src = RMT_CLK_SRC_DEFAULT,   // select source clock
+        .resolution_hz = 1 * 1000 * 1000, // 0.1 MHz tick resolution, i.e., 1 tick = 10 µs
+        .mem_block_symbols = 128,          // memory block size, 64 * 4 = 256 Bytes
+        .intr_priority = 0,
+        .flags = {
+            .invert_in = true,         // do not invert input signal
+            .with_dma = false,          // do not need DMA backend
+            .io_loop_back = false,
+        }
+    };
+    ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rx_chan));
+
+    
+    QueueHandle_t receive_queue = xQueueCreate(1, sizeof(rmt_rx_done_event_data_t));
+
+    ESP_ERROR_CHECK(rmt_enable(rx_chan));
+    
+    rmt_rx_event_callbacks_t cbs = {
+        .on_recv_done = example_rmt_rx_done_callback,
+    };
+    ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue));
+    
+    // the following timing requirement is based on NEC protocol
+    rmt_receive_config_t receive_config = {
+        .signal_range_min_ns = 2000,     // the shortest duration for NEC signal is 560 µs, 1250 ns < 560 µs, valid signal is not treated as noise
+        .signal_range_max_ns = 20000000, // the longest duration for NEC signal is 9000 µs, 12000000 ns > 9000 µs, the receive does not stop early
+        .flags = {
+            .en_partial_rx = false
+        }
+    };
+    
+    rmt_symbol_word_t raw_symbols[128]; // 64 symbols should be sufficient for a standard NEC frame
+    // ready to receive
+    ESP_ERROR_CHECK(rmt_receive(rx_chan, raw_symbols, sizeof(raw_symbols), &receive_config));
+    // wait for the RX-done signal
+    rmt_rx_done_event_data_t rx_data;
+    xQueueReceive(receive_queue, &rx_data, portMAX_DELAY);
+    ESP_LOGI(TAG, "Received %d symbols", rx_data.num_symbols);
+    // parse the received symbols
+    for (int i = 0; i < rx_data.num_symbols; i++)
+    {
+        uint16_t lowus = rx_data.received_symbols[i].duration0;
+        uint16_t highus = rx_data.received_symbols[i].duration1;
+        ESP_LOGI(TAG, "Low Duration: %d  High Duration %d", lowus, highus);
+    }
+    ESP_ERROR_CHECK(rmt_disable(rx_chan));
+    ESP_ERROR_CHECK(rmt_del_channel(rx_chan));
+    vQueueDelete(receive_queue);
 }
 
 bool VistaBus::read_packet(char * data, int &len, int &type, bool with_delay) 
@@ -299,6 +363,7 @@ void VistaBus::rx_tx_task(void * args)
     (void)gpio_install_isr_service(0);
     bool req_to_send = false;
     uint64_t last_data_received = 0;
+    uint64_t last_pattern_measure_time = 0;
     SendPacket pkt_to_send;
     uint8_t ack_failures = 0;
     uint8_t mark_failures = 0;
@@ -308,7 +373,7 @@ void VistaBus::rx_tx_task(void * args)
     uint64_t pulse_mark_time = 0;
     while (1) 
     {
-        int uart_delay = 350;
+        int uart_delay = 20;
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
         {
             this->panel_connected = false;
@@ -316,9 +381,17 @@ void VistaBus::rx_tx_task(void * args)
         }
         uint64_t now = esp_timer_get_time();
         if (now - last_data_received > 30*1000*1000)
-        {
             this->panel_connected = false;
+
+        if (now - last_pattern_measure_time > 60*1000*1000)
+        {
+            ESP_LOGE(TAG,"Collecting pulse pattern at %llu", now);
+            capture_pulse_pattern(static_cast<gpio_num_t>(this->rxPin));
+            vTaskDelay(10);
+            continue;
+            //last_pattern_measure_time = esp_timer_get_time();
         }
+            
         
         while (uxQueueMessagesWaiting(sendQueue))
         {
