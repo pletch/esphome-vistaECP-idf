@@ -123,7 +123,7 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
         .gpio_num = rx_pin,                    // GPIO number
         .clk_src = RMT_CLK_SRC_DEFAULT,   // select source clock
         .resolution_hz = 1 * 1000 * 1000, // 1 MHz tick resolution, i.e., 1 tick = 1 µs
-        .mem_block_symbols = 128,          // memory block size, 64 * 4 = 256 Bytes
+        .mem_block_symbols = 64,          // memory block size, 64 * 4 = 256 Bytes  C6 cannot use more than 64 symbols
         .intr_priority = 0,
         .flags = {
             .invert_in = true,         // invert input signal
@@ -152,7 +152,7 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
         }
     };
     
-    rmt_symbol_word_t raw_symbols[128];
+    rmt_symbol_word_t raw_symbols[64];
     // ready to receive
     ESP_ERROR_CHECK(rmt_receive(rx_chan, raw_symbols, sizeof(raw_symbols), &receive_config));
     // wait for the RX-done signal
@@ -474,7 +474,7 @@ void VistaBus::rx_tx_task(void * args)
             if ( data[0] == 0xF6) //SEND ACK Received
             {                 
                 rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //Get Address
-                if(data[0] != 0)
+                if(data[0] != 0 && monitor_rx_task_Handle != NULL)
                 {
                     uint32_t val = 0xF6 << 8 | data[0];
                     xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
@@ -594,7 +594,8 @@ void VistaBus::rx_tx_task(void * args)
                 if (received_packet.payload[3] == 0x53)
                 {
                     uint32_t val = 0xF9 << 8 | (received_packet.payload[1] + 0x40);
-                    xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                    if (monitor_rx_task_Handle != NULL)
+                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                     if (LRRemulation)
                     {
                         response[0] = received_packet.payload[1] + 0x40;
@@ -616,7 +617,8 @@ void VistaBus::rx_tx_task(void * args)
             else if ( data[0] == 0xFB ) //5881EN traffic on Vista 20p (address 0)??
             {   
                 uint32_t val = 0xFB << 8 | (received_packet.payload[3]);
-                xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                if (monitor_rx_task_Handle != NULL)
+                    xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 get_Packet_event(&received_packet,data,1,4,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
