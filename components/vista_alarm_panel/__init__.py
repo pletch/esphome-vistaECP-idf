@@ -16,6 +16,7 @@ AlarmComponent = alarm_panel_ns.class_('vistaECPHome', cg.PollingComponent)
 CONF_ACCESSCODE="access_code"
 CONF_DEFAULTPARTITION="default_partition"
 CONF_DEBUGLOG="debug_logging"
+CONF_DEBUGPULSE="debug_pulsing"
 CONF_KEYPAD1="keypad_addr_1"
 CONF_KEYPAD2="keypad_addr_2"
 CONF_KEYPAD3="keypad_addr_3"
@@ -51,6 +52,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ACCESSCODE,default=""): cv.string,
             cv.Optional(CONF_DEFAULTPARTITION, default=1): cv.int_range(min=1, max=8),
             cv.Optional(CONF_DEBUGLOG,default=False): cv.boolean,
+            cv.Optional(CONF_DEBUGPULSE,default=False): cv.boolean,
             cv.Optional(CONF_KEYPAD1,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD3,default=0): cv.int_, 
@@ -87,6 +89,8 @@ async def to_code(config):
         cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]))
     if config[CONF_DEBUGLOG]:
         cg.add_define("DEBUG_LOG")
+    if config[CONF_DEBUGPULSE]:
+        cg.add_define("DEBUG_PULSE")
     if config[CONF_KEYPAD1] != 0:
         cg.add(var.set_partitionKeypad(1,config[CONF_KEYPAD1]))
     if config[CONF_KEYPAD2] != 0:

@@ -1,6 +1,9 @@
 #include "vistabus.h"
 #include "esp_log.h"
 #include "vistaalarm.h"  //to bring in init macro definitions
+#ifdef DEBUG_PULSE
+#include "driver/rmt_rx.h"
+#endif
 
 
 VistaBus::VistaBus()
@@ -106,6 +109,7 @@ void VistaBus::emulateLRR(bool enabled)
     LRRemulation = enabled;
 }
 
+#ifdef DEBUG_PULSE
 static bool example_rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
 {
     BaseType_t high_task_wakeup = pdFALSE;
@@ -170,6 +174,7 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
     ESP_ERROR_CHECK(rmt_del_channel(rx_chan));
     vQueueDelete(receive_queue);
 }
+#endif
 
 bool VistaBus::read_packet(char * data, int &len, int &type, bool with_delay) 
 {
@@ -363,7 +368,7 @@ void VistaBus::rx_tx_task(void * args)
     (void)gpio_install_isr_service(0);
     bool req_to_send = false;
     uint64_t last_data_received = 0;
-    uint64_t last_pattern_measure_time = 0;
+    uint64_t boot = 0;
     SendPacket pkt_to_send;
     uint8_t ack_failures = 0;
     uint8_t mark_failures = 0;
@@ -383,16 +388,16 @@ void VistaBus::rx_tx_task(void * args)
         if (now - last_data_received > 30*1000*1000)
             this->panel_connected = false;
 
-        if (now - last_pattern_measure_time > 60*1000*1000)
+#ifdef DEBUG_PULSE
+        if (now > 60*1000*1000)
         {
             ESP_LOGE(TAG,"Collecting pulse pattern at %llu", now);
             capture_pulse_pattern(static_cast<gpio_num_t>(this->rxPin));
             vTaskDelay(10);
             continue;
-            //last_pattern_measure_time = esp_timer_get_time();
         }
+#endif
             
-        
         while (uxQueueMessagesWaiting(sendQueue))
         {
             if (!req_to_send)

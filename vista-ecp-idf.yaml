@@ -12,6 +12,8 @@ vista_alarm_panel:
   debug_logging: "false"  #enables additional bus activity logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm  
                           #component (if configured) logging level must be set to DEBUG or higher in logging component section
                           #to output all messages. 
+  #debug_pulsing: "false" #enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 
+                         # 60 seconds after startup and continues indefinitely.  DO NOT enable for routine use of component! 
 
   #assign a new virtual keypad address to each active partition using programs *190 - *196
   #and enter it below.  For unused partitions, use 0 as the keypad address.

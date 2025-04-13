@@ -25,9 +25,9 @@ Date: 2-Feb-2025
 #include "esp_log.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
-#include "driver/rmt_rx.h"
 #include "esp_timer.h"
 #include "hal/uart_ll.h"
+
 
 #define F6_ACK_MESSAGE_LENGTH 4
 #define F7_MESSAGE_LENGTH 45
@@ -95,7 +95,9 @@ protected:
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
     void processFA(const char * cbuf);
+
     void capture_pulse_pattern(gpio_num_t rx_pin);
+
     bool mark_pulse(uint8_t address);
     static void gpio_isr_handler(void * args);
     static void precise_delay(void * args);
