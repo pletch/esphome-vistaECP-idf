@@ -333,14 +333,14 @@ bool VistaBus::mark_pulse(uint8_t address)
     }
     //Use GPIO interrupts on rxPin to find send pulses.
 
-    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //first rising edge
+    xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(5)); //first rising edge
     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1); 
 
-    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //second rising edge
+    xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(4)); //second rising edge  Older panel 4140XMPT2 does not have 3 cycle pulse pattern.  Only one rising edge after 13 ms low signal.
     if (snd_data[1] != 0)
         uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
             
-    xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(5)); //third rising edge           
+    xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(4)); //third rising edge           
     if (snd_data[2] != 0)
         uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
     sent_request = true;
@@ -371,14 +371,13 @@ void VistaBus::rx_tx_task(void * args)
     uint64_t boot = 0;
     SendPacket pkt_to_send;
     uint8_t ack_failures = 0;
-    uint8_t mark_failures = 0;
     int sequence = 0;
     bool pulse_marked = false;
     
     uint64_t pulse_mark_time = 0;
     while (1) 
     {
-        int uart_delay = 350;
+        int uart_delay = 550;  //Note that Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
         {
             this->panel_connected = false;
@@ -436,11 +435,11 @@ void VistaBus::rx_tx_task(void * args)
                 taskargs.pin = this->rxPin;
                 gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_NEGEDGE);
                 gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) &taskargs );
-                if (xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(310)) == pdPASS)
+                if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(535)) == pdPASS)
                 {
                     uint64_t start = esp_timer_get_time();
                     gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_POSEDGE);
-                    if (xTaskNotifyWait(0xFFFFFFFF,0,NULL,pdMS_TO_TICKS(10)) == pdPASS)
+                    if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(10)) == pdPASS)
                     {
                         uint64_t end = esp_timer_get_time();
                         if (end - start > 5700 && end - start < 6300)
@@ -463,7 +462,7 @@ void VistaBus::rx_tx_task(void * args)
             default:
                 break;
         }
-        if (req_to_send)
+        if (req_to_send && !pulse_marked)
             uart_delay = 20;
         if (rxBytes > 0) 
         {
@@ -649,33 +648,22 @@ void VistaBus::rx_tx_task(void * args)
             }
         }
 
-        if (req_to_send && pulse_marked)
+        if (req_to_send && pulse_marked && (esp_timer_get_time() - pulse_mark_time > 1200000 )) //should receive ack within 1.2 seconds
         {
             ack_failures++;
-            mark_failures = 0;
             pulse_marked = false;
         }
-        else if (req_to_send && !pulse_marked)
-            mark_failures++;
 
-        if (ack_failures == 3)
+        if (ack_failures == 5)
         {
-            ESP_LOGW(TAG, "Failure to receive F6 ACK after 3 successive pulse marks.  Giving up.");
+            ESP_LOGW(TAG, "Failure to receive F6 ACK after 5 successive pulse marks.  Giving up.");
             req_to_send = false;
             ack_failures = 0;
-            mark_failures = 0;
         }
-        if (mark_failures == 67) //1340 ms total / 20 ms task frequency
-        {
-            ESP_LOGW(TAG, "Failure to mark pulse after 5 cycles.  Giving up.");
-            req_to_send = false;
-            ack_failures = 0;
-            mark_failures =0;
-        }
+
         if (!req_to_send)
         {
             ack_failures = 0;
-            mark_failures = 0;
             pulse_marked = false;
         }
     }
@@ -700,7 +688,7 @@ void VistaBus::monitor_rx_task(void * args)
         }
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, portMAX_DELAY);
         if (val == 0)
-            xTaskNotifyWait(0xFFFFFFFF,0,&val,0);  //data of interest incoming according to RX_TX Task
+            xTaskNotifyWait(0,0xFFFFFFFF,&val,0);  //data of interest incoming according to RX_TX Task
         if (rxBytes > 0) 
         {
             data[rxBytes] = 0;
@@ -805,7 +793,7 @@ void VistaBus::processFA(const char * cbuf)
     };
     esp_timer_create(&oneshot_timer_args, &oneshot_timer);
     esp_timer_start_once(oneshot_timer, 2500);
-    xTaskNotifyWait(0xFFFFFFFF,0,NULL,portMAX_DELAY);
+    xTaskNotifyWait(0,0xFFFFFFFF,NULL,portMAX_DELAY);
     if (type == 0xF1)
     {   
         char seq = cbuf[3];
