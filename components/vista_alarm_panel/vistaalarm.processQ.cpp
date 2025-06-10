@@ -327,12 +327,15 @@ namespace esphome
                 }
                 // zone fault status
 
-                if (!statusFlags.systemFlag && !statusFlags.check && !statusFlags.bypass && !statusFlags.alarm && 
+                if (!statusFlags.systemFlag && !statusFlags.check && !statusFlags.bypass && !statusFlags.alarm && !statusFlags.programMode &&
                     !(statusFlags.instant || statusFlags.armedAway || statusFlags.armedStay || statusFlags.night))
                 {
                     zoneType *zt = getZone(statusFlags.zone);
                     if (zt != NULL)
                     {
+#ifdef DEBUG_LOG
+                        ESP_LOGD(TAG, "fault found for zone %d", statusFlags.zone);
+#endif
                         if (!zt->open && zt->active)
                         {
                             zt->open = true;
