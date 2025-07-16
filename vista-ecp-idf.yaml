@@ -84,6 +84,7 @@ ota:
 
 api:
   port: 6053
+  custom_services: true
 
 ######################################################################## 
 # Edit binary and text sensors below to suit your alarm setup.
