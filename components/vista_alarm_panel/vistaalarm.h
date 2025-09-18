@@ -40,9 +40,7 @@ namespace esphome
 {
     namespace alarm_panel
     {
-
         extern VistaBus vistabus;
-
         enum sysState
         {
             soffline,
@@ -76,7 +74,18 @@ namespace esphome
             rspartitionid,
             rszoneinfo,
             rsicode,
-            rsdate,
+            rsdate
+        };
+
+        enum sourceDevice
+        {
+            unspecified = 0,
+            aui = 0xF2,
+            keypad_ack = 0xF6,
+            keypad = 0xF7,
+            long_range_radio = 0xF9,
+            expander = 0xFA,
+            rf_receiver = 0xFB
         };
 
         class vistaECPBinarySensor
@@ -94,7 +103,6 @@ namespace esphome
 
         class vistaECPHome : public api::CustomAPIDevice, public time::RealTimeClock
         {
-
             public:
                 vistaECPHome(char kpaddr, int receivePin, int transmitPin, int uartnum1, 
                             int monitorTxPin, int uartnum2);
@@ -354,8 +362,6 @@ namespace esphome
                     uint16_t zone;
                 };
 
-
-
                 bool displaySystemMsg = false;
                 bool forceRefreshGlobal = false;
                 bool forceRefreshZones, forceRefresh;
@@ -411,10 +417,8 @@ namespace esphome
 
                 int getZoneFromPrompt(char *p1);
                 //std::string getNameFromPrompt(char *p1, char *p2);
-                void printPacket(const char *label, char cbuf[], int len);
+                void printPacket(char cbuf[], int type, int src, int len);
                 void updateDisplayLines(uint8_t partition);
-
         };
-        extern vistaECPHome *alarmPanelPtr;
     } // namespace
 } // namespace

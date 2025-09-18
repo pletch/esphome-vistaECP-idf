@@ -21,9 +21,7 @@ namespace esphome
 {
     namespace alarm_panel
     {
-
         VistaBus vistabus;
-        vistaECPHome *alarmPanelPtr;
 
         void vistaECPHome::stop()
         {
@@ -32,14 +30,15 @@ namespace esphome
             processReceiveQHandle = NULL;
         }
 
-        vistaECPHome::vistaECPHome(char kpaddr, int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2) : keypadAddr1(kpaddr),
-                                                                                                                                    rxPin(receivePin),
-                                                                                                                                    txPin(transmitPin),
-                                                                                                                                    uart1(uartnum1),
-                                                                                                                                    monitorPin(monitorTxPin),
-                                                                                                                                    uart2(uartnum2)
+        vistaECPHome::vistaECPHome(char kpaddr, int receivePin, int transmitPin, 
+            int uartnum1, int monitorTxPin, int uartnum2) : keypadAddr1(kpaddr),
+                                                            rxPin(receivePin),
+                                                            txPin(transmitPin),
+                                                            uart1(uartnum1),
+                                                            monitorPin(monitorTxPin),
+                                                            uart2(uartnum2)
         {
-            alarmPanelPtr = this;
+            //alarmPanelPtr = this;
             api_connection_state = false;
         }
 
@@ -92,7 +91,8 @@ namespace esphome
         }
 
 
-        void vistaECPHome::register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial, uint8_t rf_loop, bool emulated)
+        void vistaECPHome::register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, 
+            uint32_t rf_serial, uint8_t rf_loop, bool emulated)
         {
             auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [zone_number](zoneType &f)
                 { return f.zone == zone_number; });
@@ -424,7 +424,7 @@ namespace esphome
 
 
     /*std::string vistaECPHome::getNameFromPrompt(char *p1, char *p2)  <-- not used for anything at this time. 
-                                                                      Need to refactor to eliminate regex pattern matching with digit search if enabling.
+                                        Need to refactor to eliminate regex pattern matching with digit search if enabling.
     {
         std::string p = std::string(p1) + std::string(p2);
 
@@ -484,18 +484,49 @@ namespace esphome
             return 0;
         }
 
-        void vistaECPHome::printPacket(const char *label, char cbuf[], int len)
+        void vistaECPHome::printPacket(char cbuf[], int type, int src, int len)
         {
             char s1[4];
             std::string s = "";
-            char s2[25];
+            char s2[32];
+            sourceDevice source = static_cast<sourceDevice>(src);
+            char device[4];
+            switch(source)
+            {
+                case unspecified:
+                    sprintf(device, "EXT");
+                    break;
+                case expander:
+                    sprintf(device, "EXP");
+                    break;
+                case rf_receiver:
+                    sprintf(device, "RFR");
+                    break;
+                case aui:
+                    sprintf(device, "AUI");
+                    break;
+                case keypad_ack:
+                    sprintf(device, "KPA");
+                    break;
+                case keypad:
+                    sprintf(device, "KPD");
+                    break;
+                case long_range_radio:
+                    sprintf(device, "LRR");
+                    break;
+                default:
+                    sprintf(device, "   ");               
+            }
             ESPTime rtc = now();
-            sprintf(s2, "(%s) [%02d:%02d:%02d]", label, rtc.hour, rtc.minute, rtc.second);
+            if (type == 0)
+                sprintf(s2, "(PANEL-->%s) [%02d:%02d:%02d]", device, rtc.hour, rtc.minute, rtc.second);
+            else
+                sprintf(s2, "(%s-->PANEL) [%02d:%02d:%02d]", device, rtc.hour, rtc.minute, rtc.second);
             bool abbr = false;
 #ifndef DEBUG_LOG
             if (len > 17)
             {
-                len = 17;
+                len = 14;
                 abbr = true;
             }
 #endif

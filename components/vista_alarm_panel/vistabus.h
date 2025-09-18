@@ -45,6 +45,7 @@ Date: 2-Feb-2025
 struct ReceivedPacket  
 {
     int type; //0 = yellow wire, 1 = green wire
+    int source{0};
     char payload[48];
     int size; 
 };
@@ -74,9 +75,10 @@ public:
     bool write(const char * data_to_write, int size, int keypadaddress);
     bool writedirect(const char * hex_data_to_write, int size, int keypadaddress);
     bool connected();
-    bool read_packet(char * data, int &len, int &type, bool with_delay = false);
+    bool read_packet(char * data, int &len, int &type, int &src, bool with_delay = false);
     void emulateLRR(bool enabled);
     void add_emulated_expander(uint8_t zone);
+    void add_emulated_rf_receiver(uint8_t zone, uint8_t address);
     void setExpFaultBits(uint8_t zone, bool fault);
     void setExpTamper(int32_t zone, bool tamper_active);
 
@@ -90,6 +92,7 @@ protected:
     bool stop_requested;
     bool LRRemulation;
     bool EXPemulation;
+    bool RFRemulation;
     static void rx_tx_task_start(void *args );
     static void monitor_rx_task_start(void *args);
     void rx_tx_task(void * args);
@@ -114,6 +117,14 @@ protected:
         char fault_NO_Bits{0};
         char fault_NC_Bits{0xFF};
         char seq{31};
+        pendingUpdate pending_update;
+    };
+
+    struct emulatedRFReceiver  
+    {   
+        uint8_t address{0};
+        uint8_t type{3};  //3 = 5881ENL (8 zones on 20P)  5 = 5881ENH (40 zones on 20P)
+        char seq{21};
         pendingUpdate pending_update;
     };
 

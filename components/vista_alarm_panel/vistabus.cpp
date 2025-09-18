@@ -110,7 +110,7 @@ void VistaBus::emulateLRR(bool enabled)
 }
 
 #ifdef DEBUG_PULSE
-static bool example_rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
+static bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done_event_data_t *edata, void *user_data)
 {
     BaseType_t high_task_wakeup = pdFALSE;
     QueueHandle_t receive_queue = (QueueHandle_t)user_data;
@@ -143,7 +143,7 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
     ESP_ERROR_CHECK(rmt_enable(rx_chan));
     
     rmt_rx_event_callbacks_t cbs = {
-        .on_recv_done = example_rmt_rx_done_callback,
+        .on_recv_done = rmt_rx_done_callback,
     };
     ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue));
     
@@ -176,7 +176,7 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
 }
 #endif
 
-bool VistaBus::read_packet(char * data, int &len, int &type, bool with_delay) 
+bool VistaBus::read_packet(char * data, int &len, int &type, int &src, bool with_delay) 
 {
     ReceivedPacket pkt;
     bool result = false;
@@ -189,6 +189,7 @@ bool VistaBus::read_packet(char * data, int &len, int &type, bool with_delay)
         memcpy(data,pkt.payload,pkt.size);
         len = pkt.size;
         type = pkt.type;
+        src = pkt.source;
         return true;
     }
     else
@@ -471,6 +472,7 @@ void VistaBus::rx_tx_task(void * args)
             data[rxBytes] = 0;
             memset(received_packet.payload,'\0',sizeof(received_packet.payload));
             received_packet.payload[0] = data[0];
+            received_packet.source = 0;
             if (req_to_send && pulse_marked && pkt_to_send.type == 2)
             {
                 req_to_send = false;
@@ -485,6 +487,7 @@ void VistaBus::rx_tx_task(void * args)
                 }
                 received_packet.payload[1] = data[0];
                 received_packet.size = 2;
+                received_packet.source = 0xF6;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                 uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), &data[1], 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //flush lagging zero
                 if(req_to_send && data[0] == pkt_to_send.keypadaddress) //ACK was for us.  Try to send.
@@ -562,6 +565,7 @@ void VistaBus::rx_tx_task(void * args)
                 get_Packet_event(&received_packet,data,1,F7_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 if(validChksum(received_packet.payload,0,45))
                 {
+                    received_packet.source = 0xF7;    
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                 }
             }
@@ -572,6 +576,7 @@ void VistaBus::rx_tx_task(void * args)
                 get_Packet_event(&received_packet,data,2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 if (validChksum(received_packet.payload,0,static_cast<int>(received_packet.payload[1])+2)) 
                 {
+                    received_packet.source = 0xF2;
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 }
             }
@@ -585,6 +590,7 @@ void VistaBus::rx_tx_task(void * args)
                 if (EXPemulation)
                     this->processFA(received_packet.payload);
                 get_Packet_event(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                received_packet.source = 0xFA;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
             }
             else if ( data[0] == 0xF9 ) //LRR
@@ -615,6 +621,7 @@ void VistaBus::rx_tx_task(void * args)
                 {
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum),&received_packet.payload[1], 1);
                 }
+                received_packet.source = 0xF9;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 vTaskDelay(pdMS_TO_TICKS(25)); //Delay to put command/response/ack in sequence in log
             }
@@ -624,6 +631,7 @@ void VistaBus::rx_tx_task(void * args)
                 if (monitor_rx_task_Handle != NULL)
                     xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 get_Packet_event(&received_packet,data,1,4,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                received_packet.source = 0xFB;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
             else if ( data[0] == 0xF8 ) //Unknown Command
@@ -694,11 +702,15 @@ void VistaBus::monitor_rx_task(void * args)
             data[rxBytes] = 0;
             memset(rcvd_extPkt.payload,'\0',sizeof(rcvd_extPkt.payload));
             rcvd_extPkt.payload[0] = data[0];
+            rcvd_extPkt.source = 0;
             if (data[0]==0xFE) //Send known packets immediately
             {
                 int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
                 if (res > 0)
+                {
+                    rcvd_extPkt.source = 0xFB;
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
+                }
             }
             else if(val >> 8 == 0xF6) //next byte will be header of sending sequence
             {
@@ -706,6 +718,7 @@ void VistaBus::monitor_rx_task(void * args)
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(150));
                 rcvd_extPkt.payload[1] = data[0]; //length
                 get_Packet(&rcvd_extPkt, data, 2, rcvd_extPkt.payload[1], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
+                rcvd_extPkt.source = 0xF6;
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
 
@@ -713,13 +726,14 @@ void VistaBus::monitor_rx_task(void * args)
             else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //expect response
             {
                 get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(UART_DELAY));
+                rcvd_extPkt.source = 0xF9;
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
-
             }
             else if(val >> 8 == 0xFB && rcvd_extPkt.payload[0] == 0)  //responses to FB command
             {
                 get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
+                rcvd_extPkt.source = 0xFB;
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
 
@@ -728,6 +742,7 @@ void VistaBus::monitor_rx_task(void * args)
             {
                 int res = get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
                 if (res > 0)
+                    rcvd_extPkt.source = 0xFA;
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
             }
             else //put in buffer for printing to log

@@ -21,20 +21,13 @@ namespace esphome
                 char payload[48];
                 int size;
                 int type;
+                int src;
                 memset(payload,'\0',sizeof(payload));
                 bool F7_no_change = true;
 
-                if (vistabus.read_packet(payload,size,type, true)) 
+                if (vistabus.read_packet(payload,size,type,src,true)) 
                 {    
-                    if (type == 0)
-                    {
-                        printPacket("PANEL", payload, size);
-                    }
-
-                    if (type == 1)
-                    {
-                        printPacket("EXT-D", payload, size);
-                    }
+                    printPacket(payload, type, src, size);
                     if (type == 0) //yellow wire
                     {
                         if (payload[0]==0xF7)
