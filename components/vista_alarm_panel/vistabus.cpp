@@ -482,7 +482,7 @@ void VistaBus::rx_tx_task(void * args)
                 rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //Get Address
                 if(data[0] != 0 && monitor_rx_task_Handle != NULL)
                 {
-                    uint32_t val = 0xF6 << 8 | data[0];
+                    uint32_t val = 0xF6;
                     xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 }
                 received_packet.payload[1] = data[0];
@@ -585,7 +585,10 @@ void VistaBus::rx_tx_task(void * args)
                 if (req_to_send && pulse_marked && pkt_to_send.type == 2)
                 {
                     req_to_send = false;
-                }     
+                }
+                uint32_t val = 0xFA;
+                if (monitor_rx_task_Handle != NULL)
+                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);    
                 get_Packet_event(&received_packet,data,1,FA_MESSAGE_LENGTH-2,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 if (EXPemulation)
                     this->processFA(received_packet.payload);
@@ -627,10 +630,10 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xFB ) //5881EN traffic on Vista 20p (address 0)??
             {   
-                uint32_t val = 0xFB << 8 | (received_packet.payload[3]);
-                if (monitor_rx_task_Handle != NULL)
-                    xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 get_Packet_event(&received_packet,data,1,4,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                uint32_t val = 0xFB << 8 | received_packet.payload[3];
+                if (monitor_rx_task_Handle != NULL)
+                    xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
                 received_packet.source = 0xFB;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
@@ -696,23 +699,36 @@ void VistaBus::monitor_rx_task(void * args)
         }
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, portMAX_DELAY);
         if (val == 0)
-            xTaskNotifyWait(0,0xFFFFFFFF,&val,0);  //data of interest incoming according to RX_TX Task
+            if (data[0] == 0x7F || data[0]==0xFE || data[0] == 0xFD || data[0] == 0xFB || data[0] == 0xF7)
+                xTaskNotifyWait(0,0xFFFFFFFF,&val,pdMS_TO_TICKS(500));  //data of interest incoming according to RX_TX Task.  Give time for device response and task notification.
+            else
+                xTaskNotifyWait(0,0xFFFFFFFF,&val,0);  //data of interest incoming according to RX_TX Task
         if (rxBytes > 0) 
         {
             data[rxBytes] = 0;
             memset(rcvd_extPkt.payload,'\0',sizeof(rcvd_extPkt.payload));
             rcvd_extPkt.payload[0] = data[0];
             rcvd_extPkt.source = 0;
-            if (data[0]==0xFE) //Send known packets immediately
+            if (val >> 8 == 0xFB)
             {
-                int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
-                if (res > 0)
+                if (val & 0xF1 == 0xF1) //Incoming zone data from Radio Frequency Receiver
                 {
-                    rcvd_extPkt.source = 0xFB;
-                    xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
+                    int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
+                    if (res > 0)
+                    {
+                        rcvd_extPkt.source = 0xFB;
+                        xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
+                    }
                 }
+                else //Response to FB poll command
+                {
+                    get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
+                    rcvd_extPkt.source = 0xFB;
+                    xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
+                }
+                val = 0;
             }
-            else if(val >> 8 == 0xF6) //next byte will be header of sending sequence
+            else if(val == 0xF6) //next byte will be header of sending sequence
             {
                 rcvd_extPkt.payload[0]=data[0];
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(150));
@@ -721,7 +737,6 @@ void VistaBus::monitor_rx_task(void * args)
                 rcvd_extPkt.source = 0xF6;
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
-
             }
             else if(val >> 8 == 0xF9 && (val & 0x0F) == 0x03) //expect response
             {
@@ -730,20 +745,13 @@ void VistaBus::monitor_rx_task(void * args)
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
             }
-            else if(val >> 8 == 0xFB && rcvd_extPkt.payload[0] == 0)  //responses to FB command
-            {
-                get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
-                rcvd_extPkt.source = 0xFB;
-                xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
-                val = 0;
-
-            }
-            else if (data[0] == 0xF0 || data[0] == 0x7F || data[0]==0xFB || data[0] == 0xFD || data[0] == 0xF7) //expanders such as 4219 7F=07,FE=08, FD=09, FB=10, F7=11
+            else if (val == 0xFA) // Incoming from expander such as 4219 7F=07,FE=08, FD=09, FB=10, F7=11
             {
                 int res = get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
                 if (res > 0)
                     rcvd_extPkt.source = 0xFA;
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
+                val = 0;
             }
             else //put in buffer for printing to log
             {

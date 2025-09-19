@@ -78,7 +78,7 @@ public:
     bool read_packet(char * data, int &len, int &type, int &src, bool with_delay = false);
     void emulateLRR(bool enabled);
     void add_emulated_expander(uint8_t zone);
-    void add_emulated_rf_receiver(uint8_t zone, uint8_t address);
+    void add_emulated_rf_receiver(uint8_t zone, uint8_t address, uint8_t type);
     void setExpFaultBits(uint8_t zone, bool fault);
     void setExpTamper(int32_t zone, bool tamper_active);
 

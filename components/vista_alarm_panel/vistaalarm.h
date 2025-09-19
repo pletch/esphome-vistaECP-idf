@@ -13,7 +13,7 @@
 #include <string>
 #include "paneltext.h"
 
-// for documentation see project at https://github.com/Dilbert66/esphome-vistaecp
+// for documentation see project at https://github.com/pletch/esphome-vistaECP-idf
 
 #define BIT_MASK_BYTE1_BEEP 0x07
 #define BIT_MASK_BYTE1_NIGHT 0x10
@@ -372,14 +372,11 @@ namespace esphome
                 void AUIprocessZoneList(char *list);
                 void AUIsendZoneRequest();
                 void AUIprocessF2(char * cbuf);
-                void loadZones();
 
                 std::string previousZoneStatusMsg;
 
                 alarmStatusType fireStatus, panicStatus, alarmStatus;
                 uint8_t partitionTargets;
-
-                void createZone(uint16_t z,uint8_t p=0);
       
                 auiCmdType auiCmd;
                 std::vector<zoneType> alarmZones{};
@@ -392,7 +389,6 @@ namespace esphome
                 zoneType *getRfSerialLookup(uint32_t serialCode);
 
                 void zoneStatusUpdate(zoneType *zt);
-                void assignPartitionToZone(zoneType *zt);
 
                 statusFlagType statusFlags;
                 lrrstatusFlagType lrrstatusFlags;
@@ -416,7 +412,6 @@ namespace esphome
                 bool areEqual(char *a1, char *a2, uint8_t len);
 
                 int getZoneFromPrompt(char *p1);
-                //std::string getNameFromPrompt(char *p1, char *p2);
                 void printPacket(char cbuf[], int type, int src, int len);
                 void updateDisplayLines(uint8_t partition);
         };

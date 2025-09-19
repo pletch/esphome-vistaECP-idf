@@ -3,7 +3,7 @@
 This version is a highly changed FORK of this project!!
 
 Key differences from original project:
-- Arduino dependency removed and tailed for ESP-IDF.
+- Arduino dependency removed and tailored for ESP-IDF.
 - Refactored to support workflow associated with Vistabus class.
 - Only targeted towards ESPHome API.  MQTT is removed in this version.
 - Relay emulation not implemented. Expander emulation is enabled with support for fault & tamper detection on zones.
@@ -38,7 +38,6 @@ namespace esphome
                                                             monitorPin(monitorTxPin),
                                                             uart2(uartnum2)
         {
-            //alarmPanelPtr = this;
             api_connection_state = false;
         }
 
@@ -422,27 +421,6 @@ namespace esphome
             return true;
         }
 
-
-    /*std::string vistaECPHome::getNameFromPrompt(char *p1, char *p2)  <-- not used for anything at this time. 
-                                        Need to refactor to eliminate regex pattern matching with digit search if enabling.
-    {
-        std::string p = std::string(p1) + std::string(p2);
-
-        MatchState ms;
-        char buf[5];
-        char buf1[20];
-        ms.Target((char *)p.c_str());
-        char res = ms.Match("[%a]+%s+([%d]+)%s*(.*)");
-        if (res == REGEXP_MATCHED)
-        {
-            ms.GetCapture(buf, 0);
-            ms.GetCapture(buf1, 1);
-            ESP_LOGD(TAG, "name match=%s,zone=%s", buf1, buf);
-            return std::string(buf1);
-        }
-        return "";
-    }*/
-
         int vistaECPHome::getZoneFromPrompt(char *p1)
         {
             char z_text[4];
@@ -488,7 +466,7 @@ namespace esphome
         {
             char s1[4];
             std::string s = "";
-            char s2[32];
+            char s2[48];
             sourceDevice source = static_cast<sourceDevice>(src);
             char device[4];
             switch(source)
@@ -517,11 +495,17 @@ namespace esphome
                 default:
                     sprintf(device, "   ");               
             }
-            ESPTime rtc = now();
+            struct timeval tv_now;
+            gettimeofday(&tv_now, NULL);
+            char time_str[16];
+            struct tm timeinfo;
+            localtime_r(&tv_now.tv_sec, &timeinfo);
+            strftime(time_str, sizeof(time_str), "%H:%M:%S", &timeinfo);
+            snprintf(time_str + strlen(time_str), sizeof(time_str) - strlen(time_str), ".%02ld", tv_now.tv_usec/10000);
             if (type == 0)
-                sprintf(s2, "(PANEL-->%s) [%02d:%02d:%02d]", device, rtc.hour, rtc.minute, rtc.second);
+                sprintf(s2, "(PANEL-->%s) [%s]", device, time_str);
             else
-                sprintf(s2, "(%s-->PANEL) [%02d:%02d:%02d]", device, rtc.hour, rtc.minute, rtc.second);
+                sprintf(s2, "(%s-->PANEL) [%s]", device, time_str);
             bool abbr = false;
 #ifndef DEBUG_LOG
             if (len > 17)
@@ -562,7 +546,6 @@ namespace esphome
             addr = known_partitions[kpi].assigned_keypad;
             if (addr < 1 || addr > 23)
                 return;
-
 
             // Arm stay
             if (state.compare("S") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)

@@ -6,7 +6,7 @@ Original project:  https://github.com/Dilbert66/esphome-vistaECP
 
 Refer to original project page for background and details on installation and circuit design.
   
-Note that this fork compiles using ESP-IDF rather than Arduino framework in ESPHome. ESPHome Arduino is currently stuck on ESP-IDF v4.4 base for forseeable future. Many of my newer gen ESP32 (C3, C6, S3) show improved connection stability on ESP-IDF v5+.
+Note that this fork compiles using ESP-IDF rather than Arduino framework in ESPHome.
 
 Fork is shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein as explained in the license documentation.
 
@@ -17,10 +17,10 @@ Fork is shared here for the benefits of any others that might want to use it.  N
 - Relay board emulation has been removed. Expander emulation remains.
 - Config refactored with validation. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
 - Sensors refactored to work with modified config approach.
-- Zone emulation specifier in yaml config automatically enables expander board emulation on appropriate address and corresponding group
-    of eight zone numbers.  No need to explictly declare expander address in YAML.
+- Zone emulation specifier in yaml config automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group
+    of eight zone numbers. 
 - Refactored to support workflow associated with Vistabus class using FreeRTOS tasks for UART comm and intertask comm via FreeRTOS Queues.
-- Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel.  No more "Component xx took a long time for an operation" errors in log!
+- Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel.  No need to suppress "Component xx took a long time for an operation" errors in log.
 - Targeted only towards ESPHome API.  Stand-alone MQTT is removed.
 - Web server interface component not integrated as is done in the upstream version.
 - Uses one or two (if monitoring TX wire for RF messages etc.) hardware UARTS on the ESP32 family rather than software GPIO bit-banging.
