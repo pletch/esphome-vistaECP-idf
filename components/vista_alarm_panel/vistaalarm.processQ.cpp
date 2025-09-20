@@ -103,106 +103,109 @@ namespace esphome
                     }
                     if (type == 1) 
                     {
-                        if (payload[1] != 0 && (payload[0] == 0x7F || payload[0] == 0xFE || payload[0] == 0xFD || 
-                                payload[0] == 0xFB || payload[0] == 0xF7)) //Expander board 
+                        if (payload[0] == 0x7F || payload[0] == 0xFE || payload[0] == 0xFD || 
+                                payload[0] == 0xFB || payload[0] == 0xF7)
                         {
                             //FD 09 31 00 30 open
                             //FD 09 31 00 20 closed
-                            int z = payload[4] >> 5;
-                            switch (payload[1])
+                            if (src = 0xFA && size == 6)
                             {
-                                case 0x07:
-                                    z += 8 + (payload[3] << 3);
-                                    break;
-                                case 0x08:
-                                    z += 16 + (payload[3] << 3);
-                                    break;
-                                case 0x09:
-                                    z += 24 + (payload[3] << 3);
-                                    break;
-                                case 0x0A:
-                                    z += 32 + (payload[3] << 3);
-                                    break;
-                                case 0x0B:
-                                    z += 40 + (payload[3] << 3);
-                                    break;
+                                int z = payload[4] >> 5;
+                                switch (payload[1])
+                                {
+                                    case 0x07:
+                                        z += 8 + (payload[3] << 3);
+                                        break;
+                                    case 0x08:
+                                        z += 16 + (payload[3] << 3);
+                                        break;
+                                    case 0x09:
+                                        z += 24 + (payload[3] << 3);
+                                        break;
+                                    case 0x0A:
+                                        z += 32 + (payload[3] << 3);
+                                        break;
+                                    case 0x0B:
+                                        z += 40 + (payload[3] << 3);
+                                        break;
+                                }
+                                bool open = (payload[4] >> 4) & 0x01;
+                                zoneType *zt = getZone(z);
+                                if (zt != NULL && zt->active)
+                                {
+                                    zt->open = open;
+                                    zoneStatusUpdate(zt);
+                                }
                             }
-                            bool open = (payload[4] >> 4) & 0x01;
-                            zoneType *zt = getZone(z);
-                            if (zt != NULL && zt->active)
+                            else if (src = 0xFB && size == 8)
                             {
-                                zt->open = open;
-                                zoneStatusUpdate(zt);
-                            }
-                        }     
-                        else if (payload[0] == 0xFE && payload[1] == 0 && size == 8) // Honeywell 5881 uses address of 0 on Vista 15/20
-                        {
-                            char rf_serial_char[14];
-                            //char rf_serial_char_out[20];
-                            // FE 00 54 83 8f 89 a0 = Open / Active for door sensor.  
-                            // FE 00 54 83 8f 89 80 = Closed / Inactive
-                            // fe 00 51 85 f4 03 04 = heartbeat
-                            uint8_t chksum = 0;
-                            for (int i = 2; i < 7; i++)
-                                chksum += payload[i];
-                            chksum = ~(chksum) + 1;
-                            if (chksum == payload[7])
-                            {
-                                uint32_t device_serial = ((payload[3] & 0xF) << 16) + (payload[4] << 8) + payload[5];
-                                snprintf(rf_serial_char, 14, "%3lu%04lu", device_serial / 10000, device_serial % 10000);                        
-#ifdef DEBUG_LOG
+                                char rf_serial_char[14];
+                                //char rf_serial_char_out[20];
+                                // FE 00 54 83 8f 89 a0 = Open / Active for door sensor.  
+                                // FE 00 54 83 8f 89 80 = Closed / Inactive
+                                // fe 00 51 85 f4 03 04 = heartbeat
+                                uint8_t chksum = 0;
+                                for (int i = 2; i < 7; i++)
+                                    chksum += payload[i];
+                                chksum = ~(chksum) + 1;
+                                if (chksum == payload[7])
+                                {
+                                    uint32_t device_serial = ((payload[3] & 0xF) << 16) + (payload[4] << 8) + payload[5];
+                                    snprintf(rf_serial_char, 14, "%3lu%04lu", device_serial / 10000, device_serial % 10000);                        
+#ifdef DEBUG_LOG    
                                     ESP_LOGI(TAG, "RFX: %s,%02x", rf_serial_char, payload[6]);
 #endif
-                                if (!(payload[6] & 4) && !(payload[6] & 1))
-                                { // ignore heartbeat
-                                    zoneType *zt = getRfSerialLookup(device_serial);
-                                    if (zt != NULL)
-                                    {
-                                        int mask;
-                                        switch (zt->rfloop)
+                                    if (!(payload[6] & 4) && !(payload[6] & 1))
+                                    { // ignore heartbeat
+                                        zoneType *zt = getRfSerialLookup(device_serial);
+                                        if (zt != NULL)
                                         {
-                                            case 1:
-                                                mask = 0x80;
-                                                break;
-                                            case 2:
-                                                mask = 0x20;
-                                                break;
-                                            case 3:
-                                                mask = 0x10;
-                                                break;
-                                            case 4:
-                                                mask = 0x40;
-                                                break;
-                                            default:
-                                                mask = 0x80;
-                                                break;
-                                        }
-                                        if (zt->active)
-                                        {
-                                            zt->time = esp_timer_get_time();
-                                            zt->open = payload[6] & mask ? true : false;
-                                            zt->rflowbat = payload[6] & 2 ? true : false; // low bat
-                                            zoneStatusUpdate(zt);
+                                            int mask;
+                                            switch (zt->rfloop)
+                                            {
+                                                case 1:
+                                                    mask = 0x80;
+                                                    break;
+                                                case 2:
+                                                    mask = 0x20;
+                                                    break;
+                                                case 3:
+                                                    mask = 0x10;
+                                                    break;
+                                                case 4:
+                                                    mask = 0x40;
+                                                    break;
+                                                default:
+                                                    mask = 0x80;
+                                                    break;
+                                            }
+                                            if (zt->active)
+                                            {
+                                                zt->time = esp_timer_get_time();
+                                                zt->open = payload[6] & mask ? true : false;
+                                                zt->rflowbat = payload[6] & 2 ? true : false; // low bat
+                                                zoneStatusUpdate(zt);
+                                            }
                                         }
                                     }
-                                }
-                                if (text_sensors_common.rf_messages != NULL)
-                                {
-                                    std::string s(rf_serial_char);
-                                    text_sensors_common.rf_messages->process(s);
+                                    if (text_sensors_common.rf_messages != NULL)
+                                    {
+                                        std::string s(rf_serial_char);
+                                        text_sensors_common.rf_messages->process(s);
+                                    }
+                                /* rf_serial_char
+
+                                1 - ? (loop flag?)
+                                2 - Low battery
+                                3 -	Supervision required /heartbeat
+                                4 - ?
+                                5 -	Loop 3
+                                6 -	Loop 2
+                                7 -	Loop 4
+                                8 -	Loop 1  */
                                 }
                             }
-                        }
-                        /* rf_serial_char
-
-                        1 - ? (loop flag?)
-                        2 - Low battery
-                        3 -	Supervision required /heartbeat
-                        4 - ?
-                        5 -	Loop 3
-                        6 -	Loop 2
-                        7 -	Loop 4
-                        8 -	Loop 1  */
+                        }     
                     }
                 }
                 // done other cmd processing.    Process f7 now

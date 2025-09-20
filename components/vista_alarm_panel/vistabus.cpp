@@ -585,11 +585,11 @@ void VistaBus::rx_tx_task(void * args)
                 if (req_to_send && pulse_marked && pkt_to_send.type == 2)
                 {
                     req_to_send = false;
-                }
-                uint32_t val = 0xFA;
-                if (monitor_rx_task_Handle != NULL)
-                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);    
+                }    
                 get_Packet_event(&received_packet,data,1,FA_MESSAGE_LENGTH-2,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                uint32_t val = 0xFA << 8 | received_packet.payload[4];
+                if (monitor_rx_task_Handle != NULL)
+                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 if (EXPemulation)
                     this->processFA(received_packet.payload);
                 get_Packet_event(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
@@ -700,7 +700,7 @@ void VistaBus::monitor_rx_task(void * args)
         int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, portMAX_DELAY);
         if (val == 0)
             if (data[0] == 0x7F || data[0]==0xFE || data[0] == 0xFD || data[0] == 0xFB || data[0] == 0xF7)
-                xTaskNotifyWait(0,0xFFFFFFFF,&val,pdMS_TO_TICKS(500));  //data of interest incoming according to RX_TX Task.  Give time for device response and task notification.
+                xTaskNotifyWait(0,0xFFFFFFFF,&val,pdMS_TO_TICKS(150));  //data of interest incoming according to RX_TX Task.  Give time for device response and task notification.
             else
                 xTaskNotifyWait(0,0xFFFFFFFF,&val,0);  //data of interest incoming according to RX_TX Task
         if (rxBytes > 0) 
@@ -713,7 +713,7 @@ void VistaBus::monitor_rx_task(void * args)
             {
                 if (val & 0xF1 == 0xF1) //Incoming zone data from Radio Frequency Receiver
                 {
-                    int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
+                    int res = get_Packet(&rcvd_extPkt, data, 1, FE_EXT_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(UART_DELAY)); //do not set delay to less than 125ms
                     if (res > 0)
                     {
                         rcvd_extPkt.source = 0xFB;
@@ -722,7 +722,7 @@ void VistaBus::monitor_rx_task(void * args)
                 }
                 else //Response to FB poll command
                 {
-                    get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
+                    get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(UART_DELAY));
                     rcvd_extPkt.source = 0xFB;
                     xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 }
@@ -745,9 +745,12 @@ void VistaBus::monitor_rx_task(void * args)
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
             }
-            else if (val == 0xFA) // Incoming from expander such as 4219 7F=07,FE=08, FD=09, FB=10, F7=11
+            else if (val >> 8 == 0xFA) // Incoming from expander such as 4219. 7F=07,FE=08, FD=09, FB=10, F7=11
             {
-                int res = get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150)); //do not set delay to less than 125ms
+                TickType_t rdelay = pdMS_TO_TICKS(150);
+                if (val & 0xF1 == 0xF1) 
+                    rdelay = UART_DELAY;
+                int res = get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), rdelay); 
                 if (res > 0)
                     rcvd_extPkt.source = 0xFA;
                     xQueueSend(this->receiveQueue,&rcvd_extPkt,pdMS_TO_TICKS(20));
