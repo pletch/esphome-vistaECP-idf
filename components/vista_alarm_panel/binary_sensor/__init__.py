@@ -35,9 +35,7 @@ CONF_ZONE = "zone"
 CONF_PARTITION = "partition"
 CONF_RFSERIAL = "rf_serial"
 CONF_RFLOOP = "rf_loop"
-CONF_RFHB = "rf_manage_heartbeat"
 CONF_STATUS_SENSOR = "status_indicator"
-CONF_EMULATED_ZONE = "emulated"
 
 def _validate(value):
     if CONF_ZONE in value:
