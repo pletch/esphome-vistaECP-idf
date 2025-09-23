@@ -29,6 +29,8 @@ CONF_UART2="uart_2"
 CONF_TTL="ttl"
 CONF_QUICKARM="quickarm"
 CONF_LRR="lrr_supervisor"
+CONF_RFR="rf_receiver_emulation"
+CONF_RFRADDR="rf_receiver_addr"
 CONF_CLEAN="clean_build"
 
 def validate_keypads(config):
@@ -65,6 +67,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_TTL,default=30): cv.int_, 
             cv.Optional(CONF_QUICKARM): cv.boolean, 
             cv.Optional(CONF_LRR): cv.boolean, 
+            cv.Optional(CONF_RFR): cv.boolean,
+            cv.Optional(CONF_RFRADDR, default=0): cv.int_,
             cv.Optional(CONF_CLEAN,default='false'): cv.boolean,     
         }
     ).extend(cv.COMPONENT_SCHEMA),
@@ -102,7 +106,9 @@ async def to_code(config):
     if CONF_QUICKARM in config:
         cg.add(var.set_quickArm(config[CONF_QUICKARM]))       
     if CONF_LRR in config:
-        cg.add(var.set_lrrSupervisor(config[CONF_LRR]))      
+        cg.add(var.set_lrrSupervisor(config[CONF_LRR]))
+    if CONF_RFR in config:
+        cg.add(var.set_rfrEmulation(config[CONF_RFR], config[CONF_RFRADDR]))        
     if CONF_AUIADDR in config:
         cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
     await cg.register_component(var, config)

@@ -15,8 +15,20 @@ namespace esphome
     {
         void vistaECPHome::processReceiveQueue(void *args)
         {
+            if (rfrEmulation[0])
+            {
+                for (auto it = alarmZones.begin(); it != alarmZones.end(); ++it) 
+                {
+                    if(it->rfnext_hb)
+                    {
+                        it->rfnext_hb = esp_timer_get_time() + 1*60*1000*1000 + (esp_random() % 10) * 60 * 1000 * 1000;
+                    }
+                }
+            }
             while (1)
-            {               
+            {   
+                if (rfrEmulation[0])            
+                    RF_handle_heartbeats();
                 AUIprocessQueue();
                 char payload[48];
                 int size;
@@ -95,12 +107,12 @@ namespace esphome
 
                                     if(text_sensors_common.lrr_messages != NULL)
                                         text_sensors_common.lrr_messages->process(msg);
-
                                     //refreshLrrTime = esp_timer_get_time();
                                 }
                             }
                         }
                     }
+
                     if (type == 1) 
                     {
                         if (payload[0] == 0x7F || payload[0] == 0xFE || payload[0] == 0xFD || 
@@ -140,10 +152,20 @@ namespace esphome
                             else if (src = 0xFB && size == 8)
                             {
                                 char rf_serial_char[14];
-                                //char rf_serial_char_out[20];
-                                // FE 00 54 83 8f 89 a0 = Open / Active for door sensor.  
-                                // FE 00 54 83 8f 89 80 = Closed / Inactive
-                                // fe 00 51 85 f4 03 04 = heartbeat
+                                /* char rf_serial_char_out[20];
+                                   FE 00 54 83 8f 89 a0 = Open / Active for door sensor.  
+                                   FE 00 54 83 8f 89 80 = Closed / Inactive
+                                   fe 00 51 85 f4 03 04 = heartbeat
+
+                                   rf_serial_char
+                                   1 - ? (loop flag?)
+                                   2 - Low battery
+                                   3 - Supervision required /heartbeat
+                                   4 - ?
+                                   5 -	Loop 3
+                                   6 -	Loop 2
+                                   7 -	Loop 4
+                                   8 -	Loop 1  */
                                 uint8_t chksum = 0;
                                 for (int i = 2; i < 7; i++)
                                     chksum += payload[i];
@@ -193,29 +215,18 @@ namespace esphome
                                         std::string s(rf_serial_char);
                                         text_sensors_common.rf_messages->process(s);
                                     }
-                                /* rf_serial_char
-
-                                1 - ? (loop flag?)
-                                2 - Low battery
-                                3 -	Supervision required /heartbeat
-                                4 - ?
-                                5 -	Loop 3
-                                6 -	Loop 2
-                                7 -	Loop 4
-                                8 -	Loop 1  */
                                 }
                             }
                         }     
                     }
                 }
+
                 // done other cmd processing.    Process f7 now
                 if (!forceRefreshGlobal || statusFlags.partition == 0)
                     continue;
         
                 last_refresh = esp_timer_get_time();
                 
-                
-
                 uint8_t kpi = 0;
                 for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
                 {
@@ -251,13 +262,13 @@ namespace esphome
                 bool updateSystemState = false;
 
                 // Publishes ready status
-
                 if (statusFlags.ready)
                 {
                     currentSystemState = sdisarmed;
                     currentLightState.ready = true;
                     updateSystemState = true;
                 }
+
                 // armed status lights
                 if (statusFlags.armedAway || statusFlags.armedStay)
                 {
@@ -280,6 +291,7 @@ namespace esphome
                     }
                     currentLightState.armed = true;
                 }
+
                 // zone fire status
                 if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.fireZone)
                 {
@@ -287,17 +299,18 @@ namespace esphome
                     fireStatus.time = esp_timer_get_time();
                     fireStatus.state = true;
                 }
+
                 // zone alarm status
                 if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.alarm)
                 {
 #ifdef DEBUG_LOG
                     ESP_LOGD(TAG,"alarm found for zone %d",statusFlags.zone);
 #endif
-
                     alarmStatus.zone = statusFlags.zone;
                     alarmStatus.time = esp_timer_get_time();
                     alarmStatus.state = true;
                 }
+
                 // device check status
                 if (statusFlags.check)
                 {
@@ -321,8 +334,8 @@ namespace esphome
                         zt->time = esp_timer_get_time();
                     }
                 }
-                // zone fault status
 
+                // zone fault status
                 if (!statusFlags.systemFlag && !statusFlags.check && !statusFlags.bypass && !statusFlags.alarm && !statusFlags.programMode &&
                     !(statusFlags.instant || statusFlags.armedAway || statusFlags.armedStay || statusFlags.night))
                 {
@@ -342,6 +355,7 @@ namespace esphome
                         zt->time = esp_timer_get_time();
                     }
                 }
+
                 // zone bypass status
                 if (!statusFlags.systemFlag && !statusFlags.check && statusFlags.bypass && !statusFlags.alarm && 
                     !(statusFlags.instant || statusFlags.armedAway || statusFlags.armedStay || statusFlags.night))
@@ -399,6 +413,7 @@ namespace esphome
                 {
                     currentLightState.check = true;
                 }
+
                 if (statusFlags.instant)
                 {
                     currentLightState.instant = true;
@@ -410,16 +425,19 @@ namespace esphome
                     fireStatus.state = false;
                     fireStatus.zone = 0;
                 }
+
                 if ((chkTime - alarmStatus.time) > TTL)
                 {
                     alarmStatus.state = false;
                     alarmStatus.zone = 0;
                 }
+
                 if ((chkTime - panicStatus.time) > TTL)
                 {
                     panicStatus.state = false;
                     panicStatus.zone = 0;
                 }
+
                 if ((chkTime - lowBatteryTime) > TTL)
                     currentLightState.bat = false;
 
@@ -475,8 +493,6 @@ namespace esphome
                         status_sensors_partition[known_partitions[kpi].partition - 1].trbl->process(currentLightState.trouble);
                     if ((currentLightState.chime != previousLightState.chime || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].chm != NULL)
                         status_sensors_partition[known_partitions[kpi].partition - 1].chm->process(currentLightState.chime);
-
-
                     if (statusFlags.systemFlag || updateSystemState)
                     {
                         if ((currentLightState.away != previousLightState.away || forceRefresh) && status_sensors_partition[known_partitions[kpi].partition - 1].arma != NULL)
@@ -545,6 +561,7 @@ namespace esphome
                         x.open = false;
                         zoneStatusUpdate(&x);
                     }
+
                     if (!x.bypass && x.check && (esp_timer_get_time() - x.time) > TTL)
                     {
                         x.check = false;
@@ -555,6 +572,7 @@ namespace esphome
                     {
                         zoneStatusUpdate(&x);
                     }
+
                     if (x.open)
                     {
                         if (zoneStatusMsg != "")
@@ -563,6 +581,7 @@ namespace esphome
                             sprintf(s1, "OP:%d", x.zone);
                         zoneStatusMsg.append(s1);
                     }
+
                     if (x.alarm)
                     { 
                         if (zoneStatusMsg != "")
@@ -571,6 +590,7 @@ namespace esphome
                             sprintf(s1, "AL:%d", x.zone);
                         zoneStatusMsg.append(s1);
                     }
+
                     if (x.bypass)
                     {
                         if (zoneStatusMsg != "")
@@ -579,14 +599,16 @@ namespace esphome
                             sprintf(s1, "BY:%d", x.zone);
                         zoneStatusMsg.append(s1);
                     }
+
                     if (x.check)
                     {
                         if (zoneStatusMsg != "")
                             sprintf(s1, ",CK:%d", x.zone);
                         else
                             sprintf(s1, "CK:%d", x.zone);
-                        zoneStatusMsg.append(s1);
+                            zoneStatusMsg.append(s1);
                     }
+                    
                     if (x.rflowbat)
                     { // low rf battery
                         if (zoneStatusMsg != "")
@@ -790,6 +812,38 @@ namespace esphome
             }
         }   
 
+        void vistaECPHome::RF_handle_heartbeats()
+        {
+            
+            for (auto it = alarmZones.begin(); it != alarmZones.end(); ++it) 
+            {
+                if(it->rfnext_hb && (esp_timer_get_time() > it->rfnext_hb))
+                {
+                    int mask;
+                    switch (it->rfloop)
+                    {
+                        case 1:
+                            mask = 0x80;
+                            break;
+                        case 2:
+                            mask = 0x20;
+                            break;
+                        case 3:
+                            mask = 0x10;
+                            break;
+                        case 4:
+                            mask = 0x40;
+                            break;
+                        default:
+                            mask = 0x80;
+                            break;
+                    }
+                uint8_t msg = 0x80 ^ mask & 0x04;
+                vistabus.sendRFmsg(it->rfserial,msg);
+                it->rfnext_hb = esp_timer_get_time() + 70ULL*60*1000*1000 + (esp_random() % 20) * 60 * 1000 * 1000;
+                }
+            }
+        }
 
         void vistaECPHome::updateDisplayLines(uint8_t partition)
         {

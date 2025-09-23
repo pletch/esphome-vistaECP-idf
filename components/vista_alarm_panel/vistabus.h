@@ -17,6 +17,7 @@ Date: 2-Feb-2025
 
 #include <string.h>
 #include <vector>
+#include <queue>
 #include <algorithm>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -35,6 +36,7 @@ Date: 2-Feb-2025
 #define F9_EXT_MESSAGE_LENGTH 8
 #define FE_EXT_MESSAGE_LENGTH 8
 #define FA_MESSAGE_LENGTH 6
+#define FB_MESSAGE_LENGTH 5
 
 #define RX_BUF_SIZE (128)
 #define UART_RX_TASK_STACK_SIZE (4096)
@@ -78,9 +80,10 @@ public:
     bool read_packet(char * data, int &len, int &type, int &src, bool with_delay = false);
     void emulateLRR(bool enabled);
     void add_emulated_expander(uint8_t zone);
-    void add_emulated_rf_receiver(uint8_t zone, uint8_t address, uint8_t type);
+    void emulateRFR(uint8_t address);
     void setExpFaultBits(uint8_t zone, bool fault);
-    void setExpTamper(int32_t zone, bool tamper_active);
+    void setExpTamper(uint8_t zone, bool tamper_active);
+    void sendRFmsg(uint32_t serial, uint8_t msg);
 
 protected:
     const char* const TAG = "vistabus";
@@ -97,7 +100,10 @@ protected:
     static void monitor_rx_task_start(void *args);
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
-    void processFA(const char * cbuf);
+    void processF9(const char * cbuf);
+    void processFA(const char * cbuf, bool &pending_F1);
+    void processFB(const char * cbuf, bool &pending_F1);
+    void requestF1(uint8_t address);
 
     void capture_pulse_pattern(gpio_num_t rx_pin);
 
@@ -105,10 +111,11 @@ protected:
     static void gpio_isr_handler(void * args);
     static void precise_delay(void * args);
 
-    struct pendingUpdate
+    struct DeviceMsg
     {
-        uint8_t zone{0};
-        bool fault{false};
+        uint8_t address{255};
+        uint32_t source{0}; //either zone or serial
+        uint8_t msg{0};
     };
 
     struct emulatedExpander  
@@ -116,24 +123,21 @@ protected:
         uint8_t address{0};
         char fault_NO_Bits{0};
         char fault_NC_Bits{0xFF};
-        char seq{31};
-        pendingUpdate pending_update;
     };
 
     struct emulatedRFReceiver  
     {   
         uint8_t address{0};
-        uint8_t type{3};  //3 = 5881ENL (8 zones on 20P)  5 = 5881ENH (40 zones on 20P)
-        char seq{21};
-        pendingUpdate pending_update;
     };
 
     emulatedExpander *getExpander(uint8_t address);
     std::vector<emulatedExpander> emulated_expanders{};
+    emulatedRFReceiver emulated_rf_receiver;
     TaskHandle_t rx_tx_task_Handle;
     TaskHandle_t monitor_rx_task_Handle;
     QueueHandle_t receiveQueue;
     QueueHandle_t sendQueue;
+    QueueHandle_t deviceMsgQueue;
     QueueHandle_t uartevtQueue;
 
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);

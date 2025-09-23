@@ -17,8 +17,7 @@ Fork is shared here for the benefits of any others that might want to use it.  N
 - Relay board emulation has been removed. Expander emulation remains.
 - Config refactored with validation. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
 - Sensors refactored to work with modified config approach.
-- Zone emulation specifier in yaml config automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group
-    of eight zone numbers. 
+- zone emulation specifier in yaml config allows emulation of either hardwired or rf virtual zones. Specifying for hardwired zone automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group of eight zone numbers for virtual hardwired zones. Specifier on zones with rf serial / loop definition allows for virtual rf zone emulation when rf receiver emulation is also enabled.
 - Refactored to support workflow associated with Vistabus class using FreeRTOS tasks for UART comm and intertask comm via FreeRTOS Queues.
 - Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel.  No need to suppress "Component xx took a long time for an operation" errors in log.
 - Targeted only towards ESPHome API.  Stand-alone MQTT is removed.
@@ -28,12 +27,13 @@ Fork is shared here for the benefits of any others that might want to use it.  N
 - Lots of unused residual code, bitwise operations, and variable handling cleaned up.
 - Capability to temporarily enable RMT module for outputting bus pulse pattern to log for debugging
 
-### ⚠️Caution: There may be features / capabilities carried over from original project but unused by me that are not tested.
+### ⚠️Caution: There may be features / capabilities carried over from original project but unused by me that are minimally tested.  Will test these more thoroughly in the future when I get time but please let me know if you try and the do not work.
 Some Specifics include: 
 - Long Range Radio emulation
-- AUI command handling.  
+- AUI command handling
+- RF Receiver emulation  
 
-   My system has an actual LRR and I didn't want to disconnect to test this.My former Safewatch Pro 3000 doesn't seem to respond to AUI commands as expected with neither the original implementation or this fork.
+   My system has an actual LRR and RFR and I didn't want to disconnect to test these extensively. My former Safewatch Pro 3000 doesn't seem to respond to AUI commands as expected with neither the original implementation or this fork.
 
 
 ### YAML Configuration Options (See YAML in repo for more examples):
@@ -57,7 +57,9 @@ Configuration variables:
 - **debug_log** (*Optional*, boolean): Set to true to enable additional bus activity logging and print full ecp packet contents to the log.  Global esphome and vista-alarm component (if configured)
 logging level must be set to DEBUG or higher in logging component section to output all messages.
 - **debug_pulsing** (*Optional*, boolean): Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 60 seconds after startup and continues indefinitely.  **DO NOT** enable for routine use of component!
-- **lrr_supervisor** (*Optional*, boolean): Set to true to enable Long Range Radio emulation for monitoring and decoding status updates. Do not enable if the system is monitored and an actual long range radio is already present in the system. Defaults to false.   
+- **lrr_supervisor** (*Optional*, boolean): Set to true to enable Long Range Radio emulation for monitoring and decoding status updates. Do not enable if the system is monitored and an actual long range radio is already present in the system. Defaults to false.
+- **rf_receiver_emulation** (*Optional*, boolean): Set to true to enable RF Receiver module (5881ENH) emulation for creating virtual RF zones. Do not enable if the system already includes a physical RF receiver as these Vista systems only support a single RF receiver device. Defaults to false.
+- **rf_receiver_addr** (*Optional*, int): Set to suitable address for RF Receiver per your panel installation instructions. Only permissible address on Vista 15/20 panels is 0. Defaults to 0.
 - **monitor_pin** (*Optional*, PIN): GPIO pin to use for monitoring module traffic such as RF or Expanders. Leave undefined or set to -1 to disable.
 - **uart_2** (*Optional*, UART): Hardware UART number to use for monitoring module traffic via monitorpin. Automatically disabled if monitorpin set to -1.
 - **ttl** (*Optional*, int): Time to live in seconds for expiring zone/fire status. Relevant for configurations not using monitor pin and for zones hardwired to the panel. Defaults to 30 if not defined.
@@ -99,13 +101,13 @@ binary_sensor:
 Configuration variables:  
   
 [zone binary status]
-- **emulated** (*Optional*, boolean) Enable zone emulation through automatic expander board emulation (e.g. Honeywell 4129). Ensure that the zone number selected for emulated zone does not conflict with existing physical boards in your system.  This is useful for associating other gpio on ESP32 or other Home Assistant sensors with alarm panel zone. Defaults to **false** if not defined.
+- **emulated** (*Optional*, boolean) Enable virtual zone emulation.  If specified in zone with rf_serial / rf_loop options defined and rf_receiver_emulation is enabled, an RF zone is emulated. The required heartbeat/supervisory signals are handled internally.  If specified with rf options, hardwared zone is emulated through automatic expander board emulation (e.g. Honeywell 4129). Ensure that the zone number selected for emulated hardwired zone does not conflict with existing physical boards in your system.  This is useful for associating other gpio on ESP32 or other Home Assistant sensors with alarm panel zone. Defaults to **false** if not defined.
   
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated zones 9-16 will enable expander emulation on address 7.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated zones 17-24 will enable expander emulation on address 8.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated zones 25-32 will enable expander emulation on address 9.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated zones 33-40 will enable expander emulation on address 10.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated zones 41-48 will enable expander emulation on address 11.
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 9-16 will enable expander emulation on address 7.  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 17-24 will enable expander emulation on address 8.  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 25-32 will enable expander emulation on address 9.  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 33-40 will enable expander emulation on address 10.  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 41-48 will enable expander emulation on address 11.
 - **partition** (*Optional*, int) Partion number associated with zone.
 - **rf_loop** (*Optional*, int)  Loop number of RF device (see rf_serial info below)
 - **rf_serial** (*Optional*, int) Unique RF serial number of wireless device. Enroll your RF serial devices using the rf_serial and rf_loop parameters. For most devices loop1 is used such as 5800pir, other devices such as 5816 will use loop2. Please refer to your RF device programming (*56 program) to see what loop and zones are assigned to your RF devices.  
@@ -154,37 +156,34 @@ Configuration variables:
 
 ### Example log output for working installation:
 ```
-[19:48:31][D][vista-alarm:509][pRQtask]: (PANEL) [19:48:31] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A 2A 2A 44 ...
-[19:48:31][I][vista-alarm:058][pRQtask]: Partition: 1
-[19:48:31][I][vista-alarm:059][pRQtask]: Prompt: ****DISARMED****
-[19:48:31][I][vista-alarm:060][pRQtask]: Prompt:   Ready to Arm
-[19:48:31][I][vista-alarm:061][pRQtask]: Beeps: 0
-[19:48:35][D][vista-alarm:366]: Writing keys: 1 to partition 1
-[19:48:36][D][vista-alarm:509][pRQtask]: (PANEL) [19:48:35] F6 14
-[19:48:36][D][vista-alarm:509][pRQtask]: (EXT-D) [19:48:35] D4 02 01 29
-[19:48:36][D][vista-alarm:366]: Writing keys: 2 to partition 1
-[19:48:36][D][vista-alarm:509][pRQtask]: (PANEL) [19:48:35] F7 00 00 FB 10 08 00 1C 08 02 00 00 AA 2A 2A 2A 44 ...
-[19:48:36][I][vista-alarm:058][pRQtask]: Partition: 1
-[19:48:36][I][vista-alarm:059][pRQtask]: Prompt: ****DISARMED****
-[19:48:36][I][vista-alarm:060][pRQtask]: Prompt:   Ready to Arm
-[19:48:36][I][vista-alarm:061][pRQtask]: Beeps: 0
-[19:48:36][D][text_sensor:064][pRQtask]: 'Line1': Sending state '****DISARMED****'
-[19:48:36][D][text_sensor:064][pRQtask]: 'Line2': Sending state '  Ready to Arm  '
-[19:48:36][D][text_sensor:064][pRQtask]: 'System Status': Sending state 'Disarmed'
-[19:48:36][D][text_sensor:064][pRQtask]: 'Zone Status': Sending state ''
-[19:48:36][D][vista-alarm:509][pRQtask]: (PANEL) [19:48:35] F6 14
-[19:48:36][D][vista-alarm:509][pRQtask]: (EXT-D) [19:48:35] 94 02 02 68
-[19:48:39][D][vista-alarm:509][pRQtask]: (PANEL) [19:48:38] FB 02 20 81 62
-[19:48:39][D][vista-alarm:509][pRQtask]: (EXT-D) [19:48:38] 00 24 00 DC
-[19:48:40][D][vista-alarm:509][pRQtask]: (PANEL) [19:48:39] FB 02 25 60 7E
-[19:48:40][D][vista-alarm:509][pRQtask]: (EXT-D) [19:48:39] 00 21 00 DF
-[19:48:41][D][vista-alarm:509][pRQtask]: (PANEL) [19:48:40] F7 00 00 FB 10 08 00 1C 08 02 00 00 AA 2A 2A 2A 44 ...
-[19:48:41][I][vista-alarm:058][pRQtask]: Partition: 1
-[19:48:41][I][vista-alarm:059][pRQtask]: Prompt: ****DISARMED****
-[19:48:41][I][vista-alarm:060][pRQtask]: Prompt:   Ready to Arm
-[19:48:41][I][vista-alarm:061][pRQtask]: Beeps: 0
-[19:48:43][D][vista-alarm:509][pRQtask]: (PANEL) [19:48:42] F9 03 02 53 AF
-[19:48:43][D][vista-alarm:509][pRQtask]: (EXT-D) [19:48:42] 43 04 00 60 00 59
+[13:04:52.169][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:04:51.73] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
+[13:04:52.172][I][vista-alarm:063][pRQtask]: Partition: 1
+[13:04:52.174][I][vista-alarm:064][pRQtask]: Prompt: ****DISARMED****
+[13:04:52.177][I][vista-alarm:065][pRQtask]: Prompt:   Ready to Arm
+[13:04:52.179][I][vista-alarm:066][pRQtask]: Beeps: 0
+[13:05:02.042][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:05:01.60] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
+[13:05:02.044][I][vista-alarm:063][pRQtask]: Partition: 1
+[13:05:02.046][I][vista-alarm:064][pRQtask]: Prompt: ****DISARMED****
+[13:05:02.048][I][vista-alarm:065][pRQtask]: Prompt:   Ready to Arm
+[13:05:02.050][I][vista-alarm:066][pRQtask]: Beeps: 0
+[13:05:11.940][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:05:11.50] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
+[13:05:11.942][I][vista-alarm:063][pRQtask]: Partition: 1
+[13:05:11.944][I][vista-alarm:064][pRQtask]: Prompt: ****DISARMED****
+[13:05:11.947][I][vista-alarm:065][pRQtask]: Prompt:   Ready to Arm
+[13:05:11.949][I][vista-alarm:066][pRQtask]: Beeps: 0
+[13:05:13.196][D][vista-alarm:554][pRQtask]: (PANEL-->RFR) [13:05:12.75] FB 02 25 81 5D
+[13:05:13.215][D][vista-alarm:554][pRQtask]: (RFR-->PANEL) [13:05:12.77] 00 21 00 DF
+[13:05:14.196][D][vista-alarm:554][pRQtask]: (PANEL-->RFR) [13:05:13.75] FB 02 20 82 61
+[13:05:14.203][D][vista-alarm:554][pRQtask]: (RFR-->PANEL) [13:05:13.76] 00 24 03 D9
+[13:05:17.180][D][vista-alarm:554][pRQtask]: (PANEL-->LRR) [13:05:16.74] F9 03 02 53 AF
+[13:05:17.199][D][vista-alarm:554][pRQtask]: (LRR-->PANEL) [13:05:16.76] 43 04 00 60 00 59
+[13:05:21.839][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:05:21.40] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
+[13:05:21.842][I][vista-alarm:063][pRQtask]: Partition: 1
+[13:05:21.844][I][vista-alarm:064][pRQtask]: Prompt: ****DISARMED****
+[13:05:21.846][I][vista-alarm:065][pRQtask]: Prompt:   Ready to Arm
+[13:05:21.848][I][vista-alarm:066][pRQtask]: Beeps: 0
+[13:05:22.196][D][vista-alarm:554][pRQtask]: (PANEL-->EXP) [13:05:21.75] FA 01 04 25 F7 E5
+[13:05:22.216][D][vista-alarm:554][pRQtask]: (EXP-->PANEL) [13:05:21.78] F0 31 00 00 DF
 ```
 
 ### Example log output 1 minute after startup with debug_pulsing enabled on Vista-20p panel:

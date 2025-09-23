@@ -11,6 +11,7 @@
 #include "LRRstrings.h"
 #include "translation.h"
 #include <string>
+#include "esp_random.h"
 #include "paneltext.h"
 
 // for documentation see project at https://github.com/pletch/esphome-vistaECP-idf
@@ -112,6 +113,7 @@ namespace esphome
                 void set_quickArm(bool qa) { quickArm = qa; }
                 void set_displaySystemMsg(bool dsm) { displaySystemMsg = dsm; }
                 void set_lrrSupervisor(bool ls) { lrrSupervisor = ls; }
+                void set_rfrEmulation(bool rfr_emul, uint8_t rfr_addr) { rfrEmulation[0] = rfr_emul; rfrEmulation[1] = rfr_addr; }
                 void set_auiaddr(uint8_t addr) { auiAddr = addr; };
 
                 void initialize_partition_sensors();
@@ -305,6 +307,7 @@ namespace esphome
                 bool quickArm;
 
                 bool lrrSupervisor;
+                uint8_t rfrEmulation[2];
                 int defaultPartition;
 
                 struct zoneType
@@ -315,6 +318,7 @@ namespace esphome
                     uint64_t time;
                     uint32_t rfserial;
                     uint8_t rfloop;
+                    uint64_t rfnext_hb;
                     uint8_t partition;
                     bool open;
                     bool bypass;
@@ -331,6 +335,7 @@ namespace esphome
                     .time = 0,
                     .rfserial = 0,
                     .rfloop = 0,
+                    .rfnext_hb = 0,
                     .partition = 0,
                     .open = false,
                     .bypass = false,
@@ -396,6 +401,8 @@ namespace esphome
                 void refreshLRRStatusFlags(char * cbuf, struct lrrstatusFlagType * LRRstatusFlags); 
 
                 void AUIset_panel_time();
+                void RF_handle_heartbeats();
+
                 void alarm_disarm(std::string code, int32_t partition);
                 void alarm_arm_home(int32_t partition);
                 void alarm_arm_night(int32_t partition);

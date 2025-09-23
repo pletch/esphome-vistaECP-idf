@@ -1,3 +1,4 @@
+# Modified to work with idf fork version!!!
 substitutions:
   name: "vista-ecp-idf" #unique network name, system name
   friendlyName: "Vista Alarm"  #used as the friendly name of your application in HomeAssistant
@@ -7,12 +8,12 @@ substitutions:
 vista_alarm_panel:
   id: $panelId
   access_code: $accesscode #Only comes into effect if needed for arming and quickarm is not set
- 
+
   default_partition: "1" #set to your main partition
   debug_logging: "false"  #enables additional bus activity logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm  
                           #component (if configured) logging level must be set to DEBUG or higher in logging component section
                           #to output all messages. 
-  #debug_pulsing: "false" #enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 
+  debug_pulsing: "false" #enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 
                          # 60 seconds after startup and continues indefinitely.  DO NOT enable for routine use of component! 
 
   #assign a new virtual keypad address to each active partition using programs *190 - *196
@@ -35,9 +36,13 @@ vista_alarm_panel:
   monitor_pin: "22" #GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
   uart_2: "2" #Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
 
-  ttl: "30"  # time to live in seconds for zone/fire status before expiring;
+  ttl: "30"  # time to live in seconds for zone/fire status before expiring
   quickarm: "false"
-  lrr_supervisor: "false" # set to true if we don't have an LRR monitoring supervisor so we can emulate one to get the statuses. 
+
+  lrr_supervisor: "false" # set to true if we don't have an LRR monitoring supervisor and we can emulate one to get the statuses
+
+  rf_receiver_emulation: "false" # set to true if using emulated RF sensors
+  rf_receiver_addr: "0"  
 
   clean_build: "false" #default is false.  only set to true if getting duplication errors in linking step. Once you compile, reset it back to false.  
 
@@ -100,8 +105,10 @@ api:
 # You can refer to the pdf link below for more details on loop numbers 
 # https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf
 #
-# Zone emulation through automatic expander board emulation (e.g. Honeywell 4129) is 
-# possible with the use of the option emulation: true in binary zone configuration.  
+# Zone emulation for either hardwired or RF sensors is enabled   
+# with the use of the option emulation: true in binary zone configuration.
+#
+# Hardwired zone emulation facilitated via automatic expander board emulation (e.g. Honeywell 4129).
 # Ensure that the zone number selected for emulated zone does not conflict with 
 # existing physical boards in your system. 
 #
@@ -110,6 +117,11 @@ api:
 # Emulated zones 25-32 will enable expander emulation on address 9.
 # Emulated zones 33-40 will enable expander emulation on address 10.
 # Emulated zones 41-48 will enable expander emulation on address 11.
+#
+# RF zone emulation faciliated via automatic Radio Frequency Receiver emulation (5881ENH).
+# Ensure a physical RF receiver is not already present as Vista systems only support a 
+# single RF receiver.  To use, must also set rf_receiver_emulation to 'true' above.
+# Refer to manual for possible addresses to assign to emulated receiver.
 # 
 #######################################################################
 
@@ -134,13 +146,23 @@ binary_sensor:
 
 #  - platform: vista_alarm_panel
 #    id: z33
-#    name: "Emulated zone"
+#    name: "Emulated hardwired zone"
 #    partition: 1
-#    zone: 33  # For example, specifying zone 33 will enable emulated expander on address 10.
-#    emulation: true
-#    device_class: door 
+#    zone: 33  # As explained above, specifying zone 33 will enable emulated expander on address 10.
+#    emulated: true
+#    device_class: door
 
-# Example showing attachment Home Assistant Input Boolean to emulated zone
+#  - platform: vista_alarm_panel
+#    id: z34
+#    name: "Emulated rf zone"
+#    partition: 1
+#    zone: 34
+#    rf_serial: 123456
+#    rf_loop: 1
+#    emulated: true
+#    device_class: motion 
+
+# Example showing attachment Home Assistant Input Boolean to emulated hardwired zone
 #  - platform: homeassistant
 #    name: "Input Boolean From Home Assistant"
 #    entity_id: input_boolean.example
@@ -241,7 +263,6 @@ binary_sensor:
 # Text sensors with partition specific data will require specifying partition:
 #### text sensors ####
 text_sensor:
-
 #
 #  - platform: vista_alarm_panel
 #    name: "Kitchen Motion Txt"

@@ -14,9 +14,6 @@ Key differences from original project:
 
 #include "vistaalarm.h"
 
-#include <esp_chip_info.h>
-#include <esp_task_wdt.h>
-
 namespace esphome
 {
     namespace alarm_panel
@@ -112,6 +109,7 @@ namespace esphome
                 zt.zone = zone_number;
                 zt.rfserial = rf_serial;
                 zt.rfloop = rf_loop;
+                zt.rfnext_hb = 1;
                 zt.active = true;
                 alarmZones.push_back(zt);
                 if (rf_serial == 0)
@@ -120,7 +118,10 @@ namespace esphome
                     else
                         ESP_LOGI(TAG,"Registering hardwired zone.  Zone: %d",zt.zone);
                 else
-                    ESP_LOGI(TAG,"Registering wireless zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
+                    if (emulated)
+                        ESP_LOGI(TAG,"Registering emulated wireless zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
+                    else
+                        ESP_LOGI(TAG,"Registering wireless zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
             } 
         }
 
@@ -233,9 +234,6 @@ namespace esphome
                 text_sensors_common.lrr_messages->process(" ");
             if (text_sensors_common.rf_messages != NULL)
                 text_sensors_common.rf_messages->process(" ");
-\
-            esp_chip_info_t info;
-            esp_chip_info(&info);
 
             xTaskCreate
             (
@@ -246,7 +244,9 @@ namespace esphome
                 10,                        // Priority of the task
                 &processReceiveQHandle              // Task handle.
             );
-            vistabus.emulateLRR(lrrSupervisor);    
+            vistabus.emulateLRR(lrrSupervisor);
+            if (rfrEmulation[0])
+                vistabus.emulateRFR(rfrEmulation[1]);    
             vistabus.begin(uart1, rxPin, txPin, uart2, monitorPin);
             ESP_LOGD(TAG, "Completed setup. Free heap=%lu", esp_get_free_heap_size()); 
         }
@@ -283,7 +283,39 @@ namespace esphome
 
         void vistaECPHome::set_zone_fault(int32_t zone, bool fault)
         {
-            vistabus.setExpFaultBits(zone, fault);
+            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [zone](zoneType &f)
+                { return f.zone == zone; });
+            if (it != alarmZones.end())
+            {
+                if (it->rfserial)
+                {
+                    int mask;
+                    switch (it->rfloop)
+                    {
+                        case 1:
+                            mask = 0x80;
+                            break;
+                        case 2:
+                            mask = 0x20;
+                            break;
+                        case 3:
+                            mask = 0x10;
+                            break;
+                        case 4:
+                            mask = 0x40;
+                            break;
+                        default:
+                            mask = 0x80;
+                            break;
+                    }
+                    uint8_t msg = fault ? 0x80 | mask : 0x80 ^ mask;
+                    vistabus.sendRFmsg(it->rfserial,msg);
+                }
+                else
+                {
+                    vistabus.setExpFaultBits(zone, fault);
+                }
+            }            
         }
 
         void vistaECPHome::set_emulated_zone_tamper(int32_t zone, bool tamper_active)

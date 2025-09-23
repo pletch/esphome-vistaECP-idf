@@ -35,6 +35,7 @@ CONF_ZONE = "zone"
 CONF_PARTITION = "partition"
 CONF_RFSERIAL = "rf_serial"
 CONF_RFLOOP = "rf_loop"
+CONF_RFHB = "rf_manage_heartbeat"
 CONF_STATUS_SENSOR = "status_indicator"
 CONF_EMULATED_ZONE = "emulated"
 
@@ -67,7 +68,6 @@ CONFIG_SCHEMA = cv.All(binary_sensor.binary_sensor_schema(VistaBinarySensor).ext
     _validate,
 )
 
-
 async def to_code(config):
     var = await binary_sensor.new_binary_sensor(config)
     hub = await cg.get_variable(config[CONF_ALARM_ID])
@@ -75,13 +75,16 @@ async def to_code(config):
 
     if CONF_ZONE in config:
         if CONF_RFSERIAL in config and CONF_RFLOOP in config:
-            cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],config[CONF_RFSERIAL],config[CONF_RFLOOP], False))
+            if CONF_EMULATED_ZONE in config:
+                cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],config[CONF_RFSERIAL],config[CONF_RFLOOP],True))
+            else:
+                cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],config[CONF_RFSERIAL],config[CONF_RFLOOP],False))
         else:     
             if CONF_EMULATED_ZONE in config and config[CONF_EMULATED_ZONE] == True:
-                cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0, True))
+                cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0,True))
                 cg.add(hub.register_expander(config[CONF_ZONE]))
             else:
-                cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0, False))         
+                cg.add(hub.register_zone(var,config[CONF_PARTITION],config[CONF_ZONE],0,0,False))         
     elif (config[CONF_STATUS_SENSOR] == "AC_POWER"):
         cg.add(hub.register_ac(var))
     elif (config[CONF_STATUS_SENSOR] == "BATTERY"):
