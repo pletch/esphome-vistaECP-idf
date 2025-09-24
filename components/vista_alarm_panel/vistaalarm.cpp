@@ -309,10 +309,12 @@ namespace esphome
                             break;
                     }
                     uint8_t msg = fault ? 0x80 | mask : 0x80 ^ mask;
+                    ESP_LOGI(TAG,"setting virtual rf serial: %i fault: %i", zone, fault);
                     vistabus.sendRFmsg(it->rfserial,msg);
                 }
                 else
                 {
+                    ESP_LOGI(TAG,"setting virtual hardwired zone: %i fault: %i", zone, fault);
                     vistabus.setExpFaultBits(zone, fault);
                 }
             }            
@@ -533,7 +535,7 @@ namespace esphome
             struct tm timeinfo;
             localtime_r(&tv_now.tv_sec, &timeinfo);
             strftime(time_str, sizeof(time_str), "%H:%M:%S", &timeinfo);
-            snprintf(time_str + strlen(time_str), sizeof(time_str) - strlen(time_str), ".%02ld", tv_now.tv_usec/10000);
+            snprintf(time_str + strlen(time_str), sizeof(time_str) - strlen(time_str), ".%03ld", tv_now.tv_usec/1000);
             if (type == 0)
                 sprintf(s2, "(PANEL-->%s) [%s]", device, time_str);
             else

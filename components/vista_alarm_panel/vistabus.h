@@ -100,15 +100,14 @@ protected:
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
     void processF9(const char * cbuf);
-    void processFA(const char * cbuf, bool &pending_F1);
-    void processFB(const char * cbuf, bool &pending_F1);
+    void processFA(const char * cbuf);
+    void processFB(const char * cbuf);
     void requestF1(uint8_t address);
 
     void capture_pulse_pattern(gpio_num_t rx_pin);
 
     bool mark_pulse(uint8_t address);
     static void gpio_isr_handler(void * args);
-    static void precise_delay(void * args);
 
     struct DeviceMsg
     {
