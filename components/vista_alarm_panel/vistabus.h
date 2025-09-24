@@ -108,7 +108,7 @@ protected:
 
     bool mark_pulse(uint8_t address);
     static void gpio_isr_handler(void * args);
-
+    
     struct DeviceMsg
     {
         uint8_t address{255};

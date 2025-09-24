@@ -822,7 +822,7 @@ void VistaBus::processFA(const char * cbuf)
     char type = cbuf[4];
     // we use zone to either | or & bits depending if in fault or reset
     // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry
-    usleep(2500);
+    vTaskDelay(3);  //Add 3ms of delay to ensure response occurs after 22ms
     if (type == 0xF1)
     {   
         char seq = cbuf[3];
@@ -902,6 +902,7 @@ void VistaBus::processFA(const char * cbuf)
             }
         }
     }
+    //esp_timer_delete(oneshot_timer);
 }
 
 void VistaBus::processFB(const char * cbuf)
@@ -909,7 +910,6 @@ void VistaBus::processFB(const char * cbuf)
     // For timing , must handle 0xFB packet here if emulating rather than through queues in vistaalarm process. 
     char type = cbuf[3];
     // 0xF1 - response to request, 0x80 - retry, 0x60 or 0x81 supervision, 0x82 supervision w/ type response
-    //usleep(2500);
     if (type == 0xF1)
     {   
         DeviceMsg rfMsg;
