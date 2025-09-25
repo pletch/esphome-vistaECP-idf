@@ -370,16 +370,18 @@ void VistaBus::rx_tx_task(void * args)
     uint8_t ack_failures = 0;
     int sequence = 0;
     bool pulse_marked = false;
+    uint64_t request_F1_time = 0;
     
     uint64_t pulse_mark_time = 0;
     while (1) 
     {
         int uart_delay = 550;  //Note that Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
-        if (uxQueueMessagesWaiting(deviceMsgQueue))
+        if (uxQueueMessagesWaiting(deviceMsgQueue) && !req_to_send && (esp_timer_get_time() - request_F1_time > 550*1000))
         {
             DeviceMsg q_msg;
             xQueuePeek(deviceMsgQueue,&q_msg,pdMS_TO_TICKS(0));
             requestF1(q_msg.address);
+            request_F1_time = esp_timer_get_time();
             //uart_delay = 20;     
         }
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
@@ -585,16 +587,13 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xFA ) //EXP
             {                    
-                if (req_to_send && pulse_marked && pkt_to_send.type == 2)
-                {
-                    req_to_send = false;
-                }    
+                uint64_t FA_received_time = esp_timer_get_time();    
                 get_Packet_event(&received_packet,data,1,FA_MESSAGE_LENGTH-2,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 uint32_t val = 0xFA << 8 | received_packet.payload[4];
                 if (monitor_rx_task_Handle != NULL)
                         xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 if (EXPemulation)
-                    this->processFA(received_packet.payload);
+                    this->processFA(received_packet.payload, FA_received_time);
                 get_Packet_event(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 received_packet.source = 0xFA;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
@@ -615,11 +614,7 @@ void VistaBus::rx_tx_task(void * args)
                 vTaskDelay(pdMS_TO_TICKS(25)); //Delay to put command/response/ack in sequence in log
             }
             else if ( data[0] == 0xFB ) //5881EN traffic
-            {   
-                if (req_to_send && pulse_marked && pkt_to_send.type == 2)
-                {
-                    req_to_send = false;
-                }   
+            {    
                 get_Packet_event(&received_packet,data,1,FB_MESSAGE_LENGTH-2,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 uint32_t val = 0xFB << 8 | received_packet.payload[3];
                 if (monitor_rx_task_Handle != NULL)
@@ -816,37 +811,40 @@ void VistaBus::processF9(const char * cbuf)
     }
 }
 
-void VistaBus::processFA(const char * cbuf)
+void VistaBus::processFA(const char * cbuf, uint64_t received_time)
 {
     // For timing , must handle 0xFA packet here if emulating rather than through queues in vistaalarm process. 
     char type = cbuf[4];
-    // we use zone to either | or & bits depending if in fault or reset
-    // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry
-    vTaskDelay(3);  //Add 3ms of delay to ensure response occurs after 22ms
-    if (type == 0xF1)
-    {   
-        char seq = cbuf[3];
-        char lcbuf[5];
-        int lcbuflen = 5;
-        bool valid_address = false;
-        uint8_t expSeq = (seq == 0x20 ? 0x34 : 0x31);
-        uint8_t address = 0;
-        for (int index = 1; index <= 5; index++)
+    char seq = cbuf[3];
+    char lcbuf[5];
+    int lcbuflen = 5;
+    bool valid_address = false;
+    uint8_t address = 0;
+    uint8_t expSeq = (seq == 0x20 || seq == 0x21 ? 0x34 : 0x31);
+    for (int index = 1; index <= 5; index++)
+    {
+        if (cbuf[2] == 0x01 << index)
         {
-            if (cbuf[2] == 0x01 << index)
-            {
-                address = 6+index;
-                valid_address = true;
-                break;
-            }
+            address = 6+index;
+            valid_address = true;
+            break;
         }
-        if (emulated_expanders.size() && valid_address)  //check if any emulated expanders present
+    }
+    if (emulated_expanders.size() && valid_address)  //check if any emulated expanders present
+    {
+        emulatedExpander *expander = getExpander(address);
+        // we use zone to either | or & bits depending if in fault or reset
+        // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry
+        if (expander != NULL)
         {
-            emulatedExpander *expander = getExpander(address);
-            if (expander != NULL)
-            {
+            if (type == 0xF1)
+            {  
                 DeviceMsg expMsg;
                 xQueueReceive(this->deviceMsgQueue,&expMsg,portMAX_DELAY);
+                while (esp_timer_get_time() - received_time < 13 * 1000)
+                {
+                    vTaskDelay(1);
+                }
                 lcbuf[0] = address;
                 lcbuf[1] = expSeq;
                 uint8_t z = expMsg.source & 0x07;
@@ -861,32 +859,12 @@ void VistaBus::processFA(const char * cbuf)
                 lcbuf[lcbuflen-1] = chksum;
                 uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);
             }
-        }
-    }
-    else if (type == 0xF7)
-    { // periodic zone state poll (every 30 seconds) expander
-        char seq = cbuf[3];
-        char lcbuf[5];
-        bool valid_address = false;
-        
-        uint8_t address = 0;
-        for (int index = 1; index <= 5; index++)
-        {
-            if (cbuf[2] == 0x01 << index)
+            else if (type == 0xF7)
             {
-                address = 6+index;
-                valid_address = true;
-                break;
-            }
-        }
-        if (emulated_expanders.size() && valid_address)  //check if any emulated expanders present
-        {
-            emulatedExpander *expander = getExpander(address);
-            if (expander != NULL)
-            {
-                uint8_t expSeq = (seq == 0x20 || seq == 0x21 ? 0x34 : 0x31);
-                uint8_t lcbuflen = 0;
-                lcbuflen = 5;       
+                while (esp_timer_get_time() - received_time < 20 * 1000)
+                {
+                    vTaskDelay(1);
+                }
                 lcbuf[0] = 0xF0;
                 lcbuf[1] = expSeq;
                 lcbuf[2] = expander->fault_NO_Bits;                      
@@ -902,7 +880,6 @@ void VistaBus::processFA(const char * cbuf)
             }
         }
     }
-    //esp_timer_delete(oneshot_timer);
 }
 
 void VistaBus::processFB(const char * cbuf)
