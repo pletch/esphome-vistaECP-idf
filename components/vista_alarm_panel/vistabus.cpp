@@ -1,5 +1,4 @@
 #include "vistabus.h"
-#include "esp_log.h"
 #include "vistaalarm.h"  //to bring in init macro definitions
 #ifdef DEBUG_PULSE
 #include "driver/rmt_rx.h"
@@ -42,7 +41,6 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
         return;
     }
 
-    
     init_uart(static_cast<uart_port_t>(this->uartNum),static_cast<gpio_num_t>(this->rxPin), static_cast<gpio_num_t>(this->txPin));
 
     xTaskCreate(rx_tx_task_start, "uart_rx_tx_task", UART_RX_TASK_STACK_SIZE, (void *) this, configMAX_PRIORITIES-1, &this->rx_tx_task_Handle);
@@ -716,9 +714,6 @@ void VistaBus::monitor_rx_task(void * args)
             }
             else if (val >> 8 == 0xFA) // Incoming from expander such as 4219. 7F=07,FE=08, FD=09, FB=10, F7=11
             {
-                //TickType_t rdelay = pdMS_TO_TICKS(UART_DELAY);
-                //if (val & 0xF1 == 0xF1) 
-                //    rdelay = pdMS_TO_TICKS(UART_DELAY);
                 int res = get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(UART_DELAY)); 
                 if (res > 0)
                     rcvd_extPkt.source = 0xFA;

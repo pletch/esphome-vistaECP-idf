@@ -15,19 +15,15 @@ Date: 2-Feb-2025
 
 */
 
-#include <string.h>
-#include <vector>
-#include <algorithm>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/event_groups.h"
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "hal/uart_ll.h"
-
+#include <vector>
 
 #define F6_ACK_MESSAGE_LENGTH 4
 #define F7_MESSAGE_LENGTH 45

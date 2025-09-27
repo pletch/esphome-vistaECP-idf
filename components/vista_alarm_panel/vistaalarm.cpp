@@ -90,88 +90,81 @@ namespace esphome
         void vistaECPHome::register_zone(vistaECPBinarySensor *binary_sensor, uint8_t partition_number, uint8_t zone_number, 
             uint32_t rf_serial, uint8_t rf_loop, bool emulated)
         {
-            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [zone_number](zoneType &f)
-                { return f.zone == zone_number; });
-            if (it != alarmZones.end())
+            for (auto &it: alarmZones)
             {
-                it->binary_sensor = binary_sensor;
-                it->rfserial = rf_serial;
-                it->rfloop = rf_loop;
-
-                ESP_LOGI(TAG,"Adding binary zone sensor.  Zone: %d   rfserial:%lu   rfloop:%d",it->zone, it->rfserial, it->rfloop);
-                return;
+                if (it.zone == zone_number )
+                {
+                    it.binary_sensor = binary_sensor;
+                    it.rfserial = rf_serial;
+                    it.rfloop = rf_loop;
+                    
+                    ESP_LOGI(TAG,"Adding binary zone sensor.  Zone: %d   rfserial:%lu   rfloop:%d",it.zone, it.rfserial, it.rfloop);
+                    return;
+                }
             }
-            else 
-            {
-                zoneType zt = zonetype_INIT;
-                zt.binary_sensor = binary_sensor;
-                zt.partition = partition_number;
-                zt.zone = zone_number;
-                zt.rfserial = rf_serial;
-                zt.rfloop = rf_loop;
-                zt.rfnext_hb = 1;
-                zt.active = true;
-                alarmZones.push_back(zt);
-                if (rf_serial == 0)
-                    if (emulated)
-                        ESP_LOGI(TAG,"Registering emulated hardwired zone.  Zone: %d",zt.zone);
-                    else
-                        ESP_LOGI(TAG,"Registering hardwired zone.  Zone: %d",zt.zone);
+            zoneType zt = zonetype_INIT;
+            zt.binary_sensor = binary_sensor;
+            zt.partition = partition_number;
+            zt.zone = zone_number;
+            zt.rfserial = rf_serial;
+            zt.rfloop = rf_loop;
+            zt.rfnext_hb = 1;
+            zt.active = true;
+            alarmZones.push_back(zt);
+            if (rf_serial == 0)
+                if (emulated)
+                    ESP_LOGI(TAG,"Registering emulated hardwired zone.  Zone: %d",zt.zone);
                 else
-                    if (emulated)
-                        ESP_LOGI(TAG,"Registering emulated wireless zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
-                    else
-                        ESP_LOGI(TAG,"Registering wireless zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
-            } 
+                    ESP_LOGI(TAG,"Registering hardwired zone.  Zone: %d",zt.zone);
+            else
+                if (emulated)
+                    ESP_LOGI(TAG,"Registering emulated wireless zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
+                else
+                    ESP_LOGI(TAG,"Registering wireless zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
         }
 
 
         vistaECPHome::zoneType *vistaECPHome::getZone(uint16_t z)
         {
-    
-            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [=](zoneType &f)
-                { return f.zone == z; });
-            if (it != alarmZones.end())
-                return &(*it);
-
+            for (auto &it: alarmZones)
+            {
+                if (it.zone == z)
+                    return &(it);
+            }
             return NULL;
-
         }
     
 
         vistaECPHome::zoneType *vistaECPHome::getRfSerialLookup(uint32_t serialCode)
         {
-            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [&serialCode](zoneType &f)
-                { 
-                    return f.rfserial == serialCode; });
-            if (it != alarmZones.end())
-                return &(*it);
-
+            for (auto &it: alarmZones)
+            {
+                if (it.rfserial == serialCode)
+                    return &(it);
+            }
             return NULL;
         }
 
 
         void vistaECPHome::register_zone_text(vistaECPTextSensor *text_sensor, uint8_t partition_number, uint8_t zone_number)
         {
-            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [zone_number](zoneType &f)
-                { return f.zone == zone_number; });
-            if (it != alarmZones.end())
+            for (auto &it: alarmZones)
             {
-                it->text_sensor = text_sensor;
-                ESP_LOGI("","Adding text zone sensor.  Zone: %d",it->zone);
-                return;
+                if (it.zone == zone_number )
+                {
+                    it.text_sensor = text_sensor;
+                    ESP_LOGI("","Adding text zone sensor.  Zone: %d",it.zone);
+                    return;
+                }
             }
-            else 
-            {
-                zoneType zt = zonetype_INIT;
-                zt.binary_sensor = NULL;
-                zt.text_sensor = text_sensor;
-                zt.partition = partition_number;
-                zt.zone = zone_number;
-                zt.active = true;
-                alarmZones.push_back(zt);
-                ESP_LOGI("","Registering zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop);
-            } 
+            zoneType zt = zonetype_INIT;
+            zt.binary_sensor = NULL;
+            zt.text_sensor = text_sensor;
+            zt.partition = partition_number;
+            zt.zone = zone_number;
+            zt.active = true;
+            alarmZones.push_back(zt);
+            ESP_LOGI("","Registering zone.  Zone: %d   rfserial:%lu   rfloop:%d",zt.zone, zt.rfserial, zt.rfloop); 
         }
 
 
@@ -283,39 +276,41 @@ namespace esphome
 
         void vistaECPHome::set_zone_fault(int32_t zone, bool fault)
         {
-            auto it = std::find_if(alarmZones.begin(), alarmZones.end(), [zone](zoneType &f)
-                { return f.zone == zone; });
-            if (it != alarmZones.end())
+            for (auto &it: alarmZones)
             {
-                if (it->rfserial)
+                if (it.zone == zone)
                 {
-                    int mask;
-                    switch (it->rfloop)
+                    if (it.rfserial)
                     {
-                        case 1:
-                            mask = 0x80;
-                            break;
-                        case 2:
-                            mask = 0x20;
-                            break;
-                        case 3:
-                            mask = 0x10;
-                            break;
-                        case 4:
-                            mask = 0x40;
-                            break;
-                        default:
-                            mask = 0x80;
-                            break;
+                        int mask;
+                        switch (it.rfloop)
+                        {
+                            case 1:
+                                mask = 0x80;
+                                break;
+                            case 2:
+                                mask = 0x20;
+                                break;
+                            case 3:
+                                mask = 0x10;
+                                break;
+                            case 4:
+                                mask = 0x40;
+                                break;
+                            default:
+                                mask = 0x80;
+                                break;
+                        }
+                        uint8_t msg = fault ? 0x80 | mask : 0x80 ^ mask;
+                        ESP_LOGI(TAG,"setting virtual rf serial: %i fault: %i", zone, fault);
+                        vistabus.sendRFmsg(it.rfserial,msg);
                     }
-                    uint8_t msg = fault ? 0x80 | mask : 0x80 ^ mask;
-                    ESP_LOGI(TAG,"setting virtual rf serial: %i fault: %i", zone, fault);
-                    vistabus.sendRFmsg(it->rfserial,msg);
-                }
-                else
-                {
-                    ESP_LOGI(TAG,"setting virtual hardwired zone: %i fault: %i", zone, fault);
-                    vistabus.setExpFaultBits(zone, fault);
+                    else
+                    {
+                        ESP_LOGI(TAG,"setting virtual hardwired zone: %i fault: %i", zone, fault);
+                        vistabus.setExpFaultBits(zone, fault);
+                    }
+                    return;
                 }
             }            
         }
