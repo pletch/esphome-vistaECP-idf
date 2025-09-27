@@ -96,7 +96,7 @@ protected:
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
     void processF9(const char * cbuf);
-    void processFA(const char * cbuf, uint64_t received_time);
+    void processFA(const char * cbuf);
     void processFB(const char * cbuf);
     void requestF1(uint8_t address);
 

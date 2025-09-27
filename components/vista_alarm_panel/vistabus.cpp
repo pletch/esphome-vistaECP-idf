@@ -584,14 +584,13 @@ void VistaBus::rx_tx_task(void * args)
                 }
             }
             else if ( data[0] == 0xFA ) //EXP
-            {                    
-                uint64_t FA_received_time = esp_timer_get_time();    
+            {                        
                 get_Packet_event(&received_packet,data,1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 uint32_t val = 0xFA << 8 | received_packet.payload[4];
                 if (monitor_rx_task_Handle != NULL)
                         xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 if (EXPemulation)
-                    this->processFA(received_packet.payload, FA_received_time);
+                    this->processFA(received_packet.payload);
                 received_packet.source = 0xFA;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
             }
@@ -804,7 +803,7 @@ void VistaBus::processF9(const char * cbuf)
     }
 }
 
-void VistaBus::processFA(const char * cbuf, uint64_t received_time)
+void VistaBus::processFA(const char * cbuf)
 {
     // For timing , must handle 0xFA packet here if emulating rather than through queues in vistaalarm process. 
     char type = cbuf[4];

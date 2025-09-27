@@ -539,7 +539,7 @@ namespace esphome
 #ifndef DEBUG_LOG
             if (len > 17)
             {
-                len = 14;
+                len = 8;
                 abbr = true;
             }
 #endif
