@@ -586,13 +586,12 @@ void VistaBus::rx_tx_task(void * args)
             else if ( data[0] == 0xFA ) //EXP
             {                    
                 uint64_t FA_received_time = esp_timer_get_time();    
-                get_Packet_event(&received_packet,data,1,FA_MESSAGE_LENGTH-2,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                get_Packet_event(&received_packet,data,1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 uint32_t val = 0xFA << 8 | received_packet.payload[4];
                 if (monitor_rx_task_Handle != NULL)
                         xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 if (EXPemulation)
                     this->processFA(received_packet.payload, FA_received_time);
-                get_Packet_event(&received_packet,data,5,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 received_packet.source = 0xFA;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
             }
@@ -613,13 +612,12 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xFB ) //5881EN traffic
             {    
-                get_Packet_event(&received_packet,data,1,FB_MESSAGE_LENGTH-2,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                get_Packet_event(&received_packet,data,1,FB_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 uint32_t val = 0xFB << 8 | received_packet.payload[3];
                 if (monitor_rx_task_Handle != NULL)
                     xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);                
                 if (RFRemulation)
                     this->processFB(received_packet.payload);
-                get_Packet_event(&received_packet,data,4,1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 received_packet.source = 0xFB;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
@@ -836,10 +834,6 @@ void VistaBus::processFA(const char * cbuf, uint64_t received_time)
             {  
                 DeviceMsg expMsg;
                 xQueueReceive(this->deviceMsgQueue,&expMsg,portMAX_DELAY);
-                while (esp_timer_get_time() - received_time < 13 * 1000)
-                {
-                    vTaskDelay(1);
-                }
                 lcbuf[0] = address;
                 lcbuf[1] = expSeq;
                 uint8_t z = expMsg.source & 0x07;
@@ -856,10 +850,6 @@ void VistaBus::processFA(const char * cbuf, uint64_t received_time)
             }
             else if (type == 0xF7)
             {
-                while (esp_timer_get_time() - received_time < 20 * 1000)
-                {
-                    vTaskDelay(1);
-                }
                 lcbuf[0] = 0xF0;
                 lcbuf[1] = expSeq;
                 lcbuf[2] = expander->fault_NO_Bits;                      
