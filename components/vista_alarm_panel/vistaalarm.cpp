@@ -199,9 +199,9 @@ namespace esphome
         {
             ESP_LOGD(TAG, "Start setup: Free heap: (%lu)", esp_get_free_heap_size());
 
-            set_update_interval(1000); // set interval to fire in main loop task
+            set_update_interval(1000); // set interval frequency in main loop task
 
-            register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
+            //register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
             register_service(&vistaECPHome::send_cmd_bytes, "send_cmd_bytes", {"address", "hexdata"});
             register_service(&vistaECPHome::alarm_keypress_partition, "alarm_keypress_partition", {"keys", "partition"});

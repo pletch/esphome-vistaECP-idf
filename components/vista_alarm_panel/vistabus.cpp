@@ -20,9 +20,7 @@ VistaBus::VistaBus()
 VistaBus::~VistaBus()
 {
     if (this->rx_tx_task_Handle != NULL) 
-    {
         stop();
-    }
     vQueueDelete(this->receiveQueue);
     vQueueDelete(this->sendQueue);
 }
@@ -84,7 +82,6 @@ bool VistaBus::write(const char * data_to_write, int size, int keypadaddress)
     sendpkt.size = size;
     bool result = false;
     result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
-
     return result;
 }
 
@@ -327,7 +324,6 @@ bool VistaBus::mark_pulse(uint8_t address)
         snd_data[2] = ~(0x01 << (address & 0x07));
     }
     //Use GPIO interrupts on rxPin to find send pulses.
-
     xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(5)); //first rising edge
     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1); 
 
@@ -373,7 +369,10 @@ void VistaBus::rx_tx_task(void * args)
     uint64_t pulse_mark_time = 0;
     while (1) 
     {
-        int uart_delay = 550;  //Note that Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
+        // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
+        int uart_delay = 550;
+
+        // Handle any queued device msgs via F1 request  
         if (uxQueueMessagesWaiting(deviceMsgQueue) && !req_to_send && (esp_timer_get_time() - request_F1_time > 550*1000))
         {
             DeviceMsg q_msg;
@@ -400,12 +399,12 @@ void VistaBus::rx_tx_task(void * args)
             continue;
         }
 #endif
-            
+        
         while (uxQueueMessagesWaiting(sendQueue))
         {
             if (!req_to_send)
             {
-                xQueueReceive(sendQueue,&pkt_to_send,0); //something in queue. Pop it out.
+                xQueueReceive(sendQueue,&pkt_to_send,0);
                 req_to_send = true;
             }
             else
@@ -485,12 +484,16 @@ void VistaBus::rx_tx_task(void * args)
                 rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //Get Address
                 if(data[0] != 0 && monitor_rx_task_Handle != NULL)
                 {
-                    uint32_t val = 0xF6;
+                    uint32_t val = 0xF6 << 8 | data[0];
                     xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 }
                 received_packet.payload[1] = data[0];
                 received_packet.size = 2;
-                received_packet.source = 0xF6;
+                if (received_packet.payload[1] == 1 || received_packet.payload[1] == 2 || 
+                        received_packet.payload[1] == 5 || received_packet.payload[1] == 6)
+                    received_packet.source = 0xF2;
+                else
+                    received_packet.source = 0xF6;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                 uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), &data[1], 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //flush lagging zero
                 if(req_to_send && data[0] == pkt_to_send.keypadaddress) //ACK was for us.  Try to send.
@@ -692,13 +695,16 @@ void VistaBus::monitor_rx_task(void * args)
             memset(rcvd_extPkt.payload,'\0',sizeof(rcvd_extPkt.payload));
             rcvd_extPkt.payload[0] = data[0];
             rcvd_extPkt.source = 0;
-            if(val == 0xF6) //next byte will be header of sending sequence
+            if(val >> 8 == 0xF6) //next byte will be header of sending sequence
             {
                 rcvd_extPkt.payload[0]=data[0];
                 rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(150));
                 rcvd_extPkt.payload[1] = data[0]; //length
                 get_Packet(&rcvd_extPkt, data, 2, rcvd_extPkt.payload[1], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
-                rcvd_extPkt.source = 0xF6;
+                if ((val & 0xFF) == 1 || (val & 0xFF) == 2 || (val & 0xFF) == 5 || (val & 0xFF) == 6)
+                    rcvd_extPkt.source = 0xF2;
+                else
+                    rcvd_extPkt.source = 0xF6;
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
             }

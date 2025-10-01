@@ -29,7 +29,7 @@ namespace esphome
             {   
                 if (rfrEmulation[0])            
                     RF_handle_heartbeats();
-                AUIprocessQueue();
+                //AUIprocessQueue();
                 char payload[48];
                 int size;
                 int type;
@@ -67,8 +67,8 @@ namespace esphome
                         }
                         else if (payload[0]==0xF2)
                         {
-                            if (auiAddr)
-                            AUIprocessF2(payload);
+                            //if (auiAddr)
+                            //AUIprocessF2(payload);
                         }
                         else if (payload[0] == 0xF9)
                         {         
