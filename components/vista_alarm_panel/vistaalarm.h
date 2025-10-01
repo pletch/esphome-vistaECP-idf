@@ -114,7 +114,6 @@ namespace esphome
                 void set_displaySystemMsg(bool dsm) { displaySystemMsg = dsm; }
                 void set_lrrSupervisor(bool ls) { lrrSupervisor = ls; }
                 void set_rfrEmulation(bool rfr_emul, uint8_t rfr_addr) { rfrEmulation[0] = rfr_emul; rfrEmulation[1] = rfr_addr; }
-                //void set_auiaddr(uint8_t addr) { auiAddr = addr; };
 
                 void initialize_partition_sensors();
                 void set_partitionKeypad(uint8_t idx, uint8_t addr)
@@ -163,10 +162,6 @@ namespace esphome
                 int uart1 = -1;
                 int monitorPin = 0;
                 int uart2 = -1;
-                //uint8_t auiAddr = 0;
-                //bool AUIsendTime();
-                //char auiSeq = 8;
-                //void AUIprocessQueue();
                 void processReceiveQueue(void *args);
                 static void processReceiveQueue_task_start(void *args);
                 TaskHandle_t processReceiveQHandle;
@@ -209,16 +204,6 @@ namespace esphome
                 };
 
                 std::vector<partitionType> known_partitions{};
-
-                /*struct auiCmdType
-                {
-                    reqStates state = rsidle;
-                    uint64_t time = 0;
-                    uint8_t partition = 0;
-                    uint8_t records = 0;
-                    uint8_t record = 0;
-                    bool pending = false;
-                };*/
 
                 struct statusFlagType
                 {
@@ -372,23 +357,15 @@ namespace esphome
                 bool forceRefreshZones, forceRefresh;
                 sysState currentSystemState,previousSystemState;
 
-                //void AUIupdateZoneState(zoneType *zt, int p, bool state, uint64_t t);
-                //char * AUIparseMessage(char *cmd);
-                //void AUIprocessZoneList(char *list);
-                //void AUIsendZoneRequest();
-                //void AUIprocessF2(char * cbuf);
 
                 std::string previousZoneStatusMsg;
 
                 alarmStatusType fireStatus, panicStatus, alarmStatus;
                 uint8_t partitionTargets;
       
-                //auiCmdType auiCmd;
                 std::vector<zoneType> alarmZones{};
                 vistaECPBinarySensor *ac_bin_sensor = NULL;
                 vistaECPBinarySensor *bat_bin_sensor = NULL;
-
-                //std::queue<auiCmdType> auiQueue{};
 
                 zoneType *getZone(uint16_t z);
                 zoneType *getRfSerialLookup(uint32_t serialCode);
@@ -400,7 +377,6 @@ namespace esphome
                 void refreshStatusFlags(char * cbuf, struct statusFlagType * statusFlags);
                 void refreshLRRStatusFlags(char * cbuf, struct lrrstatusFlagType * LRRstatusFlags); 
 
-                //void AUIset_panel_time();
                 void RF_handle_heartbeats();
 
                 void alarm_disarm(std::string code, int32_t partition);

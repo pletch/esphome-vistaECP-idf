@@ -7,8 +7,6 @@ Key differences from original project:
 - Refactored to support workflow associated with Vistabus class.
 - Only targeted towards ESPHome API.  MQTT is removed in this version.
 - Relay emulation not implemented. Expander emulation is enabled with support for fault & tamper detection on zones.
-- Limited testing of expanded functionality such as AUI traffic handling.  My panel does not
-    seem to respond to AUI commands from either original project or this forked version.
 
 */
 
@@ -201,7 +199,6 @@ namespace esphome
 
             set_update_interval(1000); // set interval frequency in main loop task
 
-            //register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
             register_service(&vistaECPHome::send_cmd_bytes, "send_cmd_bytes", {"address", "hexdata"});
             register_service(&vistaECPHome::alarm_keypress_partition, "alarm_keypress_partition", {"keys", "partition"});
