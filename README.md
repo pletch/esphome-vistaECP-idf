@@ -15,6 +15,7 @@ Fork is shared here for the benefits of any others that might want to use it.  N
 - OTA updates and OTA logging work reliably without requiring disabling of keybus interaction. 
 - Arduino dependency removed and refactored for ESP-IDF v5.3+. Works with newer espressif cores such as C6.
 - Relay board emulation has been removed. Expander emulation remains.
+- AUI handling has been removed for now.
 - Config refactored with validation. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
 - Sensors refactored to work with modified config approach.
 - zone emulation specifier in yaml config allows emulation of either hardwired or rf virtual zones. Specifying for hardwired zone automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group of eight zone numbers for virtual hardwired zones. Specifier on zones with rf serial / loop definition allows for virtual rf zone emulation when rf receiver emulation is also enabled.
@@ -28,12 +29,9 @@ Fork is shared here for the benefits of any others that might want to use it.  N
 - Capability to temporarily enable RMT module for outputting bus pulse pattern to log for debugging
 
 ### ⚠️Caution: There may be features / capabilities carried over from original project but unused by me that are minimally tested.  Will test these more thoroughly in the future when I get time but please let me know if you try and the do not work.
-Some Specifics include: 
+Some specifics include: 
 - Long Range Radio emulation
-- AUI command handling
-- RF Receiver emulation  
-
-   My system has an actual LRR and RFR and I didn't want to disconnect to test these extensively. My former Safewatch Pro 3000 doesn't seem to respond to AUI commands as expected with neither the original implementation or this fork.
+- RF Receiver emulation and associated emulated RF zones.  
 
 
 ### YAML Configuration Options (See YAML in repo for more examples):
@@ -52,7 +50,6 @@ Configuration variables:
 - **tx_pin (Required, PIN)**: GPIO pin assigned to UART for data transmit (green line)
 - **uart_1 (Required, UART)**: Hardware UART number associated with tx/rx 
 - **access_code** (*Optional*): Alarm code used for arming / disarming.  Typically defined in secrets file.
-- **aui_addr** (*Optional*, int): AUI address from program field *189 to use for zone status queries (open/close and bypass). Ensure it is not assigned to a real keypad or to Total Connect 2.0. For those panels, you can select auiaddr: 5 or 6. As a final option, you can assign it to the same address as your existing AUI display address of 1. Note: Older vista20 panels only have addresses 1 and 2 while newer will have 1,2,5 and 6. For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program *93, device programming.
 - **default_partition** (*Optional*, int): Set to designate main partition number.  Defaults to 1 if not defined.
 - **debug_log** (*Optional*, boolean): Set to true to enable additional bus activity logging and print full ecp packet contents to the log.  Global esphome and vista-alarm component (if configured)
 logging level must be set to DEBUG or higher in logging component section to output all messages.

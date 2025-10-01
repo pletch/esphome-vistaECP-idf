@@ -534,7 +534,7 @@ namespace esphome
                 sprintf(s2, "(%s-->PANEL) [%s]", device, time_str);
             bool abbr = false;
 #ifndef DEBUG_LOG
-            if (len > 17)
+            if (len > 8)
             {
                 len = 8;
                 abbr = true;
