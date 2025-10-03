@@ -66,7 +66,98 @@ namespace esphome
                         }
                         else if (payload[0]==0xF2)
                         {
-
+                            
+                            if ((payload[7] & 0xF0) == 0x50)
+                            {
+                                uint8_t n = 8;
+                                uint8_t sum = 0;
+                                uint8_t data_len = 0;
+                                while ((payload[n] == 0xFE || payload[n] == 0xEC) && n < payload[1])
+                                {
+                                    sum += 0xFF - payload[n];
+                                    n++;
+                                }
+                                if (payload[n-1] == 0xEC)
+                                {
+                                    data_len = payload[1] - sum + 11;
+                                }
+                                else
+                                {
+                                    data_len = payload[1] - sum - 7;
+                                }
+                                char F2data[data_len+1];
+                                memset(F2data,'\0',sizeof(F2data));
+                                memcpy(F2data,&payload[size-data_len-1],data_len);
+                                uint8_t target = 0;
+                                switch (payload[2])
+                                {
+                                    case 0x40:
+                                        target = 6;
+                                        break;
+                                    case 0x20:
+                                        target = 5;
+                                        break;
+                                    case 0x04:
+                                        target = 2;
+                                        break;
+                                    case 0x02:
+                                        target = 1;
+                                        break;
+                                    default:
+                                        break;
+                                }
+                                char F2type[32];
+                                memset(F2type,'\0',sizeof(F2type));
+                                switch (sum)
+                                {
+                                    case 1:
+                                        memcpy(F2type,"Partition",9);
+                                        break;
+                                    case 2:
+                                        memcpy(F2type,"Zone Count",10);
+                                        break;
+                                    case 20:  //There are other type 20 packets but we only print Time for now
+                                        memcpy(F2type,"Panel Time",10); 
+                                        break;
+                                    case 21:
+                                        memcpy(F2type,"Panel Info",10);
+                                        break;
+                                    case 23:
+                                        memcpy(F2type,"Faulted Zone(s)",15);
+                                        break;
+                                    default:
+                                        memcpy(F2type,"Unknown",7);
+                                        break; 
+                                }
+                                if (F2data[0] > 0x19 && F2data[0] < 0x80)                     
+                                    ESP_LOGI(TAG, "  AUI Target:%d  Type:%s  Data:%s", target,F2type,F2data);
+                            }
+                            if ((payload[7] & 0xF0) == 0x60 && payload[8] == 0x63 && payload[1] == 0x16)
+                            {   
+                                char targets[8];
+                                memset(targets,'\0',sizeof(targets));
+                                if (payload[2] & 0x02)
+                                    memcpy(targets,"1",1);
+                                if (payload[2] & 0x04)
+                                    if (targets[0])
+                                        strncat(targets,",2",3);
+                                    else
+                                        memcpy(targets,"2",1);
+                                if (payload[2] & 0x20)
+                                    if (targets[0])
+                                        strncat(targets,",5",3);
+                                    else
+                                        memcpy(targets,"5",1);
+                                if (payload[2] & 0x40)
+                                    if (targets[0])
+                                        strncat(targets,",6",3);
+                                    else
+                                        memcpy(targets,"6",1);
+                                if(payload[22] == 0x06)
+                                    ESP_LOGI(TAG, "  AUI Target(s):%s  Type:Broadcast  Data:Zone Fault", targets);
+                                else if (payload[22] == 0x01)
+                                    ESP_LOGI(TAG, "  AUI Target(s):%s  Type:Broadcast  Data:Zone Fault Cleared", targets);
+                            }
                         }
                         else if (payload[0] == 0xF9)
                         {         
@@ -173,7 +264,7 @@ namespace esphome
                                     uint32_t device_serial = ((payload[3] & 0xF) << 16) + (payload[4] << 8) + payload[5];
                                     snprintf(rf_serial_char, 14, "%3lu%04lu", device_serial / 10000, device_serial % 10000);                        
 #ifdef DEBUG_LOG    
-                                    ESP_LOGI(TAG, "RFX: %s,%02x", rf_serial_char, payload[6]);
+                                    ESP_LOGI(TAG, "  RFX: %s,%02x", rf_serial_char, payload[6]);
 #endif
                                     if (!(payload[6] & 4) && !(payload[6] & 1))
                                     { // ignore heartbeat
