@@ -106,7 +106,7 @@ namespace esphome
                                     default:
                                         break;
                                 }
-                                char F2type[32];
+                                char F2type[24];
                                 memset(F2type,'\0',sizeof(F2type));
                                 switch (sum)
                                 {
@@ -122,15 +122,29 @@ namespace esphome
                                     case 21:
                                         memcpy(F2type,"Panel Info",10);
                                         break;
+                                    case 22:
+                                        memcpy(F2type,"Device/Zone Info",16);
+                                        break;
                                     case 23:
                                         memcpy(F2type,"Faulted Zone(s)",15);
                                         break;
                                     default:
                                         memcpy(F2type,"Unknown",7);
+                                        char num[5];
+                                        memset(num,'\0',sizeof(num));
+                                        sprintf(num," (%d)",sum);
+                                        strncat(F2type,num,5);
                                         break; 
                                 }
-                                if (F2data[0] > 0x19 && F2data[0] < 0x80)                     
+                                if (F2data[0] > 0x19 && F2data[0] < 0x80)
+                                {
+                                    for (uint8_t i = 1; i < data_len; i++)
+                                    {
+                                        if(F2data[i] == 0)
+                                            F2data[i] = 0x20;
+                                    }                     
                                     ESP_LOGI(TAG, "  AUI Target:%d  Type:%s  Data:%s", target,F2type,F2data);
+                                }
                             }
                             if ((payload[7] & 0xF0) == 0x60 && payload[8] == 0x63 && payload[1] == 0x16)
                             {   
@@ -204,33 +218,32 @@ namespace esphome
 
                     if (type == 1) 
                     {
-                        if (payload[0] == 0x7F || payload[0] == 0xFE || payload[0] == 0xFD || 
-                                payload[0] == 0xFB || payload[0] == 0xF7)
+                        if (src == 0xFA || src == 0xFB)
                         {
                             //FD 09 31 00 30 open
                             //FD 09 31 00 20 closed
-                            if (src = 0xFA && size == 6)
+                            if (src = 0xFA && size == 4)
                             {
-                                int z = payload[4] >> 5;
-                                switch (payload[1])
+                                int z = payload[3] >> 5;
+                                switch (payload[0])
                                 {
                                     case 0x07:
-                                        z += 8 + (payload[3] << 3);
+                                        z += 8 + (payload[2] << 3);
                                         break;
                                     case 0x08:
-                                        z += 16 + (payload[3] << 3);
+                                        z += 16 + (payload[2] << 3);
                                         break;
                                     case 0x09:
-                                        z += 24 + (payload[3] << 3);
+                                        z += 24 + (payload[2] << 3);
                                         break;
                                     case 0x0A:
-                                        z += 32 + (payload[3] << 3);
+                                        z += 32 + (payload[2] << 3);
                                         break;
                                     case 0x0B:
-                                        z += 40 + (payload[3] << 3);
+                                        z += 40 + (payload[2] << 3);
                                         break;
                                 }
-                                bool open = (payload[4] >> 4) & 0x01;
+                                bool open = (payload[3] >> 4) & 0x01;
                                 zoneType *zt = getZone(z);
                                 if (zt != NULL && zt->active)
                                 {
@@ -238,7 +251,7 @@ namespace esphome
                                     zoneStatusUpdate(zt);
                                 }
                             }
-                            else if (src = 0xFB && size == 8)
+                            else if (src = 0xFB && size == 7)
                             {
                                 char rf_serial_char[14];
                                 /* char rf_serial_char_out[20];
@@ -256,17 +269,17 @@ namespace esphome
                                    7 -	Loop 4
                                    8 -	Loop 1  */
                                 uint8_t chksum = 0;
-                                for (int i = 2; i < 7; i++)
+                                for (int i = 0; i < RF_ZONE_MESSAGE_LENGTH-1; i++)
                                     chksum += payload[i];
                                 chksum = ~(chksum) + 1;
-                                if (chksum == payload[7])
+                                if (chksum == payload[6])
                                 {
-                                    uint32_t device_serial = ((payload[3] & 0xF) << 16) + (payload[4] << 8) + payload[5];
-                                    snprintf(rf_serial_char, 14, "%3lu%04lu", device_serial / 10000, device_serial % 10000);                        
+                                    uint32_t device_serial = ((payload[2] & 0x0F) << 16) + (payload[3] << 8) + payload[4];
+                                    snprintf(rf_serial_char, 14, "%lu%04lu", device_serial / 10000, device_serial % 10000);               
 #ifdef DEBUG_LOG    
-                                    ESP_LOGI(TAG, "  RFX: %s,%02x", rf_serial_char, payload[6]);
+                                    ESP_LOGI(TAG, "  RFX: %s,%02x", rf_serial_char, payload[5]);
 #endif
-                                    if (!(payload[6] & 4) && !(payload[6] & 1))
+                                    if (!(payload[5] & 4) && !(payload[5] & 1))
                                     { // ignore heartbeat
                                         zoneType *zt = getRfSerialLookup(device_serial);
                                         if (zt != NULL)
@@ -293,8 +306,8 @@ namespace esphome
                                             if (zt->active)
                                             {
                                                 zt->time = esp_timer_get_time();
-                                                zt->open = payload[6] & mask ? true : false;
-                                                zt->rflowbat = payload[6] & 2 ? true : false; // low bat
+                                                zt->open = payload[5] & mask ? true : false;
+                                                zt->rflowbat = payload[5] & 2 ? true : false; // low bat
                                                 zoneStatusUpdate(zt);
                                             }
                                         }
