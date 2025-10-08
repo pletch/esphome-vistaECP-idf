@@ -66,13 +66,13 @@ namespace esphome
                         }
                         else if (payload[0]==0xF2)
                         {
-                            
                             if ((payload[7] & 0xF0) == 0x50)
                             {
                                 uint8_t n = 8;
                                 uint8_t sum = 0;
                                 uint8_t data_len = 0;
-                                while ((payload[n] == 0xFE || payload[n] == 0xEC) && n < payload[1])
+                                while ((payload[n] == 0xFE || payload[n] == 0xEC || payload[n] == 0xF5) 
+                                        && n < payload[1])
                                 {
                                     sum += 0xFF - payload[n];
                                     n++;
@@ -113,23 +113,23 @@ namespace esphome
                                     case 1:
                                         memcpy(F2type,"Partition",9);
                                         break;
-                                    case 2:
-                                        memcpy(F2type,"Zone Count",10);
+                                    case 2: // Unsure..increases after entering program mode
+                                        memcpy(F2type,"Count",5);
                                         break;
                                     case 20:  //There are other type 20 packets but we only print Time for now
-                                        memcpy(F2type,"Panel Time",10); 
+                                        memcpy(F2type,"Panel-Time",10); 
                                         break;
                                     case 21:
-                                        memcpy(F2type,"Panel Info",10);
+                                        memcpy(F2type,"Panel-Info",10);
                                         break;
                                     case 22:
-                                        memcpy(F2type,"Device/Zone Info",16);
+                                        memcpy(F2type,"Device/Zone-Info",16);
                                         break;
                                     case 23:
-                                        memcpy(F2type,"Faulted Zone(s)",15);
+                                        memcpy(F2type,"Faulted-Zone(s)",15);
                                         break;
                                     default:
-                                        memcpy(F2type,"Unknown",7);
+                                        memcpy(F2type,"Uncategorized",7);
                                         char num[5];
                                         memset(num,'\0',sizeof(num));
                                         sprintf(num," (%d)",sum);
@@ -143,10 +143,10 @@ namespace esphome
                                         if(F2data[i] == 0)
                                             F2data[i] = 0x20;
                                     }                     
-                                    ESP_LOGI(TAG, "  AUI Target:%d  Type:%s  Data:%s", target,F2type,F2data);
+                                    ESP_LOGI(TAG, " AUI Target:%d  Type:%s  Data:%s", target,F2type,F2data);
                                 }
                             }
-                            if ((payload[7] & 0xF0) == 0x60 && payload[8] == 0x63 && payload[1] == 0x16)
+                            else if ((payload[7] & 0xF0) == 0x60 && payload[8] == 0x63 && payload[1] == 0x16)
                             {   
                                 char targets[8];
                                 memset(targets,'\0',sizeof(targets));
@@ -168,9 +168,9 @@ namespace esphome
                                     else
                                         memcpy(targets,"6",1);
                                 if(payload[22] == 0x06)
-                                    ESP_LOGI(TAG, "  AUI Target(s):%s  Type:Broadcast  Data:Zone Fault", targets);
+                                    ESP_LOGI(TAG, " AUI Target(s):%s  Type:Broadcast  Data:Zone-Fault", targets);
                                 else if (payload[22] == 0x01)
-                                    ESP_LOGI(TAG, "  AUI Target(s):%s  Type:Broadcast  Data:Zone Fault Cleared", targets);
+                                    ESP_LOGI(TAG, " AUI Target(s):%s  Type:Broadcast  Data:Zone-Fault-Cleared", targets);
                             }
                         }
                         else if (payload[0] == 0xF9)
@@ -211,6 +211,18 @@ namespace esphome
                                     if(text_sensors_common.lrr_messages != NULL)
                                         text_sensors_common.lrr_messages->process(msg);
                                     //refreshLrrTime = esp_timer_get_time();
+                                }
+                            }
+                        }
+                        else if (payload[0] != 0 && src == keypad_ack)
+                        {
+                            uint8_t kp_addr = (payload[0] & 0x0F) | 0x10;
+                            for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+                            {
+                                if (kp_addr == it->assigned_keypad)
+                                {
+                                    it->keypad_sequence = it->keypad_sequence + 0x40;
+                                    break;
                                 }
                             }
                         }
@@ -844,24 +856,10 @@ namespace esphome
 
         void vistaECPHome::refreshLRRStatusFlags(char * cbuf, struct lrrstatusFlagType * lrrstatusFlags) 
         {
-
-            int len = cbuf[2];
-
-            if (len == 0)
+            if (cbuf[2] == 0)
                 return;
-            char type = cbuf[3];
-            char lcbuf[12];
-            int lcbuflen = 0;
 
-            // 0x52 means respond with only cycle message
-            // 0x48 means same thing
-            //, i think 0x52 and and 0x48 are the same
-            if (type == (char)0x52 || type == (char)0x48)
-            {
-                lcbuf[0] = (char)cbuf[1];
-                lcbuflen++;
-            }
-            else if (type == (char)0x58)
+            if (cbuf[3] == 0x58)
             {
             // just respond, but 0x58s have lots of info
                 int c = (((0x0f & cbuf[8]) << 8) | cbuf[9]);
@@ -870,53 +868,11 @@ namespace esphome
                 lrrstatusFlags->code = c;
                 lrrstatusFlags->data = toDec(((uint8_t)cbuf[12] >> 4) | ((uint8_t)cbuf[11] << 4));
                 lrrstatusFlags->partition = (uint8_t)cbuf[10];
-
-                lcbuf[0] = (char)(cbuf[1]);
-                lcbuflen++;
-            }
-            else if (type == (char)0x53)
-            {
-
-                lcbuf[0] = (char)((cbuf[1] + 0x40) & 0xFF);
-                lcbuf[1] = (char)0x04;
-                lcbuf[2] = (char)0x00;
-                lcbuf[3] = (char)0x00;
-                // 0x08 is sent if we're in test mode
-                // 0x0a after a test
-                // 0x04 if you have network problems?
-                // 0x06 if you have network problems?
-                lcbuf[4] = (char)0x00;
-                lcbuflen = 5;
-            }
-
-            // we don't need a checksum for 1 byte messages (no length bit)
-            // if we don't even have a message length byte, then we are just
-            //  ACKing a cycle header byte.
-            if (lcbuflen >= 2)
-            {
-                uint32_t chksum = 0;
-                for (int x = 0; x < lcbuflen; x++)
-                {
-                    chksum += lcbuf[x];
-                }
-                chksum -= 1;
-                chksum = ~chksum;
-                lcbuf[lcbuflen] = (char)chksum;
-                lcbuflen++;
-            }
-
-            if (lrrSupervisor)
-            {
-                for (int x = 0; x < lcbuflen; x++)
-                {
-                    vistabus.writedirect(lcbuf,lcbuflen,static_cast<char>((cbuf[1] + 0x40) & 0xFF));
-                }
             }
         }   
 
         void vistaECPHome::RF_handle_heartbeats()
-        {
-            
+        {  
             for (auto it = alarmZones.begin(); it != alarmZones.end(); ++it) 
             {
                 if(it->rfnext_hb && (esp_timer_get_time() > it->rfnext_hb))

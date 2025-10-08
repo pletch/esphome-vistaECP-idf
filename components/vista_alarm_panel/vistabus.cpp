@@ -73,25 +73,29 @@ bool VistaBus::stop()
     return true;
 }
 
-bool VistaBus::write(const char * data_to_write, int size, int keypadaddress) 
+bool VistaBus::write(const char * data_to_write, int size, int keypadaddress, int sequence) 
 {
     SendPacket sendpkt;
     strncpy(sendpkt.payload,data_to_write,24);
     sendpkt.keypadaddress = keypadaddress;
     sendpkt.type = 1;
     sendpkt.size = size;
+    sendpkt.sequence = sequence;
     bool result = false;
     result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
     return result;
 }
 
-bool VistaBus::writedirect(const char * hex_data_to_write, int size, int keypadaddress) 
+bool VistaBus::writedirect(const char * hex_data_to_write, int size, int keypadaddress, int sequence) 
 {
     SendPacket sendpkt;
+    if (size > 24)
+        return false;
     memcpy(sendpkt.payload,hex_data_to_write,size);
     sendpkt.keypadaddress = keypadaddress;
     sendpkt.type = 0;
     sendpkt.size = size;
+    sendpkt.sequence = sequence;
     bool result = xQueueSend(sendQueue,&sendpkt,0) == pdPASS;
     return result;
 }
@@ -362,8 +366,9 @@ void VistaBus::rx_tx_task(void * args)
     uint64_t boot = 0;
     SendPacket pkt_to_send;
     uint8_t ack_failures = 0;
-    int sequence = 0;
     bool pulse_marked = false;
+    uint8_t last_sequence = 0;
+    uint8_t last_address = 99;
     uint64_t request_F1_time = 0;
     
     uint64_t pulse_mark_time = 0;
@@ -378,8 +383,7 @@ void VistaBus::rx_tx_task(void * args)
             DeviceMsg q_msg;
             xQueuePeek(deviceMsgQueue,&q_msg,pdMS_TO_TICKS(0));
             requestF1(q_msg.address);
-            request_F1_time = esp_timer_get_time();
-            //uart_delay = 20;     
+            request_F1_time = esp_timer_get_time();  
         }
         if(this->stop_requested && monitor_rx_task_Handle == NULL)
         {
@@ -406,6 +410,10 @@ void VistaBus::rx_tx_task(void * args)
             {
                 xQueueReceive(sendQueue,&pkt_to_send,0);
                 req_to_send = true;
+                if (pkt_to_send.sequence == last_sequence && pkt_to_send.keypadaddress == last_address)
+                    pkt_to_send.sequence += 0x40; // Iterate sequencing if needed when consolidation occurs
+                last_sequence = pkt_to_send.sequence;
+                last_address = pkt_to_send.keypadaddress;
             }
             else
             {
@@ -502,7 +510,7 @@ void VistaBus::rx_tx_task(void * args)
                     memset(outbuffer,'\0',sizeof(outbuffer));
                     data[rxBytes] = 0;
                     char keys_to_send[24];
-                    outbuffer[0] = (((++sequence<<6) & 0xc0) ^ 0xc0) | (pkt_to_send.keypadaddress & 0x3F);
+                    outbuffer[0] = pkt_to_send.sequence;
                     outbuffer[1] = pkt_to_send.size+1;
                     uint8_t chksum = 0;
                     chksum += outbuffer[0] + outbuffer[1];

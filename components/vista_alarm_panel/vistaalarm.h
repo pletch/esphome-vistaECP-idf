@@ -121,6 +121,7 @@ namespace esphome
                     partitionType new_partition;
                     new_partition.assigned_keypad = addr;
                     new_partition.partition = idx;
+                    new_partition.keypad_sequence = (addr & 0x0F) | 0x10;
                     known_partitions.push_back(new_partition);
                 }
                 void set_alarm_state(std::string const &state, std::string code, int partition);
@@ -200,6 +201,7 @@ namespace esphome
                 {
                     uint8_t partition = 0;
                     uint8_t assigned_keypad = 0;
+                    uint8_t keypad_sequence = 0;
                     partitionStateType partition_state;
                 };
 
@@ -387,7 +389,6 @@ namespace esphome
                 void alarm_trigger_panic(std::string code, int32_t partition);
                 void alarm_keypress(std::string keystring);
                 void alarm_keypress_partition(std::string keystring, int32_t partition);
-                void send_cmd_bytes(int32_t addr, std::string hexbytes);
 
                 bool isInt(std::string s, int base);
                 int toDec(int n);

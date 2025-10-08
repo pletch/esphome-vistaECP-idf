@@ -53,6 +53,7 @@ struct SendPacket
     char payload[24];
     int keypadaddress;
     int size;
+    char sequence;
 };
 
 struct gpioTaskArgs  
@@ -69,8 +70,8 @@ public:
     ~VistaBus();
     void begin(int uartnum, int rxpin, int txpin, int extuartnum, int monitorpin);
     bool stop();
-    bool write(const char * data_to_write, int size, int keypadaddress);
-    bool writedirect(const char * hex_data_to_write, int size, int keypadaddress);
+    bool write(const char * data_to_write, int size, int keypadaddress, int sequence);
+    bool writedirect(const char * hex_data_to_write, int size, int keypadaddress, int sequence);
     bool connected();
     bool read_packet(char * data, int &len, int &type, int &src, bool with_delay = false);
     void emulateLRR(bool enabled);

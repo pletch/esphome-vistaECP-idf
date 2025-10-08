@@ -200,7 +200,7 @@ namespace esphome
             set_update_interval(1000); // set interval frequency in main loop task
 
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
-            register_service(&vistaECPHome::send_cmd_bytes, "send_cmd_bytes", {"address", "hexdata"});
+            //register_service(&vistaECPHome::send_cmd_bytes, "send_cmd_bytes", {"address", "hexdata"});
             register_service(&vistaECPHome::alarm_keypress_partition, "alarm_keypress_partition", {"keys", "partition"});
             register_service(&vistaECPHome::alarm_disarm, "alarm_disarm", {"code", "partition"});
             register_service(&vistaECPHome::alarm_arm_home, "alarm_arm_home", {"partition"});
@@ -381,33 +381,18 @@ namespace esphome
                 partition = defaultPartition;
 
             uint8_t addr = 0;
+            uint8_t seq = 0;
             if (partition > 3 || partition < 1)
                 return;
             addr = known_partitions[partition - 1].assigned_keypad;
+            seq = known_partitions[partition - 1].keypad_sequence;
             bool result = false;
             if (addr > 0 and addr < 24)
-                result = vistabus.write(keystring.c_str(), keystring.length(), addr);
+                result = vistabus.write(keystring.c_str(), keystring.length(), addr, seq);
             if (result)
                 ESP_LOGD(TAG, "Writing keys: %s to partition %li", keystring.c_str(), partition);
             else
                 ESP_LOGE(TAG, "Failed to write keys: %s to partition %li. Send Queue Full.", keystring.c_str(), partition);
-        }
-
-        void vistaECPHome::send_cmd_bytes(int32_t addr, std::string hexbytes)
-        {
-            ESP_LOGD(TAG, "Cmd bytes=%s", hexbytes.c_str());
-            std::string::iterator end_pos = std::remove(hexbytes.begin(), hexbytes.end(), ' ');
-            hexbytes.erase(end_pos, hexbytes.end());
-
-            int NumberChars = hexbytes.length();
-            char *bytes = new char[NumberChars / 2];
-            for (int i = 0; i < NumberChars; i += 2)
-            {
-                bytes[i / 2] = toInt(hexbytes.substr(i, 2), 16);
-            }
-            vistabus.writedirect(bytes, sizeof(bytes),addr);
-
-            return;
         }
 
         bool vistaECPHome::isInt(std::string s, int base)
@@ -568,8 +553,9 @@ namespace esphome
             }
 
             uint8_t addr = 0;
-
+            uint seq = 0;
             addr = known_partitions[kpi].assigned_keypad;
+            seq = known_partitions[kpi].keypad_sequence;
             if (addr < 1 || addr > 23)
                 return;
 
@@ -577,50 +563,50 @@ namespace esphome
             if (state.compare("S") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
             {
                 if (quickArm)
-                    vistabus.write("#3",2, addr);
+                    vistabus.write("#3",2, addr, seq);
                 else if (code.length() == 4)
                 {
                     char send_str[5];
                     memcpy(send_str,code.c_str(),4);
                     memcpy(send_str+4,"3",1);
-                    vistabus.write(send_str,5, addr);
+                    vistabus.write(send_str,5, addr, seq);
                 }
             }
             // Arm away
             else if ((state.compare("A") == 0 || state.compare("W") == 0) && !known_partitions[kpi].partition_state.previousLightState.armed)
             {
                 if (quickArm)
-                    vistabus.write("#2",2, addr);
+                    vistabus.write("#2",2, addr, seq);
                 else if (code.length() == 4)
                 {
                     char send_str[5];
                     memcpy(send_str,code.c_str(),4);
                     memcpy(send_str+4,"2",1);
-                    vistabus.write(send_str,5, addr);
+                    vistabus.write(send_str,5, addr, seq);
                 }
             }
             else if (state.compare("I") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
             {
                 if (quickArm)
-                    vistabus.write("#7",2, addr);
+                    vistabus.write("#7",2, addr, seq);
                 else if (code.length() == 4)
                 {
                     char send_str[5];
                     memcpy(send_str,code.c_str(),4);
                     memcpy(send_str+4,"7",1);
-                    vistabus.write(send_str,5, addr);
+                    vistabus.write(send_str,5, addr, seq);
                 }
             }
             else if (state.compare("N") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
             {
                 if (quickArm)
-                    vistabus.write("#33",3, addr);
+                    vistabus.write("#33",3, addr, seq);
                 else if (code.length() == 4)
                 {
                 char send_str[6];
                 memcpy(send_str,code.c_str(),4);
                 memcpy(send_str+4,"33",2);
-                vistabus.write(send_str,6, addr);
+                vistabus.write(send_str,6, addr, seq);
                 }
             }
             // Fire command
@@ -640,7 +626,7 @@ namespace esphome
                     char send_str[6];
                     memcpy(send_str,code.c_str(),4);
                     memcpy(send_str+4,"6#",2);
-                    vistabus.write(send_str,6, addr);
+                    vistabus.write(send_str,6, addr, seq);
                 }
             }
             else if (state.compare("Y") == 0)
@@ -650,7 +636,7 @@ namespace esphome
                     char send_str[7];
                     memcpy(send_str,code.c_str(),4);
                     memcpy(send_str+4,"600",3);
-                    vistabus.write(send_str,7, addr);
+                    vistabus.write(send_str,7, addr, seq);
                 }
             }
             else if (state.compare("D") == 0)
@@ -660,7 +646,7 @@ namespace esphome
                     char send_str[5];
                     memcpy(send_str,code.c_str(),4);
                     memcpy(send_str+4,"1",1);
-                    vistabus.write(send_str,5, addr);
+                    vistabus.write(send_str,5, addr, seq);
                 }
             }
         }
