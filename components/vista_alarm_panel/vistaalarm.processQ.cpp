@@ -169,6 +169,8 @@ namespace esphome
                                         memcpy(targets,"6",1);
                                 if(payload[22] == 0x06)
                                     ESP_LOGI(TAG, " AUI Target(s):%s  Type:Broadcast  Data:Zone-Fault", targets);
+                                    if (aui_device.address)
+                                        AUIget_zone_faults();
                                 else if (payload[22] == 0x01)
                                     ESP_LOGI(TAG, " AUI Target(s):%s  Type:Broadcast  Data:Zone-Fault-Cleared", targets);
                             }

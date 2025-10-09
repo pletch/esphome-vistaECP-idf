@@ -544,7 +544,7 @@ void VistaBus::rx_tx_task(void * args)
                     outbuffer[pkt_to_send.size+2] = ~chksum+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
-                    rxBytes = get_Packet_event(&received_packet,data,0,1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(50), uartevtQueue);
+                    rxBytes = get_Packet_event(&received_packet,data,0,1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(100), uartevtQueue);
                     if(rxBytes)
                     {
                         if (data[0] == outbuffer[0])

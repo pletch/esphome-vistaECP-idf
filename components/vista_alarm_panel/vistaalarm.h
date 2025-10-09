@@ -114,6 +114,7 @@ namespace esphome
                 void set_displaySystemMsg(bool dsm) { displaySystemMsg = dsm; }
                 void set_lrrSupervisor(bool ls) { lrrSupervisor = ls; }
                 void set_rfrEmulation(bool rfr_emul, uint8_t rfr_addr) { rfrEmulation[0] = rfr_emul; rfrEmulation[1] = rfr_addr; }
+                void set_auiaddr(uint8_t addr) { aui_device.address = addr; aui_device.sequence1 = 0x20 | addr;};
 
                 void initialize_partition_sensors();
                 void set_partitionKeypad(uint8_t idx, uint8_t addr)
@@ -253,6 +254,15 @@ namespace esphome
                     uint8_t partition;
                 };
 
+                struct AUIdeviceType
+                {
+                    uint8_t address = 0;
+                    uint8_t sequence1 = 0;
+                    uint8_t sequence2 = 0x6F;
+                };
+
+                AUIdeviceType aui_device;
+
                 std::vector<binary_sensor::BinarySensor *> bMap;
                 std::vector<text_sensor::TextSensor *> tMap;
 
@@ -359,7 +369,6 @@ namespace esphome
                 bool forceRefreshZones, forceRefresh;
                 sysState currentSystemState,previousSystemState;
 
-
                 std::string previousZoneStatusMsg;
 
                 alarmStatusType fireStatus, panicStatus, alarmStatus;
@@ -389,6 +398,8 @@ namespace esphome
                 void alarm_trigger_panic(std::string code, int32_t partition);
                 void alarm_keypress(std::string keystring);
                 void alarm_keypress_partition(std::string keystring, int32_t partition);
+                void AUIset_panel_time();
+                void AUIget_zone_faults();
 
                 bool isInt(std::string s, int base);
                 int toDec(int n);

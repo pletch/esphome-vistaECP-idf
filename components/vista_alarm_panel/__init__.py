@@ -20,7 +20,7 @@ CONF_DEBUGPULSE="debug_pulsing"
 CONF_KEYPAD1="keypad_addr_1"
 CONF_KEYPAD2="keypad_addr_2"
 CONF_KEYPAD3="keypad_addr_3"
-#CONF_AUIADDR="aui_addr"
+CONF_AUIADDR="aui_addr"
 CONF_RXPIN="rx_pin"
 CONF_TXPIN="tx_pin"
 CONF_MONITORPIN="monitor_pin"
@@ -47,6 +47,12 @@ def validate_c6_uarts(config):
         raise cv.Invalid("LP UART on ESP32-C6 is not currently supported.  Please use HW UARTs 0/1")
     return config
 
+def validate_auiaddr(config):
+    valid_values = [0,1,2,5,6]
+    if (config[CONF_AUIADDR] not in valid_values):
+        raise cv.Invalid("Invalid value for aui_addr. Valid enabled values are 1,2,5,6 or 0 if disabled")
+    return config
+
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
@@ -58,7 +64,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_KEYPAD1,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD3,default=0): cv.int_, 
-            #cv.Optional(CONF_AUIADDR,default=0): cv.int_,
+            cv.Optional(CONF_AUIADDR,default=0): cv.int_,
             cv.Required(CONF_RXPIN): cv.int_, 
             cv.Required(CONF_TXPIN): cv.int_,
             cv.Required(CONF_UART1): cv.int_, 
@@ -74,6 +80,7 @@ CONFIG_SCHEMA = cv.All(
     ).extend(cv.COMPONENT_SCHEMA),
     validate_keypads,
     validate_c6_uarts,
+    validate_auiaddr
 )
 
 
@@ -109,8 +116,8 @@ async def to_code(config):
         cg.add(var.set_lrrSupervisor(config[CONF_LRR]))
     if CONF_RFR in config:
         cg.add(var.set_rfrEmulation(config[CONF_RFR], config[CONF_RFRADDR]))        
-    #if CONF_AUIADDR in config:
-    #    cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
+    if CONF_AUIADDR in config:
+        cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
     await cg.register_component(var, config)
     
 def real_clean_build():

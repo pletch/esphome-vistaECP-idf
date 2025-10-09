@@ -199,8 +199,8 @@ namespace esphome
 
             set_update_interval(1000); // set interval frequency in main loop task
 
+            register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
-            //register_service(&vistaECPHome::send_cmd_bytes, "send_cmd_bytes", {"address", "hexdata"});
             register_service(&vistaECPHome::alarm_keypress_partition, "alarm_keypress_partition", {"keys", "partition"});
             register_service(&vistaECPHome::alarm_disarm, "alarm_disarm", {"code", "partition"});
             register_service(&vistaECPHome::alarm_arm_home, "alarm_arm_home", {"partition"});
@@ -649,6 +649,35 @@ namespace esphome
                     vistabus.write(send_str,5, addr, seq);
                 }
             }
+        }
+
+        void vistaECPHome::AUIset_panel_time()
+        {
+            ESPTime rtc = now();
+            if (!rtc.is_valid() || statusFlags.programMode || !aui_device.address )
+                return;
+            ESP_LOGD(TAG, "Setting AUI time...");
+            char bytes[22] = {0,0, 0x05, 0x02, 0x45, 0x43, 0xF5, 0xEC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            aui_device.sequence2 = aui_device.sequence2 == 0x6F ? 0x68 : aui_device.sequence2 + 1;
+            bytes[1] = aui_device.sequence2;
+
+            snprintf(&bytes[8], 14, "%02d%02d%02d%02d%02d%02d%d", rtc.year % 100, rtc.month, rtc.day_of_month, rtc.hour, rtc.minute, 
+                rtc.second, rtc.day_of_week-1);
+            vistabus.writedirect(bytes, 21, aui_device.address, aui_device.sequence1);
+            aui_device.sequence1 += 0x40;
+            return;
+        }
+
+        void vistaECPHome::AUIget_zone_faults()
+        {
+            if ( !aui_device.address )
+                return;
+            char bytes[22] = {0,0, 0x62, 0x31, 0x45, 0x49, 0xF5, 0x31, 0xFB, 0x45, 0x4A, 0xF5, 0x32, 0xFB, 0x45, 0x43, 0xF5, 0x31, 0xFB, 0x43, 0x6C};
+            aui_device.sequence2 = aui_device.sequence2 == 0x6F ? 0x68 : aui_device.sequence2 + 1;
+            bytes[1] = aui_device.sequence2;
+            vistabus.writedirect(bytes, 21, aui_device.address, aui_device.sequence1);
+            aui_device.sequence1 += 0x40;
+            return;
         }
 
         void vistaECPHome::update()
