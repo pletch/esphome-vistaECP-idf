@@ -5,6 +5,9 @@ processReceiveQueue_task_start
 refreshStatusFlags
 refreshLRRStatusFlags
 updateDisplayLines
+AUIset_panel_time
+AUIget_zone_faults
+AUIprocess_zone_faults
 */
 
 #include "vistaalarm.h"
@@ -88,6 +91,7 @@ namespace esphome
                                 char F2data[data_len+1];
                                 memset(F2data,'\0',sizeof(F2data));
                                 memcpy(F2data,&payload[size-data_len-1],data_len);
+#ifdef DEBUG_LOG
                                 uint8_t target = 0;
                                 switch (payload[2])
                                 {
@@ -136,20 +140,24 @@ namespace esphome
                                         strncat(F2type,num,5);
                                         break; 
                                 }
+#endif
                                 if (F2data[0] > 0x19 && F2data[0] < 0x80)
                                 {
                                     for (uint8_t i = 1; i < data_len; i++)
                                     {
                                         if(F2data[i] == 0)
                                             F2data[i] = 0x20;
-                                    }                     
+                                    }
+#ifdef DEBUG_LOG                     
                                     ESP_LOGI(TAG, " AUI Target:%d  Type:%s  Data:%s", target,F2type,F2data);
+#endif
                                 }
                                 if (sum == 23)
                                     AUIprocess_zone_faults(F2data);
                             }
                             else if ((payload[7] & 0xF0) == 0x60 && payload[8] == 0x63 && payload[1] == 0x16)
-                            {   
+                            { 
+#ifdef DEBUG_LOG   
                                 char targets[8];
                                 memset(targets,'\0',sizeof(targets));
                                 if (payload[2] & 0x02)
@@ -171,10 +179,11 @@ namespace esphome
                                         memcpy(targets,"6",1);
                                 if(payload[22] == 0x06)
                                     ESP_LOGI(TAG, " AUI Target(s):%s  Type:Broadcast  Data:Zone-Fault", targets);
-                                    if (aui_device.address)
-                                        AUIget_zone_faults();
                                 else if (payload[22] == 0x01)
                                     ESP_LOGI(TAG, " AUI Target(s):%s  Type:Broadcast  Data:Zone-Fault-Cleared", targets);
+#endif
+                                if (aui_device.address)
+                                    AUIget_zone_faults();
                             }
                         }
                         else if (payload[0] == 0xF9)
