@@ -145,6 +145,8 @@ namespace esphome
                                     }                     
                                     ESP_LOGI(TAG, " AUI Target:%d  Type:%s  Data:%s", target,F2type,F2data);
                                 }
+                                if (sum == 23)
+                                    AUIprocess_zone_faults(F2data);
                             }
                             else if ((payload[7] & 0xF0) == 0x60 && payload[8] == 0x63 && payload[1] == 0x16)
                             {   
@@ -262,6 +264,7 @@ namespace esphome
                                 if (zt != NULL && zt->active)
                                 {
                                     zt->open = open;
+                                    zt->time = esp_timer_get_time();
                                     zoneStatusUpdate(zt);
                                 }
                             }
@@ -935,6 +938,122 @@ namespace esphome
                 text_sensors_partition[partition-1].line1->process(p1);
             if (text_sensors_partition[partition-1].line2 != NULL)
                 text_sensors_partition[partition-1].line2->process(p2);
+        }
+
+        void vistaECPHome::AUIset_panel_time()
+        {
+            ESPTime rtc = now();
+            if (!rtc.is_valid() || statusFlags.programMode || !aui_device.address )
+                return;
+            ESP_LOGD(TAG, "Setting AUI time...");
+            char bytes[22] = {0,0, 0x05, 0x02, 0x45, 0x43, 0xF5, 0xEC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            aui_device.sequence2 = aui_device.sequence2 == 0x6F ? 0x68 : aui_device.sequence2 + 1;
+            bytes[1] = aui_device.sequence2;
+
+            snprintf(&bytes[8], 14, "%02d%02d%02d%02d%02d%02d%d", rtc.year % 100, rtc.month, rtc.day_of_month, rtc.hour, rtc.minute, 
+                rtc.second, rtc.day_of_week-1);
+            vistabus.writedirect(bytes, 21, aui_device.address, aui_device.sequence1);
+            aui_device.sequence1 += 0x40;
+            return;
+        }
+
+        void vistaECPHome::AUIget_zone_faults()
+        {
+            if ( !aui_device.address )
+                return;
+            char bytes[22] = {0,0, 0x62, 0x31, 0x45, 0x49, 0xF5, 0x31, 0xFB, 0x45, 0x4A, 0xF5, 0x32, 0xFB, 0x45, 0x43, 0xF5, 0x31, 0xFB, 0x43, 0x6C};
+            aui_device.sequence2 = aui_device.sequence2 == 0x6F ? 0x68 : aui_device.sequence2 + 1;
+            bytes[1] = aui_device.sequence2;
+            vistabus.writedirect(bytes, 21, aui_device.address, aui_device.sequence1);
+            aui_device.sequence1 += 0x40;
+            return;
+        }
+
+        void vistaECPHome::AUIprocess_zone_faults(char *list)
+        {
+            int data_len = strlen(list);
+            // Search all occurrences of integers or ranges
+            size_t pos;
+            char buf[5], buf1[5];
+            char zones[16];
+            memset(zones,'\0',sizeof(zones));
+            uint8_t zone_ct = 0;
+            bool prev_digit = false;
+            bool range = false;
+            for (uint8_t i = 0; i < data_len; i++)
+            {
+                if (list[i] >= 0x30 && list[i] <= 0x39)
+                {
+                    if (prev_digit)
+                    {
+                        zones[zone_ct] = zones[zone_ct] * 10;
+                        zones[zone_ct] += (list[i] - '0');
+                        prev_digit = false;
+                    }
+                    else
+                    {
+                        zones[zone_ct] = (list[i] - '0');
+                        prev_digit = true;
+                    }
+                }
+                else if (list[i] == 0x2D) //range
+                {
+                    zone_ct++;
+                    range = true;
+                    prev_digit = false;
+                }
+                if (list[i] == 0x20 || i == (data_len-1)) //separator or end of list
+                {
+                    if (range)
+                    {
+                        uint8_t start = zones[zone_ct-1]+1;
+                        uint8_t end = zones[zone_ct];
+                        for (uint8_t k = start; k <= end; k++)
+                        {
+                            zones[zone_ct] = k;
+                            zone_ct++;
+                        }
+                        range = false;
+                    }
+                    else
+                        zone_ct++;
+                    prev_digit = false;
+                }           
+            }
+            uint32_t zonestatusmask1to32 = 0;
+            uint32_t zonestatusmask33to64 = 0;
+
+            for (uint8_t i = 0; i < strlen(zones); i++)
+            {
+                if (zones[i] <= 32)
+                    zonestatusmask1to32 = zonestatusmask1to32 | (1 << (zones[i]-1));
+                else
+                    zonestatusmask33to64 = zonestatusmask33to64 | (1 << (zones[i]-32-1));
+            }
+
+            for (auto &it: alarmZones)
+            {
+                if (it.zone <= 32)
+                {
+                    if (it.open != static_cast<bool>((zonestatusmask1to32 >> (it.zone - 1)) & 0x01))
+                    {
+                        it.open = (zonestatusmask1to32 >> (it.zone - 1)) & 0x01;
+                        if (it.open)
+                            it.time = esp_timer_get_time();
+                        zoneStatusUpdate(&it);
+                    }   
+                }
+                else
+                {
+                    if (it.open != static_cast<bool>((zonestatusmask33to64 >> (it.zone - 32 - 1)) & 0x01))
+                    {
+                        it.open = (zonestatusmask33to64 >> (it.zone - 1)) & 0x01;
+                        if (it.open)
+                            it.time = esp_timer_get_time();
+                        zoneStatusUpdate(&it);
+                    }
+                }
+            }
         }
     } //namespace
 } //namespace

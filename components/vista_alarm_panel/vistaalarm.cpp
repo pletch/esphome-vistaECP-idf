@@ -651,35 +651,6 @@ namespace esphome
             }
         }
 
-        void vistaECPHome::AUIset_panel_time()
-        {
-            ESPTime rtc = now();
-            if (!rtc.is_valid() || statusFlags.programMode || !aui_device.address )
-                return;
-            ESP_LOGD(TAG, "Setting AUI time...");
-            char bytes[22] = {0,0, 0x05, 0x02, 0x45, 0x43, 0xF5, 0xEC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-            aui_device.sequence2 = aui_device.sequence2 == 0x6F ? 0x68 : aui_device.sequence2 + 1;
-            bytes[1] = aui_device.sequence2;
-
-            snprintf(&bytes[8], 14, "%02d%02d%02d%02d%02d%02d%d", rtc.year % 100, rtc.month, rtc.day_of_month, rtc.hour, rtc.minute, 
-                rtc.second, rtc.day_of_week-1);
-            vistabus.writedirect(bytes, 21, aui_device.address, aui_device.sequence1);
-            aui_device.sequence1 += 0x40;
-            return;
-        }
-
-        void vistaECPHome::AUIget_zone_faults()
-        {
-            if ( !aui_device.address )
-                return;
-            char bytes[22] = {0,0, 0x62, 0x31, 0x45, 0x49, 0xF5, 0x31, 0xFB, 0x45, 0x4A, 0xF5, 0x32, 0xFB, 0x45, 0x43, 0xF5, 0x31, 0xFB, 0x43, 0x6C};
-            aui_device.sequence2 = aui_device.sequence2 == 0x6F ? 0x68 : aui_device.sequence2 + 1;
-            bytes[1] = aui_device.sequence2;
-            vistabus.writedirect(bytes, 21, aui_device.address, aui_device.sequence1);
-            aui_device.sequence1 += 0x40;
-            return;
-        }
-
         void vistaECPHome::update()
         {    
             if (!vistabus.connected() && esp_timer_get_time() - last_refresh > 30*1000*1000)

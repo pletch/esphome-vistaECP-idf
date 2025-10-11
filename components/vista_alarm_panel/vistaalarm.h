@@ -400,6 +400,7 @@ namespace esphome
                 void alarm_keypress_partition(std::string keystring, int32_t partition);
                 void AUIset_panel_time();
                 void AUIget_zone_faults();
+                void AUIprocess_zone_faults(char *list);
 
                 bool isInt(std::string s, int base);
                 int toDec(int n);

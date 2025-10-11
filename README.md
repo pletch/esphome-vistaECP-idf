@@ -15,7 +15,7 @@ Fork is shared here for the benefits of any others that might want to use it.  N
 - OTA updates and OTA logging work reliably without requiring disabling of keybus interaction. 
 - Arduino dependency removed and refactored for ESP-IDF v5.3+. Works with newer espressif cores such as C6.
 - Relay board emulation has been removed. Expander emulation remains.
-- AUI handling has been removed for now.
+- AUI handling has been refactored and is now working correctly.
 - Config refactored with validation. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
 - Sensors refactored to work with modified config approach.
 - zone emulation specifier in yaml config allows emulation of either hardwired or rf virtual zones. Specifying for hardwired zone automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group of eight zone numbers for virtual hardwired zones. Specifier on zones with rf serial / loop definition allows for virtual rf zone emulation when rf receiver emulation is also enabled.
@@ -50,6 +50,7 @@ Configuration variables:
 - **tx_pin (Required, PIN)**: GPIO pin assigned to UART for data transmit (green line)
 - **uart_1 (Required, UART)**: Hardware UART number associated with tx/rx 
 - **access_code** (*Optional*): Alarm code used for arming / disarming.  Typically defined in secrets file.
+- **aui_addr** (*Optional*, int): AUI address from program field *189 to use for faster zone closure status for zones directly hardwired to the panel and to allow time sync of panel via manual Home Assistant service. Ensure it is not assigned to a physical touchpad or to Total Connect 2.0 (assigned to address 2). Note: Older vista20 panel firmwares only have addresses 1 and 2 while newer will have 1,2,5 and 6. For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program #93, device programming. Omission of parameter or a value of zero disables AUI handling.
 - **default_partition** (*Optional*, int): Set to designate main partition number.  Defaults to 1 if not defined.
 - **debug_log** (*Optional*, boolean): Set to true to enable additional bus activity logging and print full ecp packet contents to the log.  Global esphome and vista-alarm component (if configured)
 logging level must be set to DEBUG or higher in logging component section to output all messages.
