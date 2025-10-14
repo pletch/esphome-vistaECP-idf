@@ -263,6 +263,14 @@ namespace esphome
 
                 AUIdeviceType aui_device;
 
+                struct AUIrequest
+                {
+                    bool pending = false;
+                    uint64_t time = 0;
+                };
+
+                AUIrequest aui_request;
+                
                 std::vector<binary_sensor::BinarySensor *> bMap;
                 std::vector<text_sensor::TextSensor *> tMap;
 

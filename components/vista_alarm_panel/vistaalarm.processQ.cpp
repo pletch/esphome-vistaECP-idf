@@ -32,6 +32,8 @@ namespace esphome
             {   
                 if (rfrEmulation[0])            
                     RF_handle_heartbeats();
+                if (aui_request.pending && esp_timer_get_time() - aui_request.time > 6 * 1000 * 1000)
+                    aui_request.pending = false;
                 char payload[48];
                 int size;
                 int type;
@@ -153,7 +155,10 @@ namespace esphome
 #endif
                                 }
                                 if (sum == 23)
+                                {
                                     AUIprocess_zone_faults(F2data);
+                                    aui_request.pending = false;
+                                }
                             }
                             else if ((payload[7] & 0xF0) == 0x60 && payload[8] == 0x63 && payload[1] == 0x16)
                             { 
@@ -968,13 +973,15 @@ namespace esphome
 
         void vistaECPHome::AUIget_zone_faults()
         {
-            if ( !aui_device.address )
+            if ( !aui_device.address || aui_request.pending)
                 return;
             char bytes[22] = {0,0, 0x62, 0x31, 0x45, 0x49, 0xF5, 0x31, 0xFB, 0x45, 0x4A, 0xF5, 0x32, 0xFB, 0x45, 0x43, 0xF5, 0x31, 0xFB, 0x43, 0x6C};
             aui_device.sequence2 = aui_device.sequence2 == 0x6F ? 0x68 : aui_device.sequence2 + 1;
             bytes[1] = aui_device.sequence2;
             vistabus.writedirect(bytes, 21, aui_device.address, aui_device.sequence1);
             aui_device.sequence1 += 0x40;
+            aui_request.pending = true;
+            aui_request.time = esp_timer_get_time();
             return;
         }
 
