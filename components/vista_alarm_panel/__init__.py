@@ -31,7 +31,6 @@ CONF_QUICKARM="quickarm"
 CONF_LRR="lrr_supervisor"
 CONF_RFR="rf_receiver_emulation"
 CONF_RFRADDR="rf_receiver_addr"
-CONF_CLEAN="clean_build"
 
 def validate_keypads(config):
     if (config[CONF_KEYPAD1] == 0 
@@ -74,8 +73,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_QUICKARM): cv.boolean, 
             cv.Optional(CONF_LRR): cv.boolean, 
             cv.Optional(CONF_RFR): cv.boolean,
-            cv.Optional(CONF_RFRADDR, default=0): cv.int_,
-            cv.Optional(CONF_CLEAN,default='false'): cv.boolean,     
+            cv.Optional(CONF_RFRADDR, default=0): cv.int_,  
         }
     ).extend(cv.COMPONENT_SCHEMA),
     validate_keypads,
@@ -89,9 +87,7 @@ async def to_code(config):
 
     esp32.add_idf_sdkconfig_option("CONFIG_FREERTOS_HZ", 1000)
     esp32.add_idf_sdkconfig_option("CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD", True)
-    old_dir = CORE.relative_build_path("src")    
-    if config[CONF_CLEAN] or os.path.exists(old_dir+'/vistaalarm.h'):
-        real_clean_build()
+
     var = cg.new_Pvariable(config[CONF_ID],config[CONF_KEYPAD1],config[CONF_RXPIN],config[CONF_TXPIN],config[CONF_UART1],config[CONF_MONITORPIN],config[CONF_UART2])
     
     if CONF_ACCESSCODE in config:
@@ -119,14 +115,6 @@ async def to_code(config):
     if CONF_AUIADDR in config:
         cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
     await cg.register_component(var, config)
-    
-def real_clean_build():
-    import shutil
-    build_dir = CORE.relative_build_path("")
-    if os.path.isdir(build_dir):
-        _LOGGER.info("Deleting %s", build_dir)
-        shutil.rmtree(build_dir)
-
         
             
     

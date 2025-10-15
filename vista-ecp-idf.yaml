@@ -43,9 +43,7 @@ vista_alarm_panel:
   lrr_supervisor: "false" # set to true if we don't have an LRR monitoring supervisor and we can emulate one to get the statuses
 
   rf_receiver_emulation: "false" # set to true if using emulated RF sensors
-  rf_receiver_addr: "0"  
-
-  clean_build: "false" #default is false.  only set to true if getting duplication errors in linking step. Once you compile, reset it back to false.  
+  rf_receiver_addr: "0"   
 
 #location of alarm panel code.  You can use the github release version  or 
 #copy the code to directory "my_components" in your main esphome directory
