@@ -26,7 +26,7 @@ Date: 2-Feb-2025
 #include <vector>
 
 #define F6_ACK_MESSAGE_LENGTH 4
-#define F7_MESSAGE_LENGTH 45
+#define F7_MESSAGE_LENGTH 48
 #define F9_MESSAGE_LENGTH 12
 #define F9_EXT_MESSAGE_LENGTH 8
 #define RF_ZONE_MESSAGE_LENGTH 7
