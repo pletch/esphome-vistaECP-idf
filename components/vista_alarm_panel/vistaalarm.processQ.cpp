@@ -77,7 +77,7 @@ namespace esphome
                                 uint8_t sum = 0;
                                 uint8_t data_len = 0;
                                 while ((payload[n] == 0xFE || payload[n] == 0xEC || payload[n] == 0xF5) 
-                                        && n < payload[1])
+                                        && n < payload[1]+1)
                                 {
                                     sum += 0xFF - payload[n];
                                     n++;
@@ -115,13 +115,16 @@ namespace esphome
                                 char F2type[24];
                                 memset(F2type,'\0',sizeof(F2type));
                                 switch (sum)
-                                {
+                                {                            
                                     case 1:
                                         memcpy(F2type,"Partition",9);
                                         break;
                                     case 2: // Unsure..increases after entering program mode
-                                        memcpy(F2type,"Count",5);
+                                        memcpy(F2type,"Program-Mode-Count",18);
                                         break;
+                                    case 4:
+                                        memcpy(F2type,"All-Zones-Clear",15);
+                                        break;   
                                     case 20:  //There are other type 20 packets but we only print Time for now
                                         memcpy(F2type,"Panel-Time",10); 
                                         break;
@@ -154,11 +157,19 @@ namespace esphome
                                     ESP_LOGI(TAG, " AUI Target:%d  Type:%s  Data:%s", target,F2type,F2data);
 #endif
                                 }
-                                if (sum == 23)
+#ifdef DEBUG_LOG
+                                else if (sum == 4)
+                                {
+                                    ESP_LOGI(TAG, " AUI Target:%d  Type:%s", target,F2type);
+                                }
+#endif
+                                
+                                if (sum == 23 || sum == 4)
                                 {
                                     AUIprocess_zone_faults(F2data);
                                     aui_request.pending = false;
                                 }
+
                             }
                             else if ((payload[7] & 0xF0) == 0x60 && payload[8] == 0x63 && payload[1] == 0x16)
                             { 
@@ -987,66 +998,68 @@ namespace esphome
 
         void vistaECPHome::AUIprocess_zone_faults(char *list)
         {
-            int data_len = strlen(list);
-            // Search all occurrences of integers or ranges
-            size_t pos;
-            char buf[5], buf1[5];
-            char zones[16];
-            memset(zones,'\0',sizeof(zones));
-            uint8_t zone_ct = 0;
-            bool prev_digit = false;
-            bool range = false;
-            for (uint8_t i = 0; i < data_len; i++)
-            {
-                if (list[i] >= 0x30 && list[i] <= 0x39)
-                {
-                    if (prev_digit)
-                    {
-                        zones[zone_ct] = zones[zone_ct] * 10;
-                        zones[zone_ct] += (list[i] - '0');
-                        prev_digit = false;
-                    }
-                    else
-                    {
-                        zones[zone_ct] = (list[i] - '0');
-                        prev_digit = true;
-                    }
-                }
-                else if (list[i] == 0x2D) //range
-                {
-                    zone_ct++;
-                    range = true;
-                    prev_digit = false;
-                }
-                if (list[i] == 0x20 || i == (data_len-1)) //separator or end of list
-                {
-                    if (range)
-                    {
-                        uint8_t start = zones[zone_ct-1]+1;
-                        uint8_t end = zones[zone_ct];
-                        for (uint8_t k = start; k <= end; k++)
-                        {
-                            zones[zone_ct] = k;
-                            zone_ct++;
-                        }
-                        range = false;
-                    }
-                    else
-                        zone_ct++;
-                    prev_digit = false;
-                }           
-            }
             uint32_t zonestatusmask1to32 = 0;
             uint32_t zonestatusmask33to64 = 0;
-
-            for (uint8_t i = 0; i < strlen(zones); i++)
+            if (list[0] != 0xFE)
             {
-                if (zones[i] <= 32)
-                    zonestatusmask1to32 = zonestatusmask1to32 | (1 << (zones[i]-1));
-                else
-                    zonestatusmask33to64 = zonestatusmask33to64 | (1 << (zones[i]-32-1));
-            }
+                int data_len = strlen(list);
+                // Search all occurrences of integers or ranges
+                size_t pos;
+                char buf[5], buf1[5];
+                char zones[16];
+                memset(zones,'\0',sizeof(zones));
+                uint8_t zone_ct = 0;
+                bool prev_digit = false;
+                bool range = false;
+                for (uint8_t i = 0; i < data_len; i++)
+                {
+                    if (list[i] >= 0x30 && list[i] <= 0x39)
+                    {
+                        if (prev_digit)
+                        {
+                            zones[zone_ct] = zones[zone_ct] * 10;
+                            zones[zone_ct] += (list[i] - '0');
+                            prev_digit = false;
+                        }
+                        else
+                        {
+                            zones[zone_ct] = (list[i] - '0');
+                            prev_digit = true;
+                        }
+                    }
+                    else if (list[i] == 0x2D) //range
+                    {
+                        zone_ct++;
+                        range = true;
+                        prev_digit = false;
+                    }
+                    if (list[i] == 0x20 || i == (data_len-1)) //separator or end of list
+                    {
+                        if (range)
+                        {
+                            uint8_t start = zones[zone_ct-1]+1;
+                            uint8_t end = zones[zone_ct];
+                            for (uint8_t k = start; k <= end; k++)
+                            {
+                                zones[zone_ct] = k;
+                                zone_ct++;
+                            }
+                            range = false;
+                        }
+                        else
+                            zone_ct++;
+                        prev_digit = false;
+                    }           
+                }   
 
+                for (uint8_t i = 0; i < strlen(zones); i++)
+                {
+                    if (zones[i] <= 32)
+                        zonestatusmask1to32 = zonestatusmask1to32 | (1 << (zones[i]-1));
+                    else
+                        zonestatusmask33to64 = zonestatusmask33to64 | (1 << (zones[i]-32-1));
+                }
+            }
             for (auto &it: alarmZones)
             {
                 if (it.zone <= 32)
