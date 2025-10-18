@@ -741,8 +741,8 @@ void VistaBus::monitor_rx_task(void * args)
             else if(static_cast<uint8_t>(val >> 16) == 0xF9) //Expect response from LRR
             {
                 uint8_t n = 0;
-                while (data[0] != (static_cast<uint8_t>(val >> 8) + 0x40) &&
-                            data[0] != (static_cast<uint8_t>(val >> 8)) && n < 2)
+                uint8_t mb = static_cast<uint8_t>(val >> 8) + 0x40;
+                while (data[0] != mb && data[0] != static_cast<uint8_t>(val >> 8) && n < 2)
                 {
                     rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
                     n++;
