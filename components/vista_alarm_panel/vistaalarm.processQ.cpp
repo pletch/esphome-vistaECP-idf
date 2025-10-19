@@ -54,13 +54,12 @@ namespace esphome
                             {
                                 memcpy(last_F7,payload,size);
                                 refreshStatusFlags(payload, &statusFlags);
-                                forceRefreshGlobal = true;
                             }
-
-                            if ((esp_timer_get_time() - last_refresh) > 300*1000*1000)
+                            if ((esp_timer_get_time() - last_refresh) > 30*1000*1000)
                             {
                                 forceRefreshGlobal = true;
                             }
+                            forceRefreshGlobal = true;
                             if (statusFlags.partition == 0) 
                                 ESP_LOGW(TAG, "No keypad associated with this partition in YAML definition.");
                             else

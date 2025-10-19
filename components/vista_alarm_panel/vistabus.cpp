@@ -721,7 +721,7 @@ void VistaBus::monitor_rx_task(void * args)
             if(static_cast<uint8_t>(val >> 8) == 0xF6) //next byte will be header of sending sequence
             {
                 uint8_t n = 0;
-                while ((data[0] & 0x0F) != static_cast<uint8_t>(val & 0x0F) && n < 4) //discard any mark bytes
+                while ((data[0] & 0x0F) != static_cast<uint8_t>(val & 0x0F) && n < 3) //discard any mark bytes
                 {
                     rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
                     n++;
@@ -804,7 +804,7 @@ void VistaBus::monitor_rx_task(void * args)
                             break;                                                                                                                
                     }
                     uint8_t n = 0;
-                    while (data[0] != req_addr && n < 3)
+                    while (data[0] != req_addr && n < 2)
                     {
                         rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
                         n++;
@@ -821,11 +821,12 @@ void VistaBus::monitor_rx_task(void * args)
                 else
                 {
                     uint8_t n = 0;
-                    while (data[0] != 0xF0 && n < 3)
+                    while (data[0] != 0xF0 && n < 2)
                     {
                         rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
                         n++;
                     }
+                    rcvd_extPkt.payload[0] = data[0];
                     get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(50));
                     rcvd_extPkt.source = 0xFA;
                     xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));                    
@@ -865,7 +866,7 @@ void VistaBus::monitor_rx_task(void * args)
                         break;                                                                                                                
                 }
                 uint8_t n = 0;
-                while (data[0] != req_addr && n < 4)
+                while (data[0] != req_addr && n < 2)
                 {
                     rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
                     n++;
