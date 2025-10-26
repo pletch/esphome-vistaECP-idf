@@ -999,6 +999,8 @@ namespace esphome
         {
             uint32_t zonestatusmask1to32 = 0;
             uint32_t zonestatusmask33to64 = 0;
+            uint32_t zonestatusmask65to96 = 0;
+            uint32_t zonestatusmask97to128 = 0;
             if (list[0] != 0xFE)
             {
                 int data_len = strlen(list);
@@ -1055,8 +1057,14 @@ namespace esphome
                 {
                     if (zones[i] <= 32)
                         zonestatusmask1to32 = zonestatusmask1to32 | (1 << (zones[i]-1));
-                    else
+                    else if (zones[i] > 32 && zones[i] <= 64)
                         zonestatusmask33to64 = zonestatusmask33to64 | (1 << (zones[i]-32-1));
+                    else if (zones[i] > 64 && zones[i] <= 96)
+                        zonestatusmask65to96 = zonestatusmask65to96 | (1 << (zones[i]-64-1));
+                    else if (zones[i] > 96 && zones[i] <= 128)
+                        zonestatusmask97to128 = zonestatusmask97to128 | (1 << (zones[i]-96-1));
+                    else
+                        return;
                 }
             }
             for (auto &it: alarmZones)
@@ -1071,11 +1079,31 @@ namespace esphome
                         zoneStatusUpdate(&it);
                     }   
                 }
-                else
+                else if (it.zone > 32 && it.zone <= 64)
                 {
                     if (it.open != static_cast<bool>((zonestatusmask33to64 >> (it.zone - 32 - 1)) & 0x01))
                     {
                         it.open = (zonestatusmask33to64 >> (it.zone - 1)) & 0x01;
+                        if (it.open)
+                            it.time = esp_timer_get_time();
+                        zoneStatusUpdate(&it);
+                    }
+                }
+                else if (it.zone > 64 && it.zone <= 96)
+                {
+                    if (it.open != static_cast<bool>((zonestatusmask65to96 >> (it.zone - 64 - 1)) & 0x01))
+                    {
+                        it.open = (zonestatusmask65to96 >> (it.zone - 1)) & 0x01;
+                        if (it.open)
+                            it.time = esp_timer_get_time();
+                        zoneStatusUpdate(&it);
+                    }
+                }
+                else if (it.zone > 96 && it.zone <= 128)
+                {
+                    if (it.open != static_cast<bool>((zonestatusmask97to128 >> (it.zone - 96 - 1)) & 0x01))
+                    {
+                        it.open = (zonestatusmask97to128 >> (it.zone - 1)) & 0x01;
                         if (it.open)
                             it.time = esp_timer_get_time();
                         zoneStatusUpdate(&it);
