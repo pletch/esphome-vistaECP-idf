@@ -21,6 +21,7 @@ CONF_KEYPAD1="keypad_addr_1"
 CONF_KEYPAD2="keypad_addr_2"
 CONF_KEYPAD3="keypad_addr_3"
 CONF_AUIADDR="aui_addr"
+CONF_AUTOCLOCKSYNC="aui_auto_clock_sync"
 CONF_RXPIN="rx_pin"
 CONF_TXPIN="tx_pin"
 CONF_MONITORPIN="monitor_pin"
@@ -64,6 +65,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD3,default=0): cv.int_, 
             cv.Optional(CONF_AUIADDR,default=0): cv.int_,
+            cv.Optional(CONF_AUTOCLOCKSYNC): cv.boolean,
             cv.Required(CONF_RXPIN): cv.int_, 
             cv.Required(CONF_TXPIN): cv.int_,
             cv.Required(CONF_UART1): cv.int_, 
@@ -114,6 +116,8 @@ async def to_code(config):
         cg.add(var.set_rfrEmulation(config[CONF_RFR], config[CONF_RFRADDR]))        
     if CONF_AUIADDR in config:
         cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
+    if CONF_AUTOCLOCKSYNC in config:
+        cg.add(var.set_clocksync(config[CONF_AUTOCLOCKSYNC]))
     await cg.register_component(var, config)
         
             

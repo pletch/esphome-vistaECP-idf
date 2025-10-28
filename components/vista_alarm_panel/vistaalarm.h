@@ -115,6 +115,7 @@ namespace esphome
                 void set_lrrSupervisor(bool ls) { lrrSupervisor = ls; }
                 void set_rfrEmulation(bool rfr_emul, uint8_t rfr_addr) { rfrEmulation[0] = rfr_emul; rfrEmulation[1] = rfr_addr; }
                 void set_auiaddr(uint8_t addr) { aui_device.address = addr; aui_device.sequence1 = 0x20 | addr;};
+                void set_clocksync(bool cs) { panel_clock.auto_sync = cs;};
 
                 void initialize_partition_sensors();
                 void set_partitionKeypad(uint8_t idx, uint8_t addr)
@@ -254,13 +255,19 @@ namespace esphome
                     uint8_t partition;
                 };
 
+                struct panelClockType
+                {
+                    uint64_t next_sync = 2*60*1000*1000; //first sync 2 min after boot
+                    bool auto_sync = false;
+                };
+                panelClockType panel_clock;
+
                 struct AUIdeviceType
                 {
                     uint8_t address = 0;
                     uint8_t sequence1 = 0;
                     uint8_t sequence2 = 0x6F;
                 };
-
                 AUIdeviceType aui_device;
 
                 struct AUIrequest
@@ -268,7 +275,6 @@ namespace esphome
                     bool pending = false;
                     uint64_t time = 0;
                 };
-
                 AUIrequest aui_request;
                 
                 std::vector<binary_sensor::BinarySensor *> bMap;
@@ -406,6 +412,7 @@ namespace esphome
                 void alarm_trigger_panic(std::string code, int32_t partition);
                 void alarm_keypress(std::string keystring);
                 void alarm_keypress_partition(std::string keystring, int32_t partition);
+                void AUIrequest_panel_time();
                 void AUIset_panel_time();
                 void AUIget_zone_faults();
                 void AUIprocess_zone_faults(char *list);

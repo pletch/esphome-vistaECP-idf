@@ -34,6 +34,11 @@ namespace esphome
                     RF_handle_heartbeats();
                 if (aui_request.pending && esp_timer_get_time() - aui_request.time > 6 * 1000 * 1000)
                     aui_request.pending = false;
+                if (panel_clock.auto_sync && (esp_timer_get_time() > panel_clock.next_sync))
+                {
+                    AUIrequest_panel_time();
+                    panel_clock.next_sync += static_cast<uint64_t>(6)*60*60*1000*1000; //next sync in 6 hrs
+                }
                 char payload[48];
                 int size;
                 int type;
@@ -48,17 +53,7 @@ namespace esphome
                     {
                         if (payload[0]==0xF7)
                         {
-                            F7_no_change = areEqual(payload, last_F7, size);
-            
-                            if (!F7_no_change)
-                            {
-                                memcpy(last_F7,payload,size);
-                                refreshStatusFlags(payload, &statusFlags);
-                            }
-                            if ((esp_timer_get_time() - last_refresh) > 30*1000*1000)
-                            {
-                                forceRefreshGlobal = true;
-                            }
+                            refreshStatusFlags(payload, &statusFlags);
                             forceRefreshGlobal = true;
                             if (statusFlags.partition == 0) 
                                 ESP_LOGW(TAG, "No keypad associated with this partition in YAML definition.");
@@ -162,7 +157,33 @@ namespace esphome
                                     ESP_LOGI(TAG, " AUI Target:%d  Type:%s", target,F2type);
                                 }
 #endif
-                                
+                                if (sum == 20 && target == aui_device.address)
+                                {
+                                    ESPTime panel_time;
+                                    ESPTime rtc = now();
+                                    if (rtc.is_valid())
+                                    {    
+                                        panel_time.year = 2000 + 10 * (F2data[0] - '0') + (F2data[1] - '0');
+                                        panel_time.month = 10 * (F2data[2] - '0') + (F2data[3] - '0');
+                                        panel_time.day_of_month = 10 * (F2data[4] - '0') + (F2data[5] - '0');
+                                        panel_time.hour = 10 * (F2data[6] - '0') + (F2data[7] - '0');
+                                        panel_time.minute = 10 * (F2data[8] - '0') + (F2data[9] - '0');
+                                        panel_time.second = 10 * (F2data[10] - '0') + (F2data[11] - '0');
+                                        panel_time.recalc_timestamp_local();
+                                        int32_t delta = abs(rtc.timestamp - panel_time.timestamp);
+                                        if (panel_clock.auto_sync && delta > 60)
+                                            AUIset_panel_time();
+#ifdef DEBUG_LOG
+                                        char s[32];
+                                        panel_time.strftime(s, 32,"%Y-%m-%d %H:%M:%S");
+                                        ESP_LOGD(TAG,"Panel time is %s",s);
+                                        rtc.strftime(s, 32,"%Y-%m-%d %H:%M:%S");
+                                        ESP_LOGD(TAG,"RTC time is %s",s);
+                                        ESP_LOGD(TAG, "Offset is %i seconds", delta);
+#endif
+                                    }
+                                }
+
                                 if (sum == 23 || sum == 4)
                                 {
                                     AUIprocess_zone_faults(F2data);
@@ -962,6 +983,19 @@ namespace esphome
                 text_sensors_partition[partition-1].line1->process(p1);
             if (text_sensors_partition[partition-1].line2 != NULL)
                 text_sensors_partition[partition-1].line2->process(p2);
+        }
+
+        void vistaECPHome::AUIrequest_panel_time()
+        {
+            if (statusFlags.programMode || !aui_device.address )
+                return;
+            ESP_LOGD(TAG, "Requesting AUI time from panel...");
+            char bytes[6] = {0,0, 0x05, 0x02, 0x43, 0x43};
+            aui_device.sequence2 = aui_device.sequence2 == 0x6F ? 0x68 : aui_device.sequence2 + 1;
+            bytes[1] = aui_device.sequence2;
+            vistabus.writedirect(bytes, 6, aui_device.address, aui_device.sequence1);
+            aui_device.sequence1 += 0x40;
+            return;
         }
 
         void vistaECPHome::AUIset_panel_time()

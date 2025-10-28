@@ -23,12 +23,14 @@ vista_alarm_panel:
   keypad_addr_3: "0" #partition 3 virtual keypad. set to 0 to disable
 
   # AUI address from program field *189 to use for faster zone closure status for zones directly
-  # hardwired to the panel and to allow time sync of panel via manual Home Assistant service. 
+  # hardwired to the panel and to allow time sync of panel via manual Home Assistant service or via
+  # automatic option if enabled. 
   # Ensure it is not assigned to a physical touchpad or to Total Connect 2.0 (assigned to address 2).
   #        Note: Older vista20 panel firmwares only have addresses 1 and 2 while newer will have 1,2,5 and 6. 
   # For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program #93, 
   # device programming. Omission of the parameter or a value of zero disables AUI handling.
   aui_addr: "0" 
+  aui_auto_clock_sync: "false" #Automatically sync panel clock using esphome clock time
 
   rx_pin: "21" #GPIO pin to use for data receive (yellow line) 
   tx_pin: "23" #GPIO pin to use for data transmit (green line)

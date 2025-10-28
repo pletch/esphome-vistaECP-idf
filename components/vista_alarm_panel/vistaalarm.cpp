@@ -200,6 +200,7 @@ namespace esphome
             set_update_interval(1000); // set interval frequency in main loop task
 
             register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
+            register_service(&vistaECPHome::AUIrequest_panel_time, "request_panel_time", {});
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
             register_service(&vistaECPHome::alarm_keypress_partition, "alarm_keypress_partition", {"keys", "partition"});
             register_service(&vistaECPHome::alarm_disarm, "alarm_disarm", {"code", "partition"});
