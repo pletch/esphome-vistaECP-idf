@@ -140,7 +140,7 @@ namespace esphome
                                         break; 
                                 }
 #endif
-                                if (F2data[0] > 0x19 && F2data[0] < 0x80)
+                                if (F2data[0] > 0x19 && F2data[0] < 0x80) //limit to standard ascii characters
                                 {
                                     for (uint8_t i = 1; i < data_len; i++)
                                     {

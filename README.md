@@ -100,7 +100,7 @@ binary_sensor:
 Configuration variables:  
   
 [zone binary status]
-- **emulated** (*Optional*, boolean) Enable virtual zone emulation.  If specified in zone with rf_serial / rf_loop options defined and rf_receiver_emulation is enabled, an RF zone is emulated. The required heartbeat/supervisory signals are handled internally.  If specified with rf options, hardwared zone is emulated through automatic expander board emulation (e.g. Honeywell 4129). Ensure that the zone number selected for emulated hardwired zone does not conflict with existing physical boards in your system.  This is useful for associating other gpio on ESP32 or other Home Assistant sensors with alarm panel zone. Defaults to **false** if not defined.
+- **emulated** (*Optional*, boolean) Enable virtual zone emulation.  If specified in zone with rf_serial / rf_loop options defined and rf_receiver_emulation is enabled, an RF zone is emulated. The required heartbeat/supervisory signals are handled internally.  If specified without rf options, hardwired zone is emulated through automatic expander board emulation (e.g. Honeywell 4129). Ensure that the zone number selected for emulated hardwired zone does not conflict with existing physical boards in your system.  This is useful for associating other gpio on ESP32 or other Home Assistant sensors with alarm panel zone. Defaults to **false** if not defined.
   
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 9-16 will enable expander emulation on address 7.  
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 17-24 will enable expander emulation on address 8.  
@@ -115,7 +115,7 @@ Configuration variables:
   
 [non-zone binary status]
 - **partition** (*Optional*, int) Partion number associated with status sensor.
-- **status_sensor** (*Optional*, string) Valid options are [ready, trouble, bypass, armed_away, armed_instant, armed_night, chime, alarm, fire, ac_power, and battery]. Partition specific indicators will require specifying partition.
+- **status_indicator** (*Optional*, string) Valid options are [ready, trouble, bypass, armed_away, armed_instant, armed_night, chime, alarm, fire, ac_power, and battery]. Partition specific indicators will require specifying partition.
     
 ```
 text_sensor:
