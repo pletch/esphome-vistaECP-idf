@@ -20,11 +20,11 @@ namespace esphome
         {
             if (rfrEmulation[0])
             {
-                for (auto it = alarmZones.begin(); it != alarmZones.end(); ++it) 
+                for (auto &it : alarmZones) 
                 {
-                    if(it->rfnext_hb)
+                    if(it.rfnext_hb)
                     {
-                        it->rfnext_hb = esp_timer_get_time() + 1*60*1000*1000 + (esp_random() % 10) * 60 * 1000 * 1000;
+                        it.rfnext_hb = esp_timer_get_time() + 1*60*1000*1000 + (esp_random() % 10) * 60 * 1000 * 1000;
                     }
                 }
             }
@@ -266,11 +266,11 @@ namespace esphome
                         else if (payload[0] != 0 && src == keypad_ack)
                         {
                             uint8_t kp_addr = (payload[0] & 0x0F) | 0x10;
-                            for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+                            for (auto &it : known_partitions)
                             {
-                                if (kp_addr == it->assigned_keypad)
+                                if (kp_addr == it.assigned_keypad)
                                 {
-                                    it->keypad_sequence = it->keypad_sequence + 0x40;
+                                    it.keypad_sequence = it.keypad_sequence + 0x40;
                                     break;
                                 }
                             }
@@ -392,9 +392,9 @@ namespace esphome
                 last_refresh = esp_timer_get_time();
                 
                 uint8_t kpi = 0;
-                for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+                for (auto &it : known_partitions)
                 {
-                    if (statusFlags.partition == it->partition)
+                    if (statusFlags.partition == it.partition)
                         break;
                     kpi++;
                 }
@@ -692,9 +692,9 @@ namespace esphome
                         continue;
 
                     kpi = 0;
-                    for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+                    for (auto &it : known_partitions)
                     {
-                        if (x.partition == it->partition)
+                        if (x.partition == it.partition)
                             break;
                         kpi++;
                     }
@@ -814,11 +814,11 @@ namespace esphome
 
             statusFlags->partition = 0;
 
-            for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+            for (auto &it : known_partitions)
             {
-                if (cbuf[(it->assigned_keypad >> 3) + 1] & (0x01 << (it->assigned_keypad & 0x07)))
+                if (cbuf[(it.assigned_keypad >> 3) + 1] & (0x01 << (it.assigned_keypad & 0x07)))
                 {
-                    statusFlags->partition = it->partition;
+                    statusFlags->partition = it.partition;
                     break;
                 }
             }
@@ -923,12 +923,12 @@ namespace esphome
 
         void vistaECPHome::RF_handle_heartbeats()
         {  
-            for (auto it = alarmZones.begin(); it != alarmZones.end(); ++it) 
+            for (auto &it : alarmZones) 
             {
-                if(it->rfnext_hb && (esp_timer_get_time() > it->rfnext_hb))
+                if(it.rfnext_hb && (esp_timer_get_time() > it.rfnext_hb))
                 {
                     int mask;
-                    switch (it->rfloop)
+                    switch (it.rfloop)
                     {
                         case 1:
                             mask = 0x80;
@@ -947,8 +947,8 @@ namespace esphome
                             break;
                     }
                 uint8_t msg = 0x80 ^ mask & 0x04;
-                vistabus.sendRFmsg(it->rfserial,msg);
-                it->rfnext_hb = esp_timer_get_time() + 70ULL*60*1000*1000 + (esp_random() % 20) * 60 * 1000 * 1000;
+                vistabus.sendRFmsg(it.rfserial,msg);
+                it.rfnext_hb = esp_timer_get_time() + 70ULL*60*1000*1000 + (esp_random() % 20) * 60 * 1000 * 1000;
                 }
             }
         }

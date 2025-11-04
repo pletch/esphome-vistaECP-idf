@@ -545,9 +545,9 @@ namespace esphome
                 return;
                 
             uint8_t kpi = 0;
-            for (auto it = begin(known_partitions); it != end (known_partitions); ++it)
+            for (auto &it : known_partitions)
             {
-                if (partition == it->partition)
+                if (partition == it.partition)
                     break;
                 kpi++;
             }
