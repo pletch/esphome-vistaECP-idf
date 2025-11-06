@@ -273,7 +273,7 @@ namespace esphome
 
         void vistaECPHome::set_zone_fault(int32_t zone, bool fault)
         {
-            for (auto &it: alarmZones)
+            for (const auto &it: alarmZones)
             {
                 if (it.zone == zone)
                 {
@@ -545,7 +545,7 @@ namespace esphome
                 return;
                 
             uint8_t kpi = 0;
-            for (auto &it : known_partitions)
+            for (const auto &it : known_partitions)
             {
                 if (partition == it.partition)
                     break;

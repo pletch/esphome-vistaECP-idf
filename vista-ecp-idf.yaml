@@ -18,9 +18,14 @@ vista_alarm_panel:
 
   #assign a new virtual keypad address to each active partition using programs *190 - *196
   #and enter it below.  For unused partitions, use 0 as the keypad address.
-  keypad_addr_1: "20" #partition 1 virtual keyapd
-  keypad_addr_2: "0" #partition 2 virtual keypad. set to 0 to disable
-  keypad_addr_3: "0" #partition 3 virtual keypad. set to 0 to disable
+  keypad_addr_1: "20" #partition 1 virtual keypad. Comment out or set to 0 to disable
+  keypad_addr_2: "0" #partition 2 virtual keypad. Comment out or set to 0 to disable
+  keypad_addr_3: "0" #partition 3 virtual keypad. Comment out or set to 0 to disable
+  keypad_addr_4: "0" #partition 4 virtual keypad. Comment out or set to 0 to disable
+  keypad_addr_5: "0" #partition 5 virtual keypad. Comment out or set to 0 to disable
+  keypad_addr_6: "0" #partition 6 virtual keypad. Comment out or set to 0 to disable
+  keypad_addr_7: "0" #partition 5 virtual keypad. Comment out or set to 0 to disable
+  keypad_addr_8: "0" #partition 6 virtual keypad. Comment out or set to 0 to disable
 
   # AUI address from program field *189 to use for faster zone closure status for zones directly
   # hardwired to the panel and to allow time sync of panel via manual Home Assistant service or via

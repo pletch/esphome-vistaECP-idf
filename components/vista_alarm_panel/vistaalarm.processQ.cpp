@@ -392,7 +392,7 @@ namespace esphome
                 last_refresh = esp_timer_get_time();
                 
                 uint8_t kpi = 0;
-                for (auto &it : known_partitions)
+                for (const auto &it : known_partitions)
                 {
                     if (statusFlags.partition == it.partition)
                         break;
@@ -692,7 +692,7 @@ namespace esphome
                         continue;
 
                     kpi = 0;
-                    for (auto &it : known_partitions)
+                    for (const auto &it : known_partitions)
                     {
                         if (x.partition == it.partition)
                             break;
@@ -814,7 +814,7 @@ namespace esphome
 
             statusFlags->partition = 0;
 
-            for (auto &it : known_partitions)
+            for (const auto &it : known_partitions)
             {
                 if (cbuf[(it.assigned_keypad >> 3) + 1] & (0x01 << (it.assigned_keypad & 0x07)))
                 {

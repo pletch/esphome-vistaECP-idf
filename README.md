@@ -45,7 +45,7 @@ vista_alarm_panel:
     uart_1: #
 ```
 Configuration variables:
-- **keypad_addr_1, keypad_addr_2, keypad_addr_3 (Required)**:  Virtual keypad address for partitions 1, 2, & 3. Enable address in alarm panel programming via program fields *190 - *196. Setting value to zero disables. At least one of the three must be defined non-zero.
+- **keypad_addr_1, ... , keypad_addr_ 8 (Required)**:  Virtual keypad address for partitions 1 - 8. Enable address in alarm panel programming via program fields *190 - *196 if using Vista 20p. Setting value to zero disables. At least one of the partition keypad must be defined non-zero and any additional are optional.
 - **rx_pin (Required, PIN)**: GPIO pin assigned to UART for data receive (yellow line)
 - **tx_pin (Required, PIN)**: GPIO pin assigned to UART for data transmit (green line)
 - **uart_1 (Required, UART)**: Hardware UART number associated with tx/rx 

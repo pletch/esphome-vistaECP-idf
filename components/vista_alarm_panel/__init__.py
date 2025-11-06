@@ -20,6 +20,11 @@ CONF_DEBUGPULSE="debug_pulsing"
 CONF_KEYPAD1="keypad_addr_1"
 CONF_KEYPAD2="keypad_addr_2"
 CONF_KEYPAD3="keypad_addr_3"
+CONF_KEYPAD4="keypad_addr_4"
+CONF_KEYPAD5="keypad_addr_5"
+CONF_KEYPAD6="keypad_addr_6"
+CONF_KEYPAD7="keypad_addr_7"
+CONF_KEYPAD8="keypad_addr_8"
 CONF_AUIADDR="aui_addr"
 CONF_AUTOCLOCKSYNC="aui_auto_clock_sync"
 CONF_RXPIN="rx_pin"
@@ -36,7 +41,12 @@ CONF_RFRADDR="rf_receiver_addr"
 def validate_keypads(config):
     if (config[CONF_KEYPAD1] == 0 
         and config[CONF_KEYPAD2] == 0
-        and config[CONF_KEYPAD3] == 0):
+        and config[CONF_KEYPAD3] == 0
+        and config[CONF_KEYPAD4] == 0
+        and config[CONF_KEYPAD5] == 0
+        and config[CONF_KEYPAD6] == 0
+        and config[CONF_KEYPAD7] == 0
+        and config[CONF_KEYPAD8] == 0):
         raise cv.Invalid("All partition keypads assigned 0. At minimum one 'keypad_addr_#' must be defined in YAML and assigned a valid address")
     return config
 
@@ -63,7 +73,12 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_DEBUGPULSE,default=False): cv.boolean,
             cv.Optional(CONF_KEYPAD1,default=0): cv.int_, 
             cv.Optional(CONF_KEYPAD2,default=0): cv.int_, 
-            cv.Optional(CONF_KEYPAD3,default=0): cv.int_, 
+            cv.Optional(CONF_KEYPAD3,default=0): cv.int_,
+            cv.Optional(CONF_KEYPAD4,default=0): cv.int_, 
+            cv.Optional(CONF_KEYPAD5,default=0): cv.int_, 
+            cv.Optional(CONF_KEYPAD6,default=0): cv.int_,
+            cv.Optional(CONF_KEYPAD7,default=0): cv.int_, 
+            cv.Optional(CONF_KEYPAD8,default=0): cv.int_,   
             cv.Optional(CONF_AUIADDR,default=0): cv.int_,
             cv.Optional(CONF_AUTOCLOCKSYNC): cv.boolean,
             cv.Required(CONF_RXPIN): cv.int_, 
@@ -106,6 +121,16 @@ async def to_code(config):
         cg.add(var.set_partitionKeypad(2,config[CONF_KEYPAD2]))
     if config[CONF_KEYPAD3] != 0:
         cg.add(var.set_partitionKeypad(3,config[CONF_KEYPAD3]))
+    if config[CONF_KEYPAD4] != 0:
+        cg.add(var.set_partitionKeypad(4,config[CONF_KEYPAD4]))
+    if config[CONF_KEYPAD5] != 0:
+        cg.add(var.set_partitionKeypad(5,config[CONF_KEYPAD5]))
+    if config[CONF_KEYPAD6] != 0:
+        cg.add(var.set_partitionKeypad(6,config[CONF_KEYPAD6]))
+    if config[CONF_KEYPAD7] != 0:
+        cg.add(var.set_partitionKeypad(7,config[CONF_KEYPAD7]))
+    if config[CONF_KEYPAD8] != 0:
+        cg.add(var.set_partitionKeypad(8,config[CONF_KEYPAD8]))
     cg.add(var.initialize_partition_sensors())
     cg.add(var.set_ttl(config[CONF_TTL]))       
     if CONF_QUICKARM in config:
