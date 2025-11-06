@@ -80,7 +80,7 @@ namespace esphome
             else if (strncmp(type, "ALARM", 3)== 0)
                 status_sensors_partition[partition_number-1].alm = binary_sensor;
             else if (strncmp(type, "FIRE", 3)== 0)
-                status_sensors_partition[partition_number-1].chm = binary_sensor;
+                status_sensors_partition[partition_number-1].fire = binary_sensor;
             ESP_LOGI("","Registering partition sensor %s for partition %d.",type, partition_number);
         }
 
@@ -197,7 +197,7 @@ namespace esphome
         {
             ESP_LOGD(TAG, "Start setup: Free heap: (%lu)", esp_get_free_heap_size());
 
-            set_update_interval(1000); // set interval frequency in main loop task
+            set_update_interval(5000); // set interval frequency in main loop task
 
             register_service(&vistaECPHome::AUIset_panel_time, "set_panel_time", {});
             register_service(&vistaECPHome::alarm_keypress, "alarm_keypress", {"keys"});
@@ -238,6 +238,7 @@ namespace esphome
             if (rfrEmulation[0])
                 vistabus.emulateRFR(rfrEmulation[1]);    
             vistabus.begin(uart1, rxPin, txPin, uart2, monitorPin);
+            last_connection_check = esp_timer_get_time();
             ESP_LOGD(TAG, "Completed setup. Free heap=%lu", esp_get_free_heap_size()); 
         }
 
@@ -335,12 +336,6 @@ namespace esphome
 
         void vistaECPHome::alarm_keypress_partition(std::string keystring, int32_t partition)
         {
-            if (keystring == "R")
-            {
-                forceRefreshGlobal = true;
-                forceRefresh = true;
-                return;
-            }
             if (keystring == "A")
             {
                 set_alarm_state("A", "", partition);
@@ -653,10 +648,10 @@ namespace esphome
 
         void vistaECPHome::update()
         {    
-            if (!vistabus.connected() && esp_timer_get_time() - last_refresh > 30*1000*1000)
+            if (!vistabus.connected() && esp_timer_get_time() - last_connection_check > 30*1000*1000)
             {
                 ESP_LOGE(TAG, "Data timeout. Is the panel connected?");
-                last_refresh = esp_timer_get_time();
+                last_connection_check = esp_timer_get_time();
                 return;
             }      
         }

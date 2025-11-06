@@ -111,7 +111,6 @@ namespace esphome
                 void set_accessCode(const char *ac) { accessCode = ac; }
                 void set_rfSerialLookup(const char *rf) { rfSerialLookup = rf; }
                 void set_quickArm(bool qa) { quickArm = qa; }
-                void set_displaySystemMsg(bool dsm) { displaySystemMsg = dsm; }
                 void set_lrrSupervisor(bool ls) { lrrSupervisor = ls; }
                 void set_rfrEmulation(bool rfr_emul, uint8_t rfr_addr) { rfrEmulation[0] = rfr_emul; rfrEmulation[1] = rfr_addr; }
                 void set_auiaddr(uint8_t addr) { aui_device.address = addr; aui_device.sequence1 = 0x20 | addr;};
@@ -156,7 +155,7 @@ namespace esphome
                 const char *const TAG = "vista-alarm";
                 esp_log_level_t log_level = ESP_LOG_DEBUG;
                 uint64_t TTL = 30000000;
-                uint64_t last_refresh = 0;
+                uint64_t last_connection_check = 0;
                 uint8_t debug = 0;
                 char last_F7[48];
                 char keypadAddr1 = 0;
@@ -196,7 +195,6 @@ namespace esphome
                     lightStates previousLightState;
                     int lastbeeps;
                     bool refreshStatus;
-                    bool refreshLights;
                 };
 
                 struct partitionType
@@ -371,21 +369,10 @@ namespace esphome
 
                 uint64_t lowBatteryTime;
 
-                struct alarmStatusType
-                {
-                    uint64_t time;
-                    bool state;
-                    uint16_t zone;
-                };
-
-                bool displaySystemMsg = false;
-                bool forceRefreshGlobal = false;
-                bool forceRefreshZones, forceRefresh;
                 sysState currentSystemState,previousSystemState;
 
-                std::string previousZoneStatusMsg;
+                std::string previousZoneStatusMsg = " ";
 
-                alarmStatusType fireStatus, panicStatus, alarmStatus;
                 uint8_t partitionTargets;
       
                 std::vector<zoneType> alarmZones{};
@@ -399,8 +386,12 @@ namespace esphome
 
                 statusFlagType statusFlags;
                 lrrstatusFlagType lrrstatusFlags;
-                void refreshStatusFlags(char * cbuf, struct statusFlagType * statusFlags);
-                void refreshLRRStatusFlags(char * cbuf, struct lrrstatusFlagType * LRRstatusFlags); 
+                void refreshStatusFlags(char * cbuf);
+                void processF7(const char * cbuf);
+                uint64_t last_refresh = 0;
+
+                void refreshSensors();
+                void refreshLRRStatusFlags(char * cbuf); 
 
                 void RF_handle_heartbeats();
 
@@ -412,6 +403,7 @@ namespace esphome
                 void alarm_trigger_panic(std::string code, int32_t partition);
                 void alarm_keypress(std::string keystring);
                 void alarm_keypress_partition(std::string keystring, int32_t partition);
+
                 void AUIrequest_panel_time();
                 void AUIset_panel_time();
                 void AUIget_zone_faults();
