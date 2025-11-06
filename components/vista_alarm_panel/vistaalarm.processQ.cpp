@@ -92,7 +92,6 @@ namespace esphome
                                 char F2data[data_len+1];
                                 memset(F2data,'\0',sizeof(F2data));
                                 memcpy(F2data,&payload[size-data_len-1],data_len);
-#ifdef DEBUG_LOG
                                 uint8_t target = 0;
                                 switch (payload[2])
                                 {
@@ -111,6 +110,7 @@ namespace esphome
                                     default:
                                         break;
                                 }
+#ifdef DEBUG_LOG
                                 char F2type[24];
                                 memset(F2type,'\0',sizeof(F2type));
                                 switch (sum)
