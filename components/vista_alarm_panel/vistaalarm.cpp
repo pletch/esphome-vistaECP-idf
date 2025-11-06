@@ -382,7 +382,7 @@ namespace esphome
 
             uint8_t addr = 0;
             uint8_t seq = 0;
-            if (partition > 3 || partition < 1)
+            if (partition > 8 || partition < 1)
                 return;
             addr = known_partitions[partition - 1].assigned_keypad;
             seq = known_partitions[partition - 1].keypad_sequence;
