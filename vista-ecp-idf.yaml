@@ -1,31 +1,31 @@
 # Modified to work with idf fork version!!!
 substitutions:
-  name: "vista-ecp-idf" #unique network name, system name
-  friendlyName: "Vista Alarm"  #used as the friendly name of your application in HomeAssistant
-  panelId: "VistaAlarm"         #used as the service variable name.
+  name: "vista-ecp-idf" # Unique network name, system name
+  friendlyName: "Vista Alarm"  # Used as the friendly name of your application in HomeAssistant
+  panelId: "VistaAlarm"        # Used as the service variable name.
   accesscode: !secret access_code
   
 vista_alarm_panel:
   id: $panelId
-  access_code: $accesscode #Only comes into effect if needed for arming and quickarm is not set
+  access_code: $accesscode # Only relevant if needed for arming and quickarm is not set
 
-  default_partition: "1" #set to your main partition
-  debug_logging: "false"  #enables additional bus activity logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm  
-                          #component (if configured) logging level must be set to DEBUG or higher in logging component section
-                          #to output all messages. 
-  debug_pulsing: "false" #enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 
+  default_partition: "1"  # Set to system main partition
+  debug_logging: "false"  # Enables additional bus activity logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm  
+                          # component (if configured) logging level must be set to DEBUG or higher in logging component section
+                          # to output all messages. 
+  debug_pulsing: "false" # Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 
                          # 60 seconds after startup and continues indefinitely.  DO NOT enable for routine use of component! 
 
-  #assign a new virtual keypad address to each active partition using programs *190 - *196
-  #and enter it below.  For unused partitions, use 0 as the keypad address.
+  # Assign a new virtual keypad address to each active partition using programs *190 - *196 (on Vista 15/20)
+  # and enter it below.  For unused partitions, use 0 as the keypad address or comment out associated keypad_addr line.
   keypad_addr_1: "20" #partition 1 virtual keypad. Comment out or set to 0 to disable
-  keypad_addr_2: "0" #partition 2 virtual keypad. Comment out or set to 0 to disable
-  keypad_addr_3: "0" #partition 3 virtual keypad. Comment out or set to 0 to disable
-  keypad_addr_4: "0" #partition 4 virtual keypad. Comment out or set to 0 to disable
-  keypad_addr_5: "0" #partition 5 virtual keypad. Comment out or set to 0 to disable
-  keypad_addr_6: "0" #partition 6 virtual keypad. Comment out or set to 0 to disable
-  keypad_addr_7: "0" #partition 5 virtual keypad. Comment out or set to 0 to disable
-  keypad_addr_8: "0" #partition 6 virtual keypad. Comment out or set to 0 to disable
+  #keypad_addr_2: "0" #partition 2 virtual keypad. Comment out or set to 0 to disable
+  #keypad_addr_3: "0" #partition 3 virtual keypad. Comment out or set to 0 to disable
+  #keypad_addr_4: "0" #partition 4 virtual keypad. Comment out or set to 0 to disable
+  #keypad_addr_5: "0" #partition 5 virtual keypad. Comment out or set to 0 to disable
+  #keypad_addr_6: "0" #partition 6 virtual keypad. Comment out or set to 0 to disable
+  #keypad_addr_7: "0" #partition 7 virtual keypad. Comment out or set to 0 to disable
+  #keypad_addr_8: "0" #partition 8 virtual keypad. Comment out or set to 0 to disable
 
   # AUI address from program field *189 to use for faster zone closure status for zones directly
   # hardwired to the panel and to allow time sync of panel via manual Home Assistant service or via
@@ -35,25 +35,26 @@ vista_alarm_panel:
   # For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program #93, 
   # device programming. Omission of the parameter or a value of zero disables AUI handling.
   aui_addr: "0" 
-  aui_auto_clock_sync: "false" #Automatically sync panel clock using esphome clock time
+  aui_auto_clock_sync: "false" # Automatically periodically sync panel clock using esphome clock time.  
+                               # Useful for automatically pushing correct time to touchpad displays. 
 
-  rx_pin: "21" #GPIO pin to use for data receive (yellow line) 
-  tx_pin: "23" #GPIO pin to use for data transmit (green line)
-  uart_1: "1" #Hardware UART number to use for tx/rx.
+  rx_pin: "21" # GPIO pin to use for data receive (yellow line) 
+  tx_pin: "23" # GPIO pin to use for data transmit (green line)
+  uart_1: "1" # Hardware UART number to use for tx/rx.
 
-  monitor_pin: "22" #GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
-  uart_2: "2" #Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
+  monitor_pin: "22" # GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
+  uart_2: "2" # Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
 
-  ttl: "30"  # time to live in seconds for zone/fire status before expiring
+  ttl: "30"  # Time to live in seconds for hard-wired zone/fire status before expiring. Panel does not specifically send cleared messages for these.
   quickarm: "false"
 
-  lrr_supervisor: "false" # set to true if we don't have an LRR monitoring supervisor and we can emulate one to get the statuses
+  lrr_supervisor: "false" # set to true if system doesn't have LRR monitoring supervisor to emulate one and retrieve monitoring status updates.
 
   rf_receiver_emulation: "false" # set to true if using emulated RF sensors
   rf_receiver_addr: "0"   
 
-#location of alarm panel code.  You can use the github release version  or 
-#copy the code to directory "my_components" in your main esphome directory
+# Location of alarm panel code.  You can use the github release version or 
+# copy the code to directory "components" in your main esphome directory
 # see here for more info: https://esphome.io/components/external_components    
 external_components:
   - source: github://pletch/esphome-vistaECP-idf
@@ -84,7 +85,7 @@ logger:
   baud_rate: 115200   
   level: DEBUG
   logs:
-    vista-alarm: DEBUG    #set this as desired to suppress/enable log messages for vista-alarm component
+    vista-alarm: DEBUG  # Set this as desired to suppress/enable verbosity of log messages for vista-alarm component.
 
 safe_mode: 
 
