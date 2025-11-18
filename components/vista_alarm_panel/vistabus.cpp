@@ -147,7 +147,6 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
     };
     ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rx_chan, &cbs, receive_queue));
     
-    // the following timing requirement is based on NEC protocol
     rmt_receive_config_t receive_config = {
         .signal_range_min_ns = 2000,     // 2 us.
         .signal_range_max_ns = 20000000, // use 20 ms as longest duration

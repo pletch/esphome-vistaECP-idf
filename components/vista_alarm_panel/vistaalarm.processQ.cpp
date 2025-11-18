@@ -2,10 +2,14 @@
 Functions in this file:
 processReceiveQueue
 processReceiveQueue_task_start
+processF7
 refreshStatusFlags
 refreshLRRStatusFlags
+refreshSensors
+RF_handle_heartbeats
 updateDisplayLines
 AUIset_panel_time
+AUIrequest_panel_time
 AUIget_zone_faults
 AUIprocess_zone_faults
 */
@@ -458,8 +462,6 @@ namespace esphome
             // Translate single extended ascii or unicode code point to multibyte UTF8
             // Not sure what encoding all the OUS panel options might use.  Possibly
             // some sort of custom mapping to extended codes?
-            // At least for Swedish, doesn't work exactly right but keeps HA from
-            // disconnecting on invalid character.
             // As an example, byte EF is given from panel when it should be F6
             // for small o with diaeresis. Byte E1 is given when it should be
             // byte E4.
@@ -642,6 +644,7 @@ namespace esphome
             {
                 currentLightState.ac = false;
             }
+            
             if ( statusFlags.lowBattery && (statusFlags.systemFlag || statusFlags.check))
             {
                 currentLightState.bat = true;

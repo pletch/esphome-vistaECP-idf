@@ -1,26 +1,26 @@
 type: custom:alarm-keypad-card
-title: Vista_ESPHOME-partition1
-disp_line1: sensor.vistaalarm_ln1_1
-disp_line2: sensor.vistaalarm_ln2_1
+title: Honeywell Vista-20P
+disp_line1: sensor.vista_ecp_idf_line1
+disp_line2: sensor.vista_ecp_idf_line2
 service_type: esphome
-service: vistaalarm_alarm_keypress_partition
+service: vista_ecp_idf_alarm_keypress_partition
 status_A: AWAY
 status_B: STAY
 status_C: READY
-status_D: BYPASS
+status_D: AC
 status_E: TROUBLE
 status_F: CHIME
 status_G: ""
 status_H: ""
-sensor_A: binary_sensor.vistaalarm_arma_1
-sensor_B: binary_sensor.vistaalarm_arms_1
-sensor_C: binary_sensor.vistaalarm_rdy_1
-sensor_D: binary_sensor.vistaalarm_byp_1
-sensor_E: binary_sensor.vistaalarm_trbl_1
-sensor_F: binary_sensor.vistaalarm_chm_1
+sensor_A: binary_sensor.vista_ecp_idf_armed_away
+sensor_B: binary_sensor.vista_ecp_idf_armed_stay
+sensor_C: binary_sensor.vista_ecp_idf_ready
+sensor_D: binary_sensor.vista_ecp_idf_power_status
+sensor_E: binary_sensor.vista_ecp_idf_trouble
+sensor_F: binary_sensor.vista_ecp_idf_chime
 button_A: STAY
 button_B: AWAY
-button_C: BP LIST
+button_C: DISARM
 button_D: BYPASS
 button_F: null
 button_G: ""
@@ -34,36 +34,49 @@ status_B_on_icon: mdi:shield-lock
 status_B_off_icon: mdi:shield-off-outline
 status_C_off_icon: mdi:circle-off-outline
 status_C_on_icon: mdi:check-circle
-status_C_color: green
+status_C_color: rgb(72, 245, 66)
+status_D_color: rgb(72, 245, 66)
 status_E_color: orange
 status_E_on_icon: mdi:alert
 status_E_off_icon: mdi:triangle-outline
-lcd_bg_color: var(--input-fill-color)
-lcd_text_color: var(--primary-text-color)
-button_bg_color: var(--input-fill-color)
-button_text_color: var(--primary-color)
-sensor_label_color: var(--accent-color)
-button_hover_color: var(--outline-hover-color)
-button_active_color: var(--secondary-text-color)
-button_focus_color: var(--outline-color)
-sensor_off_color: var(--disabled-text-color)
+style:
+  "--lcdbgcolordark": rgb(53, 117, 140)
+  "--lcdtextcolordark": var(--primary-text-color)
+  "--buttonbgcolordark": var(--input-fill-color)
+  "--buttontextcolordark": var(--primary-color)
+  "--buttonhovercolordark": var(--outline-hover-color)
+  "--buttonactivecolordark": var(--secondary-text-color)
+  "--sensorlabelcolordark": var(--accent-color));
+  "--buttonfocuscolordark": var(--outline-color)
+  "--sensoroffcolordark": var(--disabled-text-color)
+  "--bordercolordark": var(--disabled-color)
+  "--sensoroffcolorlight": var(--disabled-text-color)
+  "--lcdbgcolorlight": var(--input-fill-color)
+  "--lcdtextcolorlight": var(--primary-text-color)
+  "--sensorlabelcolorlight": var(--accent-color));
+  "--buttonbgcolorlight": var(--input-fill-color)
+  "--buttontextcolorlight": var(--primary-color)
+  "--buttonhovercolorlight": var(--outline-hover-color)
+  "--buttonactivecolorlight": var(--secondary-text-color)
+  "--buttonfocuscolorlight": var(--outline-color)
+  "--bordercolorlight": var(--disabled-color)
 cmd_A:
-  keys: "12343"
+  keys: S
   partition: 1
 cmd_B:
-  keys: "12342"
-  partition: 1
-cmd_C:
-  keys: 1234600
-  partition: 1
-cmd_D:
-  keys: 12346#
-  partition: 1
-cmd_E:
   keys: A
   partition: 1
+cmd_C:
+  keys: D
+  partition: 1
+cmd_D:
+  keys: B
+  partition: 1
+cmd_E:
+  keys: ""
+  partition: 1
 cmd_H:
-  keys: 12341
+  keys: ""
   partition: 1
 cmd_F:
   keys: <
@@ -128,102 +141,10 @@ button_disabled_E: true
 button_disabled_F: true
 button_disabled_G: true
 button_disabled_H: true
-beep: sensor.vistaalarm_beep_1
+beep: sensor.vista_ecp_idf_beeps
 view_pad: true
 view_display: true
 view_status: true
 view_status_2: true
 view_bottom: false
 button_left: false
-
-
-type: 'custom:alarm-keypad-card'
-title: Vista_MQTT
-unique_id: vista1
-disp_line1: sensor.displayline1
-disp_line2: sensor.displayline2
-scale: 1
-service_type: mqtt
-service: publish
-status_A: AWAY
-status_B: STAY
-status_C: READY
-status_E: BYPASS
-status_D: TROUBLE
-sensor_A: sensor.vistaaway
-sensor_B: sensor.vistastay
-sensor_C: sensor.vistaready
-sensor_E: sensor.vistabypass
-sensor_D: sensor.vistatrouble
-button_A: STAY
-button_B: AWAY
-button_C: DISARM
-button_D: BYPASS
-cmd_A:
-  topic: Vista/Set
-  payload: '{"keys":"12343","partition":"1"}
-cmd_B:
-  topic: Vista/Set
-  payload: '{"keys":"12342","partition":"1"}
-cmd_C:
-  topic: Vista/Set
-  payload: '{"keys":"12341","partition":"1"}
-cmd_D:
-  topic: Vista/Set
-  payload: '{"keys":"12346#","partition":"1"}
-key_0:
-  topic: Vista/Set
-  payload: '{"keys":"0","partition":"1"}
-key_1:
-  topic: Vista/Set
-  payload: '{"keys":"1","partition":"1"}
-key_2:
-  topic: Vista/Set
-  payload: '{"keys":"2","partition":"1"}
-key_3:
-  topic: Vista/Set
-  payload: '{"keys":"3","partition":"1"}
-key_4:
-  topic: Vista/Set
-  payload: '{"keys":"4","partition":"1"}
-key_5:
-  topic: Vista/Set
-  payload: '{"keys":"5","partition":"1"}
-key_6:
-  topic: Vista/Set
-  payload: '{"keys":"6","partition":"1"}
-key_7:
-  topic: Vista/Set
-  payload: '{"keys":"7","partition":"1"}
-key_8:
-  topic: Vista/Set
-  payload: '{"keys":"8","partition":"1"}
-key_9:
-  topic: Vista/Set
-  payload: '{"keys":""9,"partition":"1"}
-key_star:
-  topic: Vista/Set
-  payload: '{"keys":"*","partition":"1"}
-key_pound:
-  topic: Vista/Set
-  payload: '{"keys":"#","partition":"1"}
-text_1: 'OFF'
-text_2: AWAY
-text_3: STAY
-text_4: MAX
-text_5: TEST
-text_6: BYPASS
-text_7: INSTANT
-text_8: CODE
-text_9: CHIME
-text_star: READY
-text_pound: ''
-text_0: ''  
-view_pad: true
-view_display: true
-view_status: true
-view_status_2: true
-view_bottom: false
-button_left: false
-beep: sensor.vistabeeps
-vibration_duration: 50

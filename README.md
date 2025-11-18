@@ -6,27 +6,26 @@ Original project:  https://github.com/Dilbert66/esphome-vistaECP
 
 Refer to original project page for background and details on installation and circuit design.
   
-Note that this fork compiles using ESP-IDF rather than Arduino framework in ESPHome.
+Why fork?
+1. Project presented an opportunity for me to learn about esp-idf and about coding an external esphome component.
+2. At the time of the fork, original project based on Arduino rather than native ESP-IDF which is the recommended framework. While original project now supports ESP-IDF through Arduino as a component, Arduino is an additional abstraction which introduces more opportunity for bugs etc.
+3. Original project based on bit-banging-based software serial which is fragile and represents an inefficient use of purpose built dedicated hardware on a device such as the ESP32 which has dedicated UART serial devices.
+4. In an effort to support many different use cases and legacy ESP8266 devices, original project contains functionality and code not needed for a device specifically targeting use of esphome for interfacing a Honeywell Vista alarm system to Home Assistant.
 
-Fork is shared here for the benefits of any others that might want to use it.  No warranty is expressed or implied with the software contained herein as explained in the license documentation.
+Fork is shared here for the benefits of any others that might want to use it.  
 
 ### Key differences from original project:
-- Efficient use of limited micro CPU cycles through use of hardware UART and FreeRTOS multitasking. This includes complete fidelity of packet response handling including 2400 baud preamble bytes.
-- OTA updates and OTA logging work reliably without requiring disabling of keybus interaction. 
-- Arduino dependency removed and refactored for ESP-IDF v5.3+. Works with newer espressif cores such as C6.
-- Relay board emulation has been removed. Expander emulation remains.
-- AUI handling has been refactored and is now working correctly.
-- Config refactored with validation. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
-- Sensors refactored to work with modified config approach.
-- zone emulation specifier in yaml config allows emulation of either hardwired or rf virtual zones. Specifying for hardwired zone automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group of eight zone numbers for virtual hardwired zones. Specifier on zones with rf serial / loop definition allows for virtual rf zone emulation when rf receiver emulation is also enabled.
-- Refactored to support workflow associated with Vistabus class using FreeRTOS tasks for UART comm and intertask comm via FreeRTOS Queues.
-- Use of separate FreeRTOS task for nearly all command packet processing.  Esphome Loop used only to verify connection to panel.  No need to suppress "Component xx took a long time for an operation" errors in log.
-- Targeted only towards ESPHome API.  Stand-alone MQTT is removed.
-- Web server interface component not integrated as is done in the upstream version.
 - Uses one or two (if monitoring TX wire for RF messages etc.) hardware UARTS on the ESP32 family rather than software GPIO bit-banging.
+- Efficient use of limited micro CPU cycles through use of hardware UART and FreeRTOS multitasking. This includes complete fidelity of packet response handling including 2400 baud preamble bytes. New vistabus class designed using FreeRTOS tasks for UART comm and intertask communication via FreeRTOS Queues.
+- Arduino dependency removed and refactored for ESP-IDF v5.4+.
+- Relay board emulation has been removed. Expander emulation remains.
+- AUI handling has been refactored.
+- Config refactored with validation of parameters. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
+- zone emulation specifier in yaml config allows emulation of either hardwired or rf virtual zones. Specifying for hardwired zone automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group of eight zone numbers for virtual hardwired zones. Specifier on zones with rf serial / loop definition allows for virtual rf zone emulation when rf receiver emulation is also enabled.
+- Targeted only towards ESPHome API.  Stand-alone MQTT is removed.
 - Will not work with older ESP8266.
-- Lots of unused residual code, bitwise operations, and variable handling cleaned up.
-- Capability to temporarily enable RMT module for outputting bus pulse pattern to log for debugging
+- Unused residual code, bitwise operations, and variable handling cleaned up.
+- Capability to temporarily enable RMT module for outputting bus pulse pattern to log for debugging.
 
 ### ⚠️Caution: There may be features / capabilities carried over from original project but unused by me that are minimally tested.  Will test these more thoroughly in the future when I get time but please let me know if you try and the do not work.
 Some specifics include: 
