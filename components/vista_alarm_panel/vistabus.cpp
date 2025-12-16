@@ -54,7 +54,7 @@ bool VistaBus::stop()
     this->stop_requested = true;
 
     //monitor_rx_task must be shutdown first and is potentially parked at uartreadbytes.
-    //send an FF byte to wake so it shuts down. Must shut down gracefully to free(data).
+    //send an FF byte to wake so it shuts down. Must shut down gracefully to delete data.
     char tmp[1];
     tmp[0] = 0xFF;
     while (monitor_rx_task_Handle != NULL) //wait for task to terminate
@@ -345,7 +345,7 @@ bool VistaBus::mark_pulse(uint8_t address)
 
 void VistaBus::rx_tx_task(void * args)
 {
-    uint8_t* data = (uint8_t*) malloc(RX_BUF_SIZE+1);
+    auto data = std::make_unique<uint8_t[]>(RX_BUF_SIZE+1);
     struct ReceivedPacket received_packet;
     received_packet.type = 0;
 
@@ -437,7 +437,7 @@ void VistaBus::rx_tx_task(void * args)
         switch (event.type)
         {
             case UART_DATA:
-                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data, 1, 0);
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data.get(), 1, 0);
                 break;
             case UART_BREAK:
                 gpioTaskArgs taskargs;
@@ -454,9 +454,9 @@ void VistaBus::rx_tx_task(void * args)
                         uint64_t end = esp_timer_get_time();
                         if (end - start > 5700 && end - start < 6300)
                         {
-                            uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(4), uartevtQueue); //flush leading zero
+                            uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(4), uartevtQueue); //flush leading zero
                             uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
-                            rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(10), uartevtQueue);
+                            rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(10), uartevtQueue);
                             uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
                         }
                     }
@@ -464,7 +464,7 @@ void VistaBus::rx_tx_task(void * args)
                     {
                         pulse_marked = mark_pulse(pkt_to_send.keypadaddress);
                         pulse_mark_time = esp_timer_get_time();
-                        rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(10), uartevtQueue);
+                        rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(10), uartevtQueue);
                     }
                 }
                 gpio_isr_handler_remove(static_cast<gpio_num_t>(this->rxPin));
@@ -488,7 +488,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             if ( data[0] == 0xF6) //SEND ACK Received
             {                 
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //Get Address
+                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //Get Address
                 if(data[0] != 0 && monitor_rx_task_Handle != NULL)
                 {
                     uint32_t val = 0xF6 << 8 | data[0];
@@ -543,7 +543,7 @@ void VistaBus::rx_tx_task(void * args)
                     outbuffer[pkt_to_send.size+2] = ~chksum+1;
                     uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
 
-                    rxBytes = get_Packet_event(&received_packet,data,0,1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(100), uartevtQueue);
+                    rxBytes = get_Packet_event(&received_packet,data.get(),0,1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(100), uartevtQueue);
                     if(rxBytes)
                     {
                         if (data[0] == outbuffer[0])
@@ -570,7 +570,7 @@ void VistaBus::rx_tx_task(void * args)
                 } 
                 else //ACK was for another device.
                 {        
-                    rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(50), uartevtQueue);
+                    rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(50), uartevtQueue);
  #ifdef DEBUG_LOG
                     if (rxBytes) //should receive single panel response byte
                     {
@@ -583,15 +583,15 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xF7 ) //DISPLAY
             {
-                rxBytes = get_Packet_event(&received_packet,data,1,F7_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                rxBytes = get_Packet_event(&received_packet,data.get(),1,F7_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 received_packet.source = 0xF7;    
                 xQueueSend(this->receiveQueue,&received_packet,0);
             }            
             else if ( data[0] == 0xF2 ) //AUI
             {
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 received_packet.payload[1] = data[0];
-                get_Packet_event(&received_packet,data,2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                get_Packet_event(&received_packet,data.get(),2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 if (validChksum(received_packet.payload,0,static_cast<int>(received_packet.payload[1])+2)) 
                 {
                     received_packet.source = 0xF2;
@@ -600,7 +600,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xFA ) //EXP
             {                        
-                get_Packet_event(&received_packet,data,1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                get_Packet_event(&received_packet,data.get(),1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 uint32_t val = 0xFA << 16 | (received_packet.payload[2] << 8) | received_packet.payload[4];
                 if (monitor_rx_task_Handle != NULL)
                         xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
@@ -611,18 +611,18 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xF9 ) //LRR
             {   
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 received_packet.payload[1] = data[0];
                 received_packet.payload[2] = data[1];
                 received_packet.source = 0xF9;
-                get_Packet_event(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
                 uint32_t val = 0xF9 << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
                 if (monitor_rx_task_Handle != NULL)
                         xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                 if (LRRemulation)
                         this->processF9(received_packet.payload);
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 2, pdMS_TO_TICKS(30), uartevtQueue);
+                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(30), uartevtQueue);
 #ifdef DEBUG_LOG
                 if (rxBytes) //should receive single panel response byte
                 {
@@ -634,7 +634,7 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xFB ) //5881EN traffic
             {    
-                get_Packet_event(&received_packet,data,1,FB_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                get_Packet_event(&received_packet,data.get(),1,FB_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 uint32_t val = 0xFB << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
                 if (monitor_rx_task_Handle != NULL)
                     xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);                
@@ -645,13 +645,13 @@ void VistaBus::rx_tx_task(void * args)
             }
             else if ( data[0] == 0xF8 ) //Unknown Device
             {
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data, 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 received_packet.payload[1] = data[0];
                 received_packet.payload[2] = data[1];
                 uint32_t val = 0xF8 << 8 | received_packet.payload[1];
                 if (monitor_rx_task_Handle != NULL)
                     xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
-                get_Packet_event(&received_packet,data,3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
             else if (data[0] == 0)
@@ -687,7 +687,6 @@ void VistaBus::rx_tx_task(void * args)
             pulse_marked = false;
         }
     }
-    free(data);
     ESP_LOGI(TAG, "Stopping Task");
     this->rx_tx_task_Handle = NULL;
     vTaskDelete(NULL);
@@ -695,7 +694,7 @@ void VistaBus::rx_tx_task(void * args)
 
 void VistaBus::monitor_rx_task(void * args)
 {  
-    uint8_t* data = (uint8_t*) malloc(128);
+    auto data = std::make_unique<uint8_t[]>(128);
     struct ReceivedPacket rcvd_extPkt;
     rcvd_extPkt.type = 1;
     uint32_t val = 0;
@@ -706,7 +705,7 @@ void VistaBus::monitor_rx_task(void * args)
         {
             break;
         }
-        int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, portMAX_DELAY);
+        int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, portMAX_DELAY);
         if (val == 0)
             {
                 xTaskNotifyWait(0,0xFFFFFFFF,&val,pdMS_TO_TICKS(400));  //data of interest incoming according to RX_TX Task
@@ -722,13 +721,13 @@ void VistaBus::monitor_rx_task(void * args)
                 uint8_t n = 0;
                 while ((data[0] & 0x0F) != static_cast<uint8_t>(val & 0x0F) && n < 3) //discard any mark bytes
                 {
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
+                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY));
                     n++;
                 }
                 rcvd_extPkt.payload[0]=data[0];
-                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(150));
+                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(150));
                 rcvd_extPkt.payload[1] = data[0]; //length
-                get_Packet(&rcvd_extPkt, data, 2, rcvd_extPkt.payload[1], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
+                get_Packet(&rcvd_extPkt, data.get(), 2, rcvd_extPkt.payload[1], static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(150));
                 if (static_cast<uint8_t>(val) == 1 || static_cast<uint8_t>(val) == 2 
                         || static_cast<uint8_t>(val) == 5 || static_cast<uint8_t>(val) == 6)
                     rcvd_extPkt.source = 0xF2;
@@ -743,14 +742,14 @@ void VistaBus::monitor_rx_task(void * args)
                 uint8_t mb = static_cast<uint8_t>(val >> 8) + 0x40;
                 while (data[0] != mb && data[0] != static_cast<uint8_t>(val >> 8) && n < 2)
                 {
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
+                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY));
                     n++;
                 }
                 rcvd_extPkt.payload[0] = data[0];
                 rcvd_extPkt.source = 0xF9;
                 if (static_cast<uint8_t>(val) == 0x53)
                 {
-                    get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(25));
+                    get_Packet(&rcvd_extPkt, data.get(), 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(25));
                     xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 }
 #ifdef DEBUG_LOG                
@@ -767,7 +766,7 @@ void VistaBus::monitor_rx_task(void * args)
                 uint8_t n = 0;
                 while ((data[0]) != static_cast<uint8_t>(val) && n < 2)
                 {
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
+                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY));
                     n++;
                 }
 #ifdef DEBUG_LOG
@@ -805,11 +804,11 @@ void VistaBus::monitor_rx_task(void * args)
                     uint8_t n = 0;
                     while (data[0] != req_addr && n < 2)
                     {
-                        rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
+                        rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY));
                         n++;
                     }
                     rcvd_extPkt.payload[0] = data[0];
-                    int res = get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), 
+                    int res = get_Packet(&rcvd_extPkt, data.get(), 1, 3, static_cast<uart_port_t>(this->extuartNum), 
                             pdMS_TO_TICKS(UART_DELAY)); 
                     if (res > 0)
                     {
@@ -822,11 +821,11 @@ void VistaBus::monitor_rx_task(void * args)
                     uint8_t n = 0;
                     while (data[0] != 0xF0 && n < 2)
                     {
-                        rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
+                        rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY));
                         n++;
                     }
                     rcvd_extPkt.payload[0] = data[0];
-                    get_Packet(&rcvd_extPkt, data, 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(50));
+                    get_Packet(&rcvd_extPkt, data.get(), 1, 5, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(50));
                     rcvd_extPkt.source = 0xFA;
                     xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));                    
                 }
@@ -867,13 +866,13 @@ void VistaBus::monitor_rx_task(void * args)
                 uint8_t n = 0;
                 while (data[0] != req_addr && n < 2)
                 {
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data, 1, pdMS_TO_TICKS(UART_DELAY));
+                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY));
                     n++;
                 }
                 rcvd_extPkt.payload[0] = data[0];
                 if ((val & 0xFF) == 0xF1) //Incoming zone data from Radio Frequency Receiver
                 {
-                    int res = get_Packet(&rcvd_extPkt, data, 1, RF_ZONE_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), 
+                    int res = get_Packet(&rcvd_extPkt, data.get(), 1, RF_ZONE_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->extuartNum), 
                         pdMS_TO_TICKS(UART_DELAY));
                     if (res > 0)
                     {
@@ -883,7 +882,7 @@ void VistaBus::monitor_rx_task(void * args)
                 }
                 else //Response to FB poll command
                 {
-                    get_Packet(&rcvd_extPkt, data, 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(UART_DELAY));
+                    get_Packet(&rcvd_extPkt, data.get(), 1, 3, static_cast<uart_port_t>(this->extuartNum), pdMS_TO_TICKS(UART_DELAY));
                     rcvd_extPkt.source = 0xFB;
                     xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 }
@@ -899,7 +898,6 @@ void VistaBus::monitor_rx_task(void * args)
             }
         }
     }
-    free(data);
     ESP_LOGI(TAG, "Stopping Task");
     this->monitor_rx_task_Handle = NULL;
     vTaskDelete(NULL);
