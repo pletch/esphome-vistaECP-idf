@@ -239,7 +239,7 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     
 }
 
-static bool validChksum(const char * cbuf, int start, int len)
+inline bool validChksum(const char * cbuf, int start, int len)
 {
   uint16_t chksum = 0;
   for (uint8_t x = start; x < len; x++)
@@ -584,74 +584,106 @@ void VistaBus::rx_tx_task(void * args)
             else if ( data[0] == 0xF7 ) //DISPLAY
             {
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,F7_MESSAGE_LENGTH-1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                received_packet.source = 0xF7;    
+                if (validChksum(received_packet.payload,0,rxBytes+1))
+                    received_packet.source = 0xF7;
+                else
+                    received_packet.source = 0xCF;
                 xQueueSend(this->receiveQueue,&received_packet,0);
             }            
             else if ( data[0] == 0xF2 ) //AUI
             {
                 rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 received_packet.payload[1] = data[0];
-                get_Packet_event(&received_packet,data.get(),2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                if (validChksum(received_packet.payload,0,static_cast<int>(received_packet.payload[1])+2)) 
-                {
+                rxBytes = get_Packet_event(&received_packet,data.get(),2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                if (validChksum(received_packet.payload,0,rxBytes+2)) 
                     received_packet.source = 0xF2;
-                    xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                }
+                else
+                    received_packet.source = 0xCF;
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
             else if ( data[0] == 0xFA ) //EXP
             {                        
-                get_Packet_event(&received_packet,data.get(),1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                uint32_t val = 0xFA << 16 | (received_packet.payload[2] << 8) | received_packet.payload[4];
-                if (monitor_rx_task_Handle != NULL)
-                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
-                if (EXPemulation)
-                    this->processFA(received_packet.payload);
-                received_packet.source = 0xFA;
+                rxBytes = get_Packet_event(&received_packet,data.get(),1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                if (validChksum(received_packet.payload,0,rxBytes+1))
+                {
+                    uint32_t val = 0xFA << 16 | (received_packet.payload[2] << 8) | received_packet.payload[4];
+                    if (monitor_rx_task_Handle != NULL)
+                            xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                    if (EXPemulation)
+                        this->processFA(received_packet.payload);
+                    received_packet.source = 0xFA;
+                }
+                else
+                    received_packet.source = 0xCF;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
             }
             else if ( data[0] == 0xF9 ) //LRR
             {   
                 rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                received_packet.payload[1] = data[0];
-                received_packet.payload[2] = data[1];
-                received_packet.source = 0xF9;
-                get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                uint32_t val = 0xF9 << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
-                if (monitor_rx_task_Handle != NULL)
-                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
-                if (LRRemulation)
-                        this->processF9(received_packet.payload);
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(30), uartevtQueue);
-#ifdef DEBUG_LOG
-                if (rxBytes) //should receive single panel response byte
+                if (rxBytes == 2)
                 {
-                    received_packet.payload[0] = data[1]; //first byte is a zero
-                    received_packet.size = 1;
+                    received_packet.payload[1] = data[0];
+                    received_packet.payload[2] = data[1];
+                    rxBytes = get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                    if (validChksum(received_packet.payload,0,rxBytes+3))
+                    {
+                        received_packet.source = 0xF9;
+                        uint32_t val = 0xF9 << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
+                        if (monitor_rx_task_Handle != NULL)
+                            xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                        if (LRRemulation)
+                            this->processF9(received_packet.payload);
+                    }
+                    else
+                        received_packet.source = 0xCF;
                     xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-                }
+                    if (received_packet.source == 0xF9)
+                    {
+                        rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(30), uartevtQueue);
+#ifdef DEBUG_LOG
+                        if (rxBytes) //should receive single panel response byte
+                        {   
+                            received_packet.payload[0] = data[1]; //first byte is a zero
+                            received_packet.size = 1;
+                            xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+                        }
 #endif
+                    }
+                }
             }
             else if ( data[0] == 0xFB ) //5881EN traffic
             {    
-                get_Packet_event(&received_packet,data.get(),1,FB_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                uint32_t val = 0xFB << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
-                if (monitor_rx_task_Handle != NULL)
-                    xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);                
-                if (RFRemulation)
-                    this->processFB(received_packet.payload);
-                received_packet.source = 0xFB;
+                rxBytes = get_Packet_event(&received_packet,data.get(),1,FB_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                if (validChksum(received_packet.payload,0,rxBytes+1))
+                {
+                    uint32_t val = 0xFB << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
+                    if (monitor_rx_task_Handle != NULL)
+                        xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);                
+                    if (RFRemulation)
+                        this->processFB(received_packet.payload);
+                    received_packet.source = 0xFB;
+                }
+                else
+                {
+                    received_packet.source = 0xCF;
+                }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
             else if ( data[0] == 0xF8 ) //Unknown Device
             {
                 rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                received_packet.payload[1] = data[0];
-                received_packet.payload[2] = data[1];
-                uint32_t val = 0xF8 << 8 | received_packet.payload[1];
-                if (monitor_rx_task_Handle != NULL)
-                    xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
-                get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                if (rxBytes == 2)
+                {
+                    received_packet.payload[1] = data[0];
+                    received_packet.payload[2] = data[1];
+                    rxBytes = get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                    if (validChksum(received_packet.payload,0,rxBytes+3))
+                    { 
+                        uint32_t val = 0xF8 << 8 | received_packet.payload[1];
+                        if (monitor_rx_task_Handle != NULL)
+                            xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
+                    }
+                }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
             else if (data[0] == 0)

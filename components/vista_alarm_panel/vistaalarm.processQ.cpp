@@ -57,7 +57,7 @@ namespace esphome
                     printPacket(payload, type, src, size);
                     if (type == 0) //yellow wire
                     {
-                        if (payload[0]==0xF7)
+                        if (src == 0xF7)
                         {
                             refreshStatusFlags(payload);
                             if (statusFlags.partition == 0) 
@@ -72,7 +72,7 @@ namespace esphome
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
                             ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
                         }
-                        else if (payload[0]==0xF2)
+                        else if (src == 0xF2)
                         {
                             if ((payload[7] & 0xF0) == 0x50)
                             {
@@ -231,7 +231,7 @@ namespace esphome
                                     AUIget_zone_faults();
                             }
                         }
-                        else if (payload[0] == 0xF9)
+                        else if (src == 0xF9)
                         {         
                             // we process all lrr messages with type 58
                             if (payload[3] == 0x58)

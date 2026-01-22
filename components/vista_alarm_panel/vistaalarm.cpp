@@ -229,7 +229,7 @@ namespace esphome
             (
                 this->processReceiveQueue_task_start, // Function to implement the task
                 "pRQtask",       // Name of the task
-                3072,                      // Stack size in words
+                4096,                      // Stack size in words
                 (void *)this,              // Task input parameter
                 10,                        // Priority of the task
                 &processReceiveQHandle              // Task handle.
@@ -479,6 +479,9 @@ namespace esphome
             {
                 case unspecified:
                     sprintf(device, "EXT");
+                    break;
+                case chksum_fail:
+                    sprintf(device, "CHK");
                     break;
                 case expander:
                     sprintf(device, "EXP");

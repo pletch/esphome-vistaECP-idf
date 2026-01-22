@@ -81,6 +81,7 @@ namespace esphome
         enum sourceDevice
         {
             unspecified = 0,
+            chksum_fail = 0xCF,
             aui = 0xF2,
             keypad_ack = 0xF6,
             keypad = 0xF7,
@@ -151,7 +152,7 @@ namespace esphome
                 void update() override;
                 void stop();
 
-            protected:
+            private:
                 const char *const TAG = "vista-alarm";
                 esp_log_level_t log_level = ESP_LOG_DEBUG;
                 uint64_t TTL = 30000000;

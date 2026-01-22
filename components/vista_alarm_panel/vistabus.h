@@ -36,7 +36,7 @@ Date: 2-Feb-2025
 #define RX_BUF_SIZE (128)
 #define UART_RX_TASK_STACK_SIZE (4096)
 #define UART_RX_EXT_TASK_STACK_SIZE (3072)
-#define UART_DELAY 10
+#define UART_DELAY 15
 
 
 struct ReceivedPacket  
@@ -81,7 +81,7 @@ public:
     void setExpTamper(uint8_t zone, bool tamper_active);
     void sendRFmsg(uint32_t serial, uint8_t msg);
 
-protected:
+private:
     const char* const TAG = "vistabus";
     int rxPin, txPin;
     int uartNum;
