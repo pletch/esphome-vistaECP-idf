@@ -27,7 +27,7 @@ Fork is shared here for the benefits of any others that might want to use it.
 - Unused residual code, bitwise operations, and variable handling cleaned up.
 - Capability to temporarily enable RMT module for outputting bus pulse pattern to log for debugging.
 
-### ⚠️Caution: There may be features / capabilities carried over from original project but unused by me that are minimally tested.  Will test these more thoroughly in the future when I get time but please let me know if you try and the do not work.
+### ⚠️Caution: There may be features / capabilities carried over from original project but unused by me that are minimally tested.  Will test these more thoroughly in the future when I get time but please let me know if you try and they do not work.
 Some specifics include: 
 - Long Range Radio emulation
 - RF Receiver emulation and associated emulated RF zones.  
@@ -44,7 +44,7 @@ vista_alarm_panel:
     uart_1: #
 ```
 Configuration variables:
-- **keypad_addr_1, ... , keypad_addr_ 8 (Required)**:  Virtual keypad address for partitions 1 - 8. Enable address in alarm panel programming via program fields *190 - *196 if using Vista 20p. Setting value to zero disables. At least one of the partition keypad must be defined non-zero and any additional are optional.
+- **keypad_addr_1, ... , keypad_addr_ 8 (Required)**:  Virtual keypad address for partitions 1 - 8. Enable address in alarm panel programming via program fields *190 - *196 if using Vista 20p. Setting value to zero disables. At least one of the partition keypad must be defined non-zero and any additional are optional. The defined address must not conflict with the address of any physical keypads already present in the system.
 - **rx_pin (Required, PIN)**: GPIO pin assigned to UART for data receive (yellow line)
 - **tx_pin (Required, PIN)**: GPIO pin assigned to UART for data transmit (green line)
 - **uart_1 (Required, UART)**: Hardware UART number associated with tx/rx 
@@ -59,7 +59,7 @@ logging level must be set to DEBUG or higher in logging component section to out
 - **rf_receiver_emulation** (*Optional*, boolean): Set to true to enable RF Receiver module (5881ENH) emulation for creating virtual RF zones. Do not enable if the system already includes a physical RF receiver as these Vista systems only support a single RF receiver device. Defaults to false.
 - **rf_receiver_addr** (*Optional*, int): Set to suitable address for RF Receiver per your panel installation instructions. Only permissible address on Vista 15/20 panels is 0. Defaults to 0.
 - **monitor_pin** (*Optional*, PIN): GPIO pin to use for monitoring module traffic such as RF or Expanders. Leave undefined or set to -1 to disable.
-- **uart_2** (*Optional*, UART): Hardware UART number to use for monitoring module traffic via monitorpin. Automatically disabled if monitorpin set to -1.
+- **uart_2** (*Optional*, UART): Hardware UART number to use for monitoring module traffic via monitorpin. Disabled if monitorpin undefined or monitorpin set to -1.
 - **ttl** (*Optional*, int): Time to live in seconds for expiring zone/fire status. Relevant for configurations not using monitor pin and for zones hardwired to the panel. Defaults to 30 if not defined.
 
 
@@ -73,12 +73,21 @@ binary_sensor:
     zone: 8
     device_class: moisture
 
-# example rf wireless zone
+# example emulated hard-wired zone
   - platform: vista_alarm_panel
-    id: z9
-    name: "Front Door"
+    id: z9  
+    name: "Office Window"
     partition: 1
     zone: 9
+    emulated: true
+    device_class: moisture
+
+# example rf wireless zone
+  - platform: vista_alarm_panel
+    id: z10
+    name: "Front Door"
+    partition: 1
+    zone: 10
     rf_serial: 123456
     rf_loop: 2
     device_class: door
