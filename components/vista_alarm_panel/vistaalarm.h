@@ -41,7 +41,6 @@ namespace esphome
 {
     namespace alarm_panel
     {
-        extern VistaBus vistabus;
         enum sysState
         {
             soffline,
@@ -153,6 +152,7 @@ namespace esphome
                 void stop();
 
             private:
+                VistaBus vistabus;
                 const char *const TAG = "vista-alarm";
                 esp_log_level_t log_level = ESP_LOG_DEBUG;
                 uint64_t TTL = 30000000;

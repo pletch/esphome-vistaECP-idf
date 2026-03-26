@@ -16,8 +16,6 @@ namespace esphome
 {
     namespace alarm_panel
     {
-        VistaBus vistabus;
-
         void vistaECPHome::stop()
         {
             vistabus.stop();

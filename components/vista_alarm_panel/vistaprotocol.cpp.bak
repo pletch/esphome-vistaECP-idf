@@ -1,0 +1,11 @@
+/*#include "vistaprotocol.h"
+
+bool VistaProtocol::test() 
+{
+    return true;
+}
+
+bool Vista20p::test()
+{
+    return false;
+}*/

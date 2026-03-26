@@ -1,4 +1,5 @@
 #include "vistabus.h"
+//#include "vistaprotocol.h"
 #include "vistaalarm.h"  //to bring in init macro definitions
 #ifdef DEBUG_PULSE
 #include "driver/rmt_rx.h"
@@ -73,7 +74,7 @@ bool VistaBus::stop()
     return true;
 }
 
-bool VistaBus::write(const char * data_to_write, int size, int keypadaddress, int sequence) 
+bool VistaBus::write(const char * data_to_write, int size, int keypadaddress, int sequence) //move
 {
     SendPacket sendpkt;
     strncpy(sendpkt.payload,data_to_write,24);
@@ -86,7 +87,7 @@ bool VistaBus::write(const char * data_to_write, int size, int keypadaddress, in
     return result;
 }
 
-bool VistaBus::writedirect(const char * hex_data_to_write, int size, int keypadaddress, int sequence) 
+bool VistaBus::writedirect(const char * hex_data_to_write, int size, int keypadaddress, int sequence) //move
 {
     SendPacket sendpkt;
     if (size > 24)
@@ -175,7 +176,7 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
 }
 #endif
 
-bool VistaBus::read_packet(char * data, int &len, int &type, int &src, bool with_delay) 
+bool VistaBus::read_packet(char * data, int &len, int &type, int &src, bool with_delay) //move
 {
     ReceivedPacket pkt;
     bool result = false;
@@ -239,7 +240,7 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     
 }
 
-inline bool validChksum(const char * cbuf, int start, int len)
+inline bool validChksum(const char * cbuf, int start, int len) //move
 {
   uint16_t chksum = 0;
   for (uint8_t x = start; x < len; x++)
@@ -252,7 +253,7 @@ inline bool validChksum(const char * cbuf, int start, int len)
     return false;
 }
 
-static int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout)
+static int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout) //move
 {
     const int rxBytes = uart_read_bytes(uart_num, rxbuf, len, timeout);
     memcpy(received_packet->payload+start,rxbuf,rxBytes);
@@ -261,30 +262,7 @@ static int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, 
     return rxBytes;
 }
 
-static int uart_read_bytes_event(uart_port_t uart_num, uint8_t * rxbuf, int len, int timeout, QueueHandle_t queue)
-{
-    uart_event_t event;
-    int bytes = 0;
-    while (bytes < len)
-    {
-        if (!(xQueueReceive(queue, (void *)&event, timeout) == pdPASS))
-            break;
-        switch (event.type)
-        {
-            case UART_DATA:
-                uart_read_bytes(uart_num, &rxbuf[bytes], 1, 0);
-                bytes++;
-                break;
-            case UART_BREAK:
-                break;
-            default:
-                break;
-        }
-    }
-    return bytes;
-}
-
-static int get_Packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout, QueueHandle_t queue)
+static int get_Packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout, QueueHandle_t queue)  //move
 {
     const int rxBytes = uart_read_bytes_event(uart_num, rxbuf, len, timeout, queue);
     memcpy(received_packet->payload+start,rxbuf,rxBytes);
@@ -293,60 +271,10 @@ static int get_Packet_event(struct ReceivedPacket * received_packet, uint8_t * r
     return rxBytes;
 }
 
-void IRAM_ATTR VistaBus::gpio_isr_handler(void * args)
-{
-    gpioTaskArgs * taskargs = (gpioTaskArgs *) args; 
-    BaseType_t xHigherPriorityTaskWoken;
-    xHigherPriorityTaskWoken = pdFALSE;
-    int val = gpio_get_level(static_cast<gpio_num_t>(taskargs->pin));
-    xTaskNotifyFromISR(taskargs->task_handle,val, eSetValueWithOverwrite,&xHigherPriorityTaskWoken);
-    portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
-} 
-
-bool VistaBus::mark_pulse(uint8_t address)
-{
-    uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_DISABLE);
-    char snd_data[3];
-    bool sent_request = false;
-    if (address < 8)
-    {
-        snd_data[0] = ~(0x01 << (address & 0x07));
-        snd_data[1] = 0;
-        snd_data[2] = 0;
-    }
-    else if (address < 17)
-    {
-        snd_data[0] = 0xFF;
-        snd_data[1] = ~(0x01 << (address & 0x07));
-        snd_data[2] = 0;
-    }
-    else
-    {
-        snd_data[0] = 0xFF;
-        snd_data[1] = 0xFF;
-        snd_data[2] = ~(0x01 << (address & 0x07));
-    }
-    //Use GPIO interrupts on rxPin to find send pulses.
-    xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(5)); //first rising edge
-    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[0], 1); 
-
-    xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(4)); //second rising edge  Older panel 4140XMPT2 does not have 3 cycle pulse pattern.  Only one rising edge after 13 ms low signal.
-    if (snd_data[1] != 0)
-        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[1], 1);
-            
-    xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(4)); //third rising edge           
-    if (snd_data[2] != 0)
-        uart_write_bytes(static_cast<uart_port_t>(this->uartNum), &snd_data[2], 1);
-    sent_request = true;
-
-    uart_set_parity(static_cast<uart_port_t>(this->uartNum),UART_PARITY_EVEN);
-    return sent_request;
-}
-
 void VistaBus::rx_tx_task(void * args)
 {
     auto data = std::make_unique<uint8_t[]>(RX_BUF_SIZE+1);
-    struct ReceivedPacket received_packet;
+    ReceivedPacket received_packet;
     received_packet.type = 0;
 
     gpio_config_t io_conf = 
@@ -360,24 +288,14 @@ void VistaBus::rx_tx_task(void * args)
 
     gpio_config(&io_conf);
     (void)gpio_install_isr_service(0);
-    bool req_to_send = false;
-    uint64_t last_data_received = 0;
-    uint64_t boot = 0;
-    SendPacket pkt_to_send;
-    uint8_t ack_failures = 0;
-    bool pulse_marked = false;
-    uint8_t last_sequence = 0;
-    uint8_t last_address = 99;
-    uint64_t request_F1_time = 0;
-    
-    uint64_t pulse_mark_time = 0;
+
     while (1) 
     {
         // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
         int uart_delay = 550;
 
         // Handle any queued device msgs via F1 request  
-        if (uxQueueMessagesWaiting(deviceMsgQueue) && !req_to_send && (esp_timer_get_time() - request_F1_time > 550*1000))
+        if (uxQueueMessagesWaiting(deviceMsgQueue) && !req_to_send && (esp_timer_get_time() - request_F1_time > uart_delay*1000))
         {
             DeviceMsg q_msg;
             xQueuePeek(deviceMsgQueue,&q_msg,pdMS_TO_TICKS(0));
@@ -402,77 +320,15 @@ void VistaBus::rx_tx_task(void * args)
             continue;
         }
 #endif
-        
-        while (uxQueueMessagesWaiting(sendQueue))
-        {
-            if (!req_to_send)
-            {
-                xQueueReceive(sendQueue,&pkt_to_send,0);
-                req_to_send = true;
-                if (pkt_to_send.sequence == last_sequence && pkt_to_send.keypadaddress == last_address)
-                    pkt_to_send.sequence += 0x40; // Iterate sequencing if needed when consolidation occurs
-                last_sequence = pkt_to_send.sequence;
-                last_address = pkt_to_send.keypadaddress;
-            }
-            else
-            {
-                SendPacket next_pkt;
-                xQueuePeek(sendQueue, &next_pkt,pdMS_TO_TICKS(20));
-                if(next_pkt.keypadaddress == pkt_to_send.keypadaddress && (next_pkt.size + pkt_to_send.size) <= 24)
-                {
-                    xQueueReceive(sendQueue, &next_pkt, 0);
-                    memcpy(pkt_to_send.payload + pkt_to_send.size, next_pkt.payload, next_pkt.size);
-                    pkt_to_send.size += next_pkt.size;
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
+        SendPacket pkt_to_send;
+        //this->req_to_send = checkSendQ(pkt_to_send);
+        this->req_to_send = vprotocol.checkSendQ(this->sendQueue, pkt_to_send, this->req_to_send);
 
-        int rxBytes = 0;
-        uart_event_t event;
-        xQueueReceive(uartevtQueue, (void *)&event, uart_delay);
-        switch (event.type)
-        {
-            case UART_DATA:
-                rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->uartNum), data.get(), 1, 0);
-                break;
-            case UART_BREAK:
-                gpioTaskArgs taskargs;
-                taskargs.task_handle = this->rx_tx_task_Handle;
-                taskargs.pin = this->rxPin;
-                gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_NEGEDGE);
-                gpio_isr_handler_add(static_cast<gpio_num_t>(this->rxPin), gpio_isr_handler, (void *) &taskargs );
-                if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(535)) == pdPASS)
-                {
-                    uint64_t start = esp_timer_get_time();
-                    gpio_set_intr_type(static_cast<gpio_num_t>(this->rxPin), GPIO_INTR_POSEDGE);
-                    if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(10)) == pdPASS)
-                    {
-                        uint64_t end = esp_timer_get_time();
-                        if (end - start > 5700 && end - start < 6300)
-                        {
-                            uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(4), uartevtQueue); //flush leading zero
-                            uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
-                            rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(10), uartevtQueue);
-                            uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
-                        }
-                    }
-                    else if (req_to_send && !pulse_marked)
-                    {
-                        pulse_marked = mark_pulse(pkt_to_send.keypadaddress);
-                        pulse_mark_time = esp_timer_get_time();
-                        rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(10), uartevtQueue);
-                    }
-                }
-                gpio_isr_handler_remove(static_cast<gpio_num_t>(this->rxPin));
-                break;
-            default:
-                break;
-        }
-        if (req_to_send && !pulse_marked)
+        //int rxBytes = handleUARTevents(data.get(), pkt_to_send.keypadaddress);    
+        int rxBytes = vprotocol.handleUARTevents(this->uartevtQueue, this->rx_tx_task_Handle, this->uartNum, this->rxPin, 
+                this->req_to_send, this->pulse_marked, this->pulse_mark_time, data.get(), pkt_to_send.keypadaddress);
+
+        if (this->req_to_send && !this->pulse_marked) //loop faster when needing to mark pulse to send
             uart_delay = 20;
         if (rxBytes) 
         {
@@ -482,9 +338,9 @@ void VistaBus::rx_tx_task(void * args)
             memset(received_packet.payload,'\0',sizeof(received_packet.payload));
             received_packet.payload[0] = data[0];
             received_packet.source = 0;
-            if (req_to_send && pulse_marked && pkt_to_send.type == 2)
+            if (this->req_to_send && this->pulse_marked && pkt_to_send.type == 2)  //No ACK for this type of send
             {
-                req_to_send = false;
+                this->req_to_send = false;
             }
             if ( data[0] == 0xF6) //SEND ACK Received
             {                 
