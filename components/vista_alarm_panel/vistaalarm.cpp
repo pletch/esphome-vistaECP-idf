@@ -380,7 +380,7 @@ namespace esphome
             addr = known_partitions[partition - 1].assigned_keypad;
             seq = known_partitions[partition - 1].keypad_sequence;
             bool result = false;
-            if (addr > 0 and addr < 24)
+            if (addr > 0 and addr < 24 || addr == 31)
                 result = vistabus.write(keystring.c_str(), keystring.length(), addr, seq);
             if (result)
                 ESP_LOGD(TAG, "Writing keys: %s to partition %li", keystring.c_str(), partition);
@@ -471,7 +471,7 @@ namespace esphome
             char s1[4];
             std::string s = "";
             char s2[48];
-            sourceDevice source = static_cast<sourceDevice>(src);
+            packetType source = static_cast<packetType>(src);
             char device[4];
             switch(source)
             {
@@ -495,6 +495,9 @@ namespace esphome
                     break;
                 case keypad:
                     sprintf(device, "KPD");
+                    break;
+                case legacy_protocol:
+                    sprintf(device, "KPDL");
                     break;
                 case long_range_radio:
                     sprintf(device, "LRR");

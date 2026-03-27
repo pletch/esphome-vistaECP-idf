@@ -1,6 +1,5 @@
 #include "vistabus.h"
-//#include "vistaprotocol.h"
-#include "vistaalarm.h"  //to bring in init macro definitions
+
 #ifdef DEBUG_PULSE
 #include "driver/rmt_rx.h"
 #endif
@@ -240,37 +239,6 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     
 }
 
-inline bool validChksum(const char * cbuf, int start, int len) //move
-{
-  uint16_t chksum = 0;
-  for (uint8_t x = start; x < len; x++)
-  {
-    chksum += cbuf[x];
-  }
-  if (chksum % 256 == 0)
-    return true;
-  else
-    return false;
-}
-
-static int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout) //move
-{
-    const int rxBytes = uart_read_bytes(uart_num, rxbuf, len, timeout);
-    memcpy(received_packet->payload+start,rxbuf,rxBytes);
-    received_packet->payload[rxBytes+start] = '\0';
-    received_packet->size = rxBytes+start;
-    return rxBytes;
-}
-
-static int get_Packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, int len, uart_port_t uart_num, int timeout, QueueHandle_t queue)  //move
-{
-    const int rxBytes = uart_read_bytes_event(uart_num, rxbuf, len, timeout, queue);
-    memcpy(received_packet->payload+start,rxbuf,rxBytes);
-    received_packet->payload[rxBytes+start] = '\0';
-    received_packet->size = rxBytes+start;
-    return rxBytes;
-}
-
 void VistaBus::rx_tx_task(void * args)
 {
     auto data = std::make_unique<uint8_t[]>(RX_BUF_SIZE+1);
@@ -321,14 +289,13 @@ void VistaBus::rx_tx_task(void * args)
         }
 #endif
         SendPacket pkt_to_send;
-        //this->req_to_send = checkSendQ(pkt_to_send);
-        this->req_to_send = vprotocol.checkSendQ(this->sendQueue, pkt_to_send, this->req_to_send);
 
-        //int rxBytes = handleUARTevents(data.get(), pkt_to_send.keypadaddress);    
-        int rxBytes = vprotocol.handleUARTevents(this->uartevtQueue, this->rx_tx_task_Handle, this->uartNum, this->rxPin, 
-                this->req_to_send, this->pulse_marked, this->pulse_mark_time, data.get(), pkt_to_send.keypadaddress);
+        this->req_to_send = vprotocol.check_send_Q(this->sendQueue, pkt_to_send, this->req_to_send); 
+        int rxBytes = vprotocol.handle_UART_events(this->uartevtQueue, this->rx_tx_task_Handle, this->monitor_rx_task_Handle,
+                this->uartNum, this->rxPin, this->req_to_send, this->pulse_marked, this->pulse_mark_time, this->is_2400, 
+                pkt_to_send, data.get());
 
-        if (this->req_to_send && !this->pulse_marked) //loop faster when needing to mark pulse to send
+        if (this->req_to_send && !this->pulse_marked && !vprotocol.legacy_protocol()) //loop faster when needing to mark pulse to send
             uart_delay = 20;
         if (rxBytes) 
         {
@@ -342,7 +309,18 @@ void VistaBus::rx_tx_task(void * args)
             {
                 this->req_to_send = false;
             }
-            if ( data[0] == 0xF6) //SEND ACK Received
+            if ( data[0] == 0xF2 ) //AUI
+            {
+                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                received_packet.payload[1] = data[0];
+                rxBytes = get_Packet_event(&received_packet,data.get(),2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                if (validChksum(received_packet.payload,0,rxBytes+2)) 
+                    received_packet.source = 0xF2;
+                else
+                    received_packet.source = 0xCF;
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+            }
+            else if ( data[0] == 0xF6) //SEND ACK Received
             {                 
                 rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //Get Address
                 if(data[0] != 0 && monitor_rx_task_Handle != NULL)
@@ -361,48 +339,13 @@ void VistaBus::rx_tx_task(void * args)
                 uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), &data[1], 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //flush lagging zero
                 if(req_to_send && data[0] == pkt_to_send.keypadaddress) //ACK was for us.  Try to send.
                 { 
-                    char outbuffer[24];
-                    memset(outbuffer,'\0',sizeof(outbuffer));
                     data[rxBytes] = 0;
-                    char keys_to_send[24];
-                    outbuffer[0] = pkt_to_send.sequence;
-                    outbuffer[1] = pkt_to_send.size+1;
-                    uint8_t chksum = 0;
-                    chksum += outbuffer[0] + outbuffer[1];
-                    for (int i=2; i < pkt_to_send.size+2; i++)
-                    {
-                        if (pkt_to_send.type == 0) //write direct as hex
-                        {
-                            outbuffer[i] = pkt_to_send.payload[i-2];
-                        }
-                        else //translate from ascii before write
-                        {
-                            if (pkt_to_send.payload[i-2] >= 0x30 && pkt_to_send.payload[i-2] <= 0x39)
-                                outbuffer[i] = (pkt_to_send.payload[i-2] - 0x30);
-                            else if (pkt_to_send.payload[i-2] == 0x23)
-                                outbuffer[i] = 0x0B;
-                            else if (pkt_to_send.payload[i-2] == 0x2A)
-                                outbuffer[i] = 0x0A;
-                            else if (pkt_to_send.payload[i-2] == 0x46)
-                                outbuffer[i] = 0x0C;
-                            else if (pkt_to_send.payload[i-2] == 0x4D)
-                                outbuffer[i] = 0x0D;
-                            else if (pkt_to_send.payload[i-2] == 0x50)
-                                outbuffer[i] = 0x0E;
-                            else if (pkt_to_send.payload[i-2] == 0x47)
-                                outbuffer[i] = 0x0F;
-                            else if (pkt_to_send.payload[i-2] >= 0x41 && pkt_to_send.payload[i-2] <= 0x44)
-                                outbuffer[i] = (pkt_to_send.payload[i-2] - 0x25);
-                        }
-                        chksum += outbuffer[i];
-                    }
-                    outbuffer[pkt_to_send.size+2] = ~chksum+1;
-                    uart_write_bytes(static_cast<uart_port_t>(this->uartNum), outbuffer,pkt_to_send.size+3);
+                    keypad_write(static_cast<uart_port_t>(this->uartNum), pkt_to_send );
 
                     rxBytes = get_Packet_event(&received_packet,data.get(),0,1, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(100), uartevtQueue);
                     if(rxBytes)
                     {
-                        if (data[0] == outbuffer[0])
+                        if (data[0] == pkt_to_send.sequence)
                         {
                             req_to_send = false;
                             pulse_marked = false;
@@ -446,32 +389,22 @@ void VistaBus::rx_tx_task(void * args)
                     received_packet.source = 0xCF;
                 xQueueSend(this->receiveQueue,&received_packet,0);
             }            
-            else if ( data[0] == 0xF2 ) //AUI
+            else if ( data[0] == 0xF8 ) //Unknown Device
             {
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                received_packet.payload[1] = data[0];
-                rxBytes = get_Packet_event(&received_packet,data.get(),2,static_cast<int> (received_packet.payload[1]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                if (validChksum(received_packet.payload,0,rxBytes+2)) 
-                    received_packet.source = 0xF2;
-                else
-                    received_packet.source = 0xCF;
-                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
-            }
-            else if ( data[0] == 0xFA ) //EXP
-            {                        
-                rxBytes = get_Packet_event(&received_packet,data.get(),1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                if (validChksum(received_packet.payload,0,rxBytes+1))
+                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                if (rxBytes == 2)
                 {
-                    uint32_t val = 0xFA << 16 | (received_packet.payload[2] << 8) | received_packet.payload[4];
-                    if (monitor_rx_task_Handle != NULL)
-                            xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
-                    if (EXPemulation)
-                        this->processFA(received_packet.payload);
-                    received_packet.source = 0xFA;
+                    received_packet.payload[1] = data[0];
+                    received_packet.payload[2] = data[1];
+                    rxBytes = get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                    if (validChksum(received_packet.payload,0,rxBytes+3))
+                    { 
+                        uint32_t val = 0xF8 << 8 | received_packet.payload[1];
+                        if (monitor_rx_task_Handle != NULL)
+                            xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
+                    }
                 }
-                else
-                    received_packet.source = 0xCF;
-                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
             else if ( data[0] == 0xF9 ) //LRR
             {   
@@ -507,7 +440,23 @@ void VistaBus::rx_tx_task(void * args)
                     }
                 }
             }
-            else if ( data[0] == 0xFB ) //5881EN traffic
+            else if ( data[0] == 0xFA && is_2400) //EXP
+            {                        
+                rxBytes = get_Packet_event(&received_packet,data.get(),1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                if (validChksum(received_packet.payload,0,rxBytes+1))
+                {
+                    uint32_t val = 0xFA << 16 | (received_packet.payload[2] << 8) | received_packet.payload[4];
+                    if (monitor_rx_task_Handle != NULL)
+                            xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                    if (EXPemulation)
+                        this->processFA(received_packet.payload);
+                    received_packet.source = 0xFA;
+                }
+                else
+                    received_packet.source = 0xCF;
+                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
+            }
+            else if ( data[0] == 0xFB && is_2400) //5881EN traffic
             {    
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,FB_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 if (validChksum(received_packet.payload,0,rxBytes+1))
@@ -525,22 +474,29 @@ void VistaBus::rx_tx_task(void * args)
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
-            else if ( data[0] == 0xF8 ) //Unknown Device
-            {
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                if (rxBytes == 2)
-                {
-                    received_packet.payload[1] = data[0];
-                    received_packet.payload[2] = data[1];
-                    rxBytes = get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                    if (validChksum(received_packet.payload,0,rxBytes+3))
-                    { 
-                        uint32_t val = 0xF8 << 8 | received_packet.payload[1];
-                        if (monitor_rx_task_Handle != NULL)
-                            xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
-                    }
-                }
-                xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
+            else if ( vprotocol.legacy_protocol() && data[0] == 0xFE && is_2400 ) //Vista20SE 
+            {   
+                uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
+                rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                received_packet.source = 0xDD;
+                uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
+                xQueueSend(this->receiveQueue,&received_packet,0);
+            }
+            else if ( vprotocol.legacy_protocol() && data[0] == 0xFF && is_2400 ) //Vista20SE 
+            {   
+                uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
+                rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                received_packet.source = 0xDD;
+                uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
+                xQueueSend(this->receiveQueue,&received_packet,0);
+            }
+            else if ( vprotocol.legacy_protocol() && is_2400 ) //Vista20SE 
+            {   
+                uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
+                rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                received_packet.source = 0xDD;
+                uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
+                xQueueSend(this->receiveQueue,&received_packet,0);
             }
             else if (data[0] == 0)
             {
@@ -552,6 +508,7 @@ void VistaBus::rx_tx_task(void * args)
                 received_packet.payload[0] = data[0];
                 received_packet.size = 1;
                 xQueueSend(this->receiveQueue, &received_packet,pdMS_TO_TICKS(20));
+                ESP_LOGI(TAG,"Legacy Protocol: %i", vprotocol.legacy_protocol());
 #endif
             }
         }
@@ -589,15 +546,13 @@ void VistaBus::monitor_rx_task(void * args)
 
     while (1) 
     {
+        //uint32_t val = 0;  // might be ok here and remove individual setters in sections below.
         if(this->stop_requested)
         {
             break;
         }
-        int rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, portMAX_DELAY);
-        if (val == 0)
-            {
-                xTaskNotifyWait(0,0xFFFFFFFF,&val,pdMS_TO_TICKS(400));  //data of interest incoming according to RX_TX Task
-            }
+
+        int rxBytes = vprotocol.monitor_task_sync(extuartNum, data.get(), val, receiveQueue, rcvd_extPkt);
         if (rxBytes) 
         {
             data[rxBytes] = 0;
@@ -624,6 +579,21 @@ void VistaBus::monitor_rx_task(void * args)
                 xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 val = 0;
             }
+            else if(static_cast<uint8_t>(val >> 8) == 0xF8) //Expect response from ?
+            {
+                uint8_t n = 0;
+                while ((data[0]) != static_cast<uint8_t>(val) && n < 2)
+                {
+                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY));
+                    n++;
+                }
+#ifdef DEBUG_LOG
+                    rcvd_extPkt.payload[0] = data[0];
+                    rcvd_extPkt.size = 1;
+                    xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
+#endif
+                val = 0;
+            }
             else if(static_cast<uint8_t>(val >> 16) == 0xF9) //Expect response from LRR
             {
                 uint8_t n = 0;
@@ -646,21 +616,6 @@ void VistaBus::monitor_rx_task(void * args)
                     rcvd_extPkt.size = 1;
                     xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 }
-#endif
-                val = 0;
-            }
-            else if(static_cast<uint8_t>(val >> 8) == 0xF8) //Expect response from LRR
-            {
-                uint8_t n = 0;
-                while ((data[0]) != static_cast<uint8_t>(val) && n < 2)
-                {
-                    rxBytes = uart_read_bytes(static_cast<uart_port_t>(this->extuartNum), data.get(), 1, pdMS_TO_TICKS(UART_DELAY));
-                    n++;
-                }
-#ifdef DEBUG_LOG
-                    rcvd_extPkt.payload[0] = data[0];
-                    rcvd_extPkt.size = 1;
-                    xQueueSend(this->receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
 #endif
                 val = 0;
             }
@@ -1043,3 +998,4 @@ void VistaBus::monitor_rx_task_start(void *args)
     VistaBus *tsk = static_cast<VistaBus *>(args);
     tsk->monitor_rx_task(args);
 }
+

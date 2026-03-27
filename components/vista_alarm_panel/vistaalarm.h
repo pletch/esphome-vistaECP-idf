@@ -77,9 +77,10 @@ namespace esphome
             rsdate
         };
 
-        enum sourceDevice
+        enum packetType
         {
             unspecified = 0,
+            legacy_protocol = 0xDD,
             chksum_fail = 0xCF,
             aui = 0xF2,
             keypad_ack = 0xF6,
@@ -388,7 +389,7 @@ namespace esphome
                 statusFlagType statusFlags;
                 lrrstatusFlagType lrrstatusFlags;
                 void refreshStatusFlags(char * cbuf);
-                void processF7(const char * cbuf);
+                void processF7();
                 uint64_t last_refresh = 0;
 
                 void refreshSensors();

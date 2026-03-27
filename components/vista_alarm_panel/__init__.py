@@ -37,6 +37,7 @@ CONF_QUICKARM="quickarm"
 CONF_LRR="lrr_supervisor"
 CONF_RFR="rf_receiver_emulation"
 CONF_RFRADDR="rf_receiver_addr"
+CONF_LEGACYPROTOCOL="legacy_protocol"
 
 def validate_keypads(config):
     if (config[CONF_KEYPAD1] == 0 
@@ -90,7 +91,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_QUICKARM): cv.boolean, 
             cv.Optional(CONF_LRR): cv.boolean, 
             cv.Optional(CONF_RFR): cv.boolean,
-            cv.Optional(CONF_RFRADDR, default=0): cv.int_,  
+            cv.Optional(CONF_RFRADDR, default=0): cv.int_,
+            cv.Optional(CONF_LEGACYPROTOCOL,default=False): cv.boolean  
         }
     ).extend(cv.COMPONENT_SCHEMA),
     validate_keypads,
@@ -115,6 +117,9 @@ async def to_code(config):
         cg.add_define("DEBUG_LOG")
     if config[CONF_DEBUGPULSE]:
         cg.add_define("DEBUG_PULSE")
+    if config[CONF_LEGACYPROTOCOL]:
+        cg.add_define("LEGACY_SE_PROTOCOL")
+        print("Enabling Legacy Protocol Option")
     if config[CONF_KEYPAD1] != 0:
         cg.add(var.set_partitionKeypad(1,config[CONF_KEYPAD1]))
     if config[CONF_KEYPAD2] != 0:

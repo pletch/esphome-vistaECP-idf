@@ -24,8 +24,11 @@ Date: 2-Feb-2025
 #include "esp_timer.h"
 #include "hal/uart_ll.h"
 #include <vector>
-#include "vista20p.h"
+#include <memory>
+#include "esphome/core/defines.h"
 #include "helperstructs.h"
+#include "helperfuncs.h"
+
 
 #define F6_ACK_MESSAGE_LENGTH 4
 #define F7_MESSAGE_LENGTH 48
@@ -39,6 +42,12 @@ Date: 2-Feb-2025
 #define UART_RX_TASK_STACK_SIZE (4096)
 #define UART_RX_EXT_TASK_STACK_SIZE (3072)
 #define UART_DELAY 15
+
+#ifdef LEGACY_SE_PROTOCOL
+#include "vistaSE.h"
+#else
+#include "vista20p.h"
+#endif
 
 class VistaBus
 {
@@ -59,7 +68,11 @@ public:
     void sendRFmsg(uint32_t serial, uint8_t msg);
 
 private:
+#ifdef LEGACY_SE_PROTOCOL
+    VistaSE vprotocol;
+#else
     Vista20P vprotocol;
+#endif
     const char* const TAG = "vistabus";
     int rxPin, txPin;
     int uartNum;
@@ -85,6 +98,7 @@ private:
     uint64_t request_F1_time = 0;
     uint64_t pulse_mark_time = 0;
     bool req_to_send = false;
+    bool is_2400 = false;
 
     void capture_pulse_pattern(gpio_num_t rx_pin);
 

@@ -33,6 +33,8 @@ namespace esphome
                 }
             }
             vTaskDelay(250);
+            uint8_t legacy_packet_index = 0;
+            char legacy_cmd_buffer[48];
             while (1)
             {   
                 uint64_t current_time = esp_timer_get_time();
@@ -64,13 +66,56 @@ namespace esphome
                                 ESP_LOGW(TAG, "No keypad associated with this partition in YAML definition.");
                             else
                             {
-                                processF7(payload);
+                                processF7();
                                 refreshSensors();
                                 ESP_LOGI(TAG, "Partition: %u", statusFlags.partition);
                             }
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt1);
                             ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
                             ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
+                        }
+                        else if (src == 0xDD) //Legacy Vista20SE protocol packets
+                        {
+                            if( payload[0] != 0XFE && payload[0] != 0xFF && size >= 4) 
+                            {
+                                legacy_packet_index = 0;
+                                memset(legacy_cmd_buffer,'\0',sizeof(legacy_cmd_buffer));
+                                legacy_cmd_buffer[4] = 0x80;
+                                for (int i=0; i<5; i++)
+                                    legacy_cmd_buffer[i+5] = payload[i];
+                            }
+                            else if( payload[0] == 0xFE && size == 5)
+                            {
+                                legacy_packet_index = 1;
+                                for (int i=1; i<5; i++)
+                                    legacy_cmd_buffer[i+11] = payload[i];
+                            }
+                            else if( payload[0] == 0xFF && size == 5 && legacy_packet_index > 0 && legacy_packet_index < 8)
+                            {
+                                legacy_packet_index++;
+                                for (int i=1; i<5; i++)
+                                    legacy_cmd_buffer[i+11+(legacy_packet_index -1)*4] = payload[i];
+                            }
+                            else
+                            {
+                                legacy_packet_index == 0;
+                            }
+                            if ( legacy_packet_index == 8)
+                            {
+                                legacy_cmd_buffer[44] = '\0';
+                                refreshStatusFlags(legacy_cmd_buffer);
+                                if (statusFlags.partition == 0) 
+                                    ESP_LOGW(TAG, "No keypad associated with this partition in YAML definition.");
+                                else
+                                {
+                                    processF7();
+                                    refreshSensors();
+                                    ESP_LOGI(TAG, "Partition: %u", statusFlags.partition);
+                                }
+                                ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt1);
+                                ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
+                                ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
+                            }
                         }
                         else if (src == 0xF2)
                         {
@@ -504,7 +549,7 @@ namespace esphome
             memcpy(statusFlags.prompt2, tempbuf, 32);
         }
 
-        void vistaECPHome::processF7(const char * cbuf)
+        void vistaECPHome::processF7()
         {
             uint8_t kpi = 0;
             bool forceRefresh = false;
