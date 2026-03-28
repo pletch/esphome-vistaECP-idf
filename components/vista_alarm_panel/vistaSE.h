@@ -42,9 +42,9 @@ public:
         return data_waiting;
     }
 
-    int handle_UART_events_impl(QueueHandle_t uartevtQueue, TaskHandle_t rx_tx_task_Handle, TaskHandle_t monitor_rx_task_Handle, 
+    int handle_UART_events_impl(const QueueHandle_t uartevtQueue, const TaskHandle_t rx_tx_task_Handle, const TaskHandle_t monitor_rx_task_Handle, 
                 int uartNum, int rxPin, bool &req_to_send, bool &pulse_marked, int64_t &pulse_mark_time, bool &is_2400, 
-                SendPacket &pkt_to_send, uint8_t * buf)
+                const SendPacket &pkt_to_send, uint8_t * buf)
     {
         int bytes = 0;
         uart_event_t event;
@@ -60,26 +60,31 @@ public:
                 gpioTaskArgs taskargs;
                 taskargs.task_handle = rx_tx_task_Handle;
                 taskargs.pin = rxPin;
-
+                if(monitor_rx_task_Handle != NULL)                     
+                    //notify break detected to sync tx_monitor task to allow reading of 2400/5/1 bits
+                {
+                    uint32_t val = 0x11 << 8;
+                    xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                } 
                 if (gpio_get_level( static_cast<gpio_num_t>(rxPin)))
                 {                      
                     int64_t high_start = esp_timer_get_time();
                     gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_NEGEDGE);
                     gpio_isr_handler_add(static_cast<gpio_num_t>(rxPin), gpio_isr_handler, (void *) &taskargs );
-                    if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(535)) == pdPASS)
-                    {            
-                        int64_t start = esp_timer_get_time();
-                        if (start - high_start > 20000)
+                    if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(535)) == pdPASS) //notify again that 4ms window is started
+                    {
+                        if(monitor_rx_task_Handle != NULL)                        
                         {
-                            //ESP_LOGE("TAG", "start - high_start: %lld", start-high_start);
-                            if(monitor_rx_task_Handle != NULL)                        
-                            //sync tx_monitor task to allow reading of 2400/5/1 bits
-                            {
-                                uint32_t val = 0x11 << 8;
-                                xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
-                            }                  
+                            uint32_t val = 0x11 << 8;
+                            xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                        }            
+                        int64_t start = esp_timer_get_time();
+                        int64_t high_time = start - high_start; 
+                        if ((high_time > 20000))
+                        {
+                            //ESP_LOGE("TAG", "start - high_start: %lld", start-high_start);                
                             gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_POSEDGE);
-                            if (req_to_send && pkt_to_send.type == 1)
+                            if (req_to_send && pkt_to_send.type == 1 && (high_time < 60000 || high_time > 150000)) //try to write
                             {
                                 const esp_timer_create_args_t oneshot_timer_args = 
                                 {
@@ -151,38 +156,32 @@ public:
     int monitor_task_sync_impl(int extuartNum, uint8_t * buf, uint32_t &val, QueueHandle_t receiveQueue, ReceivedPacket &rcvd_extPkt)
     {
         int bytes = 0;
-        bool synced = false;
-        uart_set_baudrate(static_cast<uart_port_t>(extuartNum),2400);
-        uart_set_stop_bits(static_cast<uart_port_t>(extuartNum), UART_STOP_BITS_1);
-        uart_set_word_length(static_cast<uart_port_t>(extuartNum), UART_DATA_5_BITS);
+
         xTaskNotifyWait(0xFFFFFFFF,0xFFFFFFFF,&val,pdMS_TO_TICKS(portMAX_DELAY));
-        if (static_cast<uint8_t>(val >> 8) == 0x11) //using 0x11 to pass sync
+        if (static_cast<uint8_t>(val >> 8) == 0x11) //in a break
         {
+            uart_set_baudrate(static_cast<uart_port_t>(extuartNum),2400);
+            uart_set_stop_bits(static_cast<uart_port_t>(extuartNum), UART_STOP_BITS_1);
+            uart_set_word_length(static_cast<uart_port_t>(extuartNum), UART_DATA_5_BITS);
             buf[0] = 0;
             memset(rcvd_extPkt.payload,'\0',sizeof(rcvd_extPkt.payload));
+            xTaskNotifyWait(0xFFFFFFFF,0xFFFFFFFF,&val,pdMS_TO_TICKS(portMAX_DELAY)); //start of low time after break
             rcvd_extPkt.source = 0xDD; //only VistaSE protocol writes here
-                bytes = get_Packet(&rcvd_extPkt, buf, 0, 3, static_cast<uart_port_t>(extuartNum), pdMS_TO_TICKS(5));
-                uart_set_word_length(static_cast<uart_port_t>(extuartNum), UART_DATA_8_BITS);
-                uart_set_stop_bits(static_cast<uart_port_t>(extuartNum), UART_STOP_BITS_2);
-                uart_set_baudrate(static_cast<uart_port_t>(extuartNum),4800);
-                synced = true;
-                if (bytes)
-                {
-                    xQueueSend(receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
-                    ESP_LOGE("Vista20SE","Received some bytes: %i",bytes);
-                }
-            }
-            if (synced)
+            bytes = get_Packet(&rcvd_extPkt, buf, 0, 3, static_cast<uart_port_t>(extuartNum), pdMS_TO_TICKS(8)); //wait up for 4 ms for any data to start arriving
+            uart_set_word_length(static_cast<uart_port_t>(extuartNum), UART_DATA_8_BITS);
+            uart_set_stop_bits(static_cast<uart_port_t>(extuartNum), UART_STOP_BITS_2);
+            uart_set_baudrate(static_cast<uart_port_t>(extuartNum),4800);
+            if (bytes)
             {
+                uart_flush(static_cast<uart_port_t>(extuartNum));
+                xQueueSend(receiveQueue, &rcvd_extPkt,pdMS_TO_TICKS(0));
                 bytes = 0;
-                if (xTaskNotifyWait(0,0xFFFFFFFF,&val,pdMS_TO_TICKS(20) == pdPASS));  //data of interest incoming according to RX_TX Task
-                {
-                    bytes = uart_read_bytes(static_cast<uart_port_t>(extuartNum), buf, 1, pdMS_TO_TICKS(0));
-                    if (bytes)
-                        ESP_LOGE("Vista20SE","Received a byte. task_val: %i",val);
-                }
-            }
-        val = 0;
+            }            
+        }
+        else
+        {
+            bytes = uart_read_bytes(static_cast<uart_port_t>(extuartNum), buf, 1, pdMS_TO_TICKS(20));
+        }
         return bytes;
     }
 

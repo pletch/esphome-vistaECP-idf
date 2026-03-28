@@ -44,9 +44,9 @@ public:
         return data_waiting;
     }
 
-    int handle_UART_events_impl(QueueHandle_t uartevtQueue, TaskHandle_t rx_tx_task_Handle, TaskHandle_t monitor_rx_task_Handle,
+    int handle_UART_events_impl(const QueueHandle_t uartevtQueue, const TaskHandle_t rx_tx_task_Handle, const TaskHandle_t monitor_rx_task_Handle,
                 int uartNum, int rxPin, bool &req_to_send, bool &pulse_marked, int64_t &pulse_mark_time, bool &is_2400, 
-                SendPacket &pkt_to_send, uint8_t * buf)
+                const SendPacket &pkt_to_send, uint8_t * buf)
     {
         int bytes = 0;
         uart_event_t event;

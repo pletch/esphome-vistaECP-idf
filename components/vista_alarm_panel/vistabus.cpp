@@ -782,6 +782,8 @@ void VistaBus::processF9(const char * cbuf)
     // For timing , must handle 0xF9 packet here if emulating rather than through queues in vistaalarm process. 
     char response[6];
     if (cbuf[3] == 0x53)
+    // F9 83 02 53 2F 
+    // C3 04 00 60 00 D9 
     {
         response[0] = cbuf[1] + 0x40;
         response[1] = 0x04;
