@@ -37,7 +37,7 @@ namespace esphome
             char legacy_cmd_buffer[48];
             while (1)
             {   
-                uint64_t current_time = esp_timer_get_time();
+                int64_t current_time = esp_timer_get_time();
                 if (rfrEmulation[0])            
                     RF_handle_heartbeats();
                 if (aui_request.pending && (current_time - aui_request.time > 6 * 1000 * 1000))
@@ -45,7 +45,7 @@ namespace esphome
                 if (panel_clock.auto_sync && (current_time > panel_clock.next_sync))
                 {
                     AUIrequest_panel_time();
-                    panel_clock.next_sync += static_cast<uint64_t>(6)*60*60*1000*1000; //next sync in 6 hrs
+                    panel_clock.next_sync += static_cast<int64_t>(6)*60*60*1000*1000; //next sync in 6 hrs
                 }
 
                 char payload[48];
@@ -553,7 +553,7 @@ namespace esphome
         {
             uint8_t kpi = 0;
             bool forceRefresh = false;
-            uint64_t current_time = esp_timer_get_time();
+            int64_t current_time = esp_timer_get_time();
             if (current_time - last_refresh > 300*1000*1000) //force send at least every 5 minutes
             {
                 forceRefresh = true;
@@ -796,7 +796,7 @@ namespace esphome
         {
             std::string zoneStatusMsg = "";
             char s1[16];
-            uint64_t current_time = esp_timer_get_time();
+            int64_t current_time = esp_timer_get_time();
             // clears restored zones after timeout
             for (auto &x : alarmZones)
             {

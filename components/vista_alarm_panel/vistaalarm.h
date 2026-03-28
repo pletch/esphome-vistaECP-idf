@@ -156,8 +156,8 @@ namespace esphome
                 VistaBus vistabus;
                 const char *const TAG = "vista-alarm";
                 esp_log_level_t log_level = ESP_LOG_DEBUG;
-                uint64_t TTL = 30000000;
-                uint64_t last_connection_check = 0;
+                int64_t TTL = 30000000;
+                int64_t last_connection_check = 0;
                 uint8_t debug = 0;
                 char last_F7[48];
                 char keypadAddr1 = 0;
@@ -257,7 +257,7 @@ namespace esphome
 
                 struct panelClockType
                 {
-                    uint64_t next_sync = 2*60*1000*1000; //first sync 2 min after boot
+                    int64_t next_sync = 2*60*1000*1000; //first sync 2 min after boot
                     bool auto_sync = false;
                 };
                 panelClockType panel_clock;
@@ -273,7 +273,7 @@ namespace esphome
                 struct AUIrequest
                 {
                     bool pending = false;
-                    uint64_t time = 0;
+                    int64_t time = 0;
                 };
                 AUIrequest aui_request;
                 
@@ -326,10 +326,10 @@ namespace esphome
                     vistaECPBinarySensor *binary_sensor;
                     vistaECPTextSensor *text_sensor;
                     uint8_t zone;
-                    uint64_t time;
+                    int64_t time;
                     uint32_t rfserial;
                     uint8_t rfloop;
-                    uint64_t rfnext_hb;
+                    int64_t rfnext_hb;
                     uint8_t partition;
                     bool open;
                     bool bypass;
@@ -369,7 +369,7 @@ namespace esphome
                     .type = NULL
                 };
 
-                uint64_t lowBatteryTime;
+                int64_t lowBatteryTime;
 
                 sysState currentSystemState,previousSystemState;
 
@@ -390,7 +390,7 @@ namespace esphome
                 lrrstatusFlagType lrrstatusFlags;
                 void refreshStatusFlags(char * cbuf);
                 void processF7();
-                uint64_t last_refresh = 0;
+                int64_t last_refresh = 0;
 
                 void refreshSensors();
                 void refreshLRRStatusFlags(char * cbuf); 

@@ -12,7 +12,7 @@ public:
     }
 
     int handle_UART_events(QueueHandle_t uartevtQueue, TaskHandle_t rx_tx_task_Handle, TaskHandle_t monitor_rx_task_Handle,
-                int uartNum, int rxPin, bool req_to_send, bool &pulse_marked, uint64_t &pulse_mark_time, bool &is_2400,
+                int uartNum, int rxPin, bool &req_to_send, bool &pulse_marked, int64_t &pulse_mark_time, bool &is_2400,
                 SendPacket &pkt_to_send, uint8_t * buf)
     {
         return static_cast<VistaProtocolDeriv*>(this)->handle_UART_events_impl(uartevtQueue, rx_tx_task_Handle, monitor_rx_task_Handle,

@@ -43,7 +43,7 @@ public:
     }
 
     int handle_UART_events_impl(QueueHandle_t uartevtQueue, TaskHandle_t rx_tx_task_Handle, TaskHandle_t monitor_rx_task_Handle, 
-                int uartNum, int rxPin, bool req_to_send, bool &pulse_marked, uint64_t &pulse_mark_time, bool &is_2400, 
+                int uartNum, int rxPin, bool &req_to_send, bool &pulse_marked, int64_t &pulse_mark_time, bool &is_2400, 
                 SendPacket &pkt_to_send, uint8_t * buf)
     {
         int bytes = 0;
@@ -62,85 +62,85 @@ public:
                 taskargs.pin = rxPin;
 
                 if (gpio_get_level( static_cast<gpio_num_t>(rxPin)))
-            {    
-                int64_t high_start = esp_timer_get_time();
-                                   
-                gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_NEGEDGE);
-                gpio_isr_handler_add(static_cast<gpio_num_t>(rxPin), gpio_isr_handler, (void *) &taskargs );
-                if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(535)) == pdPASS)
-                {
-                    int64_t start = esp_timer_get_time();
-                    int64_t high_time = start - high_start;
-                    ESP_LOGE("TAG", "Here line 74. high_time:%i  high_start:%i", high_time, high_start);
-                    if(high_start && high_time > 20000 && monitor_rx_task_Handle != NULL)
-                        //sync tx_monitor task to allow reading of 2400/5/1 bits
-                    {
-                        uint32_t val = 0x11 << 8;
-                        xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
-                    }
-                                            
-                    gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_POSEDGE);
-                    if (req_to_send && pkt_to_send.type == 1 && high_start && high_time > 20000)
-                    {
-                        const esp_timer_create_args_t oneshot_timer_args = 
+                {                      
+                    int64_t high_start = esp_timer_get_time();
+                    gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_NEGEDGE);
+                    gpio_isr_handler_add(static_cast<gpio_num_t>(rxPin), gpio_isr_handler, (void *) &taskargs );
+                    if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(535)) == pdPASS)
+                    {            
+                        int64_t start = esp_timer_get_time();
+                        if (start - high_start > 20000)
                         {
-                            .callback = &timer_isr_handler,
-                            .arg = (void*) rx_tx_task_Handle,
-                            .name = "one-shot"
-                        };
-                        esp_timer_handle_t oneshot_timer;
-                        esp_timer_create(&oneshot_timer_args, &oneshot_timer);
-                        esp_timer_start_once(oneshot_timer, 3000); //delay 3ms before sending
+                            //ESP_LOGE("TAG", "start - high_start: %lld", start-high_start);
+                            if(monitor_rx_task_Handle != NULL)                        
+                            //sync tx_monitor task to allow reading of 2400/5/1 bits
+                            {
+                                uint32_t val = 0x11 << 8;
+                                xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+                            }                  
+                            gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_POSEDGE);
+                            if (req_to_send && pkt_to_send.type == 1)
+                            {
+                                const esp_timer_create_args_t oneshot_timer_args = 
+                                {
+                                    .callback = &timer_isr_handler,
+                                    .arg = (void*) rx_tx_task_Handle,
+                                    .name = "one-shot"
+                                };
+                                esp_timer_handle_t oneshot_timer;
+                                esp_timer_create(&oneshot_timer_args, &oneshot_timer);
+                                esp_timer_start_once(oneshot_timer, 3000); //delay 3ms before sending
 
-                        xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(10));
-                                
-                        bool data_written = true;
-                        uart_set_baudrate(static_cast<uart_port_t>(uartNum),2400);
-                        uart_set_stop_bits(static_cast<uart_port_t>(uartNum), UART_STOP_BITS_1);
-                        uart_set_word_length(static_cast<uart_port_t>(uartNum), UART_DATA_5_BITS);
-                        keypad_write_SE(static_cast<uart_port_t>(uartNum),pkt_to_send.payload);
-                        if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,0) != pdTRUE)
-                            keypad_write_SE(static_cast<uart_port_t>(uartNum),pkt_to_send.payload);
-                        else
-                            data_written = false;
-                        if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,0) != pdTRUE)
-                            keypad_write_SE(static_cast<uart_port_t>(uartNum),pkt_to_send.payload);
-                        else
-                            data_written = false;
-                        if (data_written)
-                        {
-                            req_to_send = false;
-                        }
-                        uart_set_word_length(static_cast<uart_port_t>(uartNum), UART_DATA_8_BITS);
-                        uart_set_stop_bits(static_cast<uart_port_t>(uartNum), UART_STOP_BITS_2);
-                        uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
+                                xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(10));
+                                gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_ANYEDGE);    
+                                bool data_written = true;
+                                uart_set_baudrate(static_cast<uart_port_t>(uartNum),2400);
+                                uart_set_stop_bits(static_cast<uart_port_t>(uartNum), UART_STOP_BITS_1);
+                                uart_set_word_length(static_cast<uart_port_t>(uartNum), UART_DATA_5_BITS);
+                                keypad_write_SE(static_cast<uart_port_t>(uartNum),pkt_to_send.payload);
+                                if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,0) != pdTRUE)
+                                {
+                                    keypad_write_SE(static_cast<uart_port_t>(uartNum),pkt_to_send.payload);
+                                    if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,0) != pdTRUE)
+                                        keypad_write_SE(static_cast<uart_port_t>(uartNum),pkt_to_send.payload);
+                                    else
+                                        data_written = false;
+                                }
+                                else
+                                    data_written = false;
+                                if (data_written)
+                                {
+                                    req_to_send = false;
+                                }
+                                uart_set_word_length(static_cast<uart_port_t>(uartNum), UART_DATA_8_BITS);
+                                uart_set_stop_bits(static_cast<uart_port_t>(uartNum), UART_STOP_BITS_2);
+                                uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
 
-                        esp_timer_delete(oneshot_timer);
-                        //ESP_LOGI(TAG,"High Time Protocol: %d",high_time);
-                    }
-                    
-                    else if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(10)) == pdPASS)
-                    {
-                        int64_t end = esp_timer_get_time();
-                        if (end - start > 5700 && end - start < 6300)
-                        {
-                            uart_flush(static_cast<uart_port_t>(uartNum));  // flush UART to ensure sync of read against 2400 preamble
-                            uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(4), uartevtQueue); //flush leading zero
-                            uart_set_baudrate(static_cast<uart_port_t>(uartNum),2400);
-                            bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(15), uartevtQueue);
-                            uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
-                            is_2400 = true;
+                                esp_timer_delete(oneshot_timer);
+                            }
+                            else if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(10)) == pdPASS)
+                            {
+                                int64_t end = esp_timer_get_time();
+                                if (end - start > 5700 && end - start < 6300)
+                                {
+                                    uart_flush(static_cast<uart_port_t>(uartNum));  // flush UART to ensure sync of read against 2400 preamble
+                                    uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(4), uartevtQueue); //flush leading zero
+                                    uart_set_baudrate(static_cast<uart_port_t>(uartNum),2400);
+                                    bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(15), uartevtQueue);
+                                    uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
+                                    is_2400 = true;
+                                }
+                            }
+                            else if (req_to_send && !pulse_marked && pkt_to_send.type == 2)
+                            {
+                                pulse_marked = mark_pulse(uartNum, pkt_to_send.keypadaddress);
+                                pulse_mark_time = esp_timer_get_time();
+                                bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(10), uartevtQueue);
+                            }
                         }
-                    }
-                    else if (req_to_send && !pulse_marked && pkt_to_send.type == 2)
-                    {
-                        pulse_marked = mark_pulse(uartNum, pkt_to_send.keypadaddress);
-                        pulse_mark_time = esp_timer_get_time();
-                        bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(10), uartevtQueue);
-                    }
-                }
-                gpio_isr_handler_remove(static_cast<gpio_num_t>(rxPin));
-            }            
+                    }   
+                    gpio_isr_handler_remove(static_cast<gpio_num_t>(rxPin));
+                }            
                 break;
             default:
                 break;

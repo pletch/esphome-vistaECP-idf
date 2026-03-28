@@ -45,7 +45,7 @@ public:
     }
 
     int handle_UART_events_impl(QueueHandle_t uartevtQueue, TaskHandle_t rx_tx_task_Handle, TaskHandle_t monitor_rx_task_Handle,
-                int uartNum, int rxPin, bool req_to_send, bool &pulse_marked, uint64_t &pulse_mark_time, bool &is_2400, 
+                int uartNum, int rxPin, bool &req_to_send, bool &pulse_marked, int64_t &pulse_mark_time, bool &is_2400, 
                 SendPacket &pkt_to_send, uint8_t * buf)
     {
         int bytes = 0;
@@ -67,11 +67,11 @@ public:
                     gpio_isr_handler_add(static_cast<gpio_num_t>(rxPin), gpio_isr_handler, (void *) &taskargs );
                     if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(535)) == pdPASS)
                     {
-                        uint64_t start = esp_timer_get_time();
+                        int64_t start = esp_timer_get_time();
                         gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_POSEDGE);
                         if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(10)) == pdPASS)
                         {
-                            uint64_t end = esp_timer_get_time();
+                            int64_t end = esp_timer_get_time();
                             if (end - start > 5700 && end - start < 6300)
                             {
                                 uart_flush(static_cast<uart_port_t>(uartNum));  // flush UART ahead of 2400 preamble

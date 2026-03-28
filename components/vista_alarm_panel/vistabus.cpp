@@ -256,7 +256,7 @@ void VistaBus::rx_tx_task(void * args)
 
     gpio_config(&io_conf);
     (void)gpio_install_isr_service(0);
-
+    SendPacket pkt_to_send;
     while (1) 
     {
         // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
@@ -275,7 +275,7 @@ void VistaBus::rx_tx_task(void * args)
             this->panel_connected = false;
             break;
         }
-        uint64_t now = esp_timer_get_time();
+        int64_t now = esp_timer_get_time();
         if (now - last_data_received > 30*1000*1000)
             this->panel_connected = false;
 
@@ -288,7 +288,6 @@ void VistaBus::rx_tx_task(void * args)
             continue;
         }
 #endif
-        SendPacket pkt_to_send;
 
         this->req_to_send = vprotocol.check_send_Q(this->sendQueue, pkt_to_send, this->req_to_send); 
         int rxBytes = vprotocol.handle_UART_events(this->uartevtQueue, this->rx_tx_task_Handle, this->monitor_rx_task_Handle,
@@ -297,6 +296,7 @@ void VistaBus::rx_tx_task(void * args)
 
         if (this->req_to_send && !this->pulse_marked && !vprotocol.legacy_protocol()) //loop faster when needing to mark pulse to send
             uart_delay = 20;
+
         if (rxBytes) 
         {
             this->panel_connected = true;
