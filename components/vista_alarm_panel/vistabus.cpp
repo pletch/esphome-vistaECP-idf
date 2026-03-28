@@ -259,11 +259,9 @@ void VistaBus::rx_tx_task(void * args)
     SendPacket pkt_to_send;
     while (1) 
     {
-        // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
-        int uart_delay = 550;
-
         // Handle any queued device msgs via F1 request  
-        if (uxQueueMessagesWaiting(deviceMsgQueue) && !vprotocol.req_to_send && (esp_timer_get_time() - request_F1_time > uart_delay*1000))
+        if (uxQueueMessagesWaiting(deviceMsgQueue) && !vprotocol.req_to_send 
+                && (esp_timer_get_time() - request_F1_time > PULSE_CYCLE_PERIOD*1000))
         {
             DeviceMsg q_msg;
             xQueuePeek(deviceMsgQueue,&q_msg,pdMS_TO_TICKS(0));
@@ -282,7 +280,7 @@ void VistaBus::rx_tx_task(void * args)
 #ifdef DEBUG_PULSE
         if (now > 60*1000*1000)
         {
-            ESP_LOGE(TAG,"Collecting pulse pattern at %llu", now);
+            ESP_LOGE(TAG,"Collecting pulse pattern at %lld", now);
             capture_pulse_pattern(static_cast<gpio_num_t>(this->rxPin));
             vTaskDelay(10);
             continue;
@@ -292,9 +290,6 @@ void VistaBus::rx_tx_task(void * args)
         vprotocol.check_send_Q(this->sendQueue, pkt_to_send); 
         int rxBytes = vprotocol.handle_UART_events(this->uartevtQueue, this->rx_tx_task_Handle, this->monitor_rx_task_Handle,
                 this->uartNum, this->rxPin, pkt_to_send, data.get());
-
-        if (vprotocol.req_to_send && !vprotocol.pulse_marked && !vprotocol.legacy_protocol()) //loop faster when needing to mark pulse to send
-            uart_delay = 20;
 
         if (rxBytes) 
         {
@@ -473,7 +468,7 @@ void VistaBus::rx_tx_task(void * args)
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
-            else if ( vprotocol.legacy_protocol() && data[0] == 0xFE && vprotocol.is_2400 ) //Vista20SE 
+            else if ( vprotocol.legacy_protocol() && data[0] == 0xFE && vprotocol.is_2400 ) //VistaSE 
             {   
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
@@ -481,7 +476,7 @@ void VistaBus::rx_tx_task(void * args)
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
                 xQueueSend(this->receiveQueue,&received_packet,0);
             }
-            else if ( vprotocol.legacy_protocol() && data[0] == 0xFF && vprotocol.is_2400 ) //Vista20SE 
+            else if ( vprotocol.legacy_protocol() && data[0] == 0xFF && vprotocol.is_2400 ) //VistaSE 
             {   
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
@@ -489,7 +484,7 @@ void VistaBus::rx_tx_task(void * args)
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
                 xQueueSend(this->receiveQueue,&received_packet,0);
             }
-            else if ( vprotocol.legacy_protocol() && vprotocol.is_2400 ) //Vista20SE 
+            else if ( vprotocol.legacy_protocol() && vprotocol.is_2400 ) //VistaSE 
             {   
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);

@@ -48,7 +48,7 @@ public:
     {
         int bytes = 0;
         uart_event_t event;
-        xQueueReceive(uartevtQueue, (void *)&event, pdMS_TO_TICKS(550));
+        xQueueReceive(uartevtQueue, (void *)&event, pdMS_TO_TICKS(PULSE_CYCLE_PERIOD));
         switch (event.type)
         {
             case UART_DATA:
