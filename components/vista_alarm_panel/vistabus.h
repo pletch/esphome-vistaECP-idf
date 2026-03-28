@@ -94,11 +94,7 @@ private:
 
     int64_t last_data_received = 0;
     uint8_t ack_failures = 0;
-    bool pulse_marked = false;
     int64_t request_F1_time = 0;
-    int64_t pulse_mark_time = 0;
-    bool req_to_send = false;
-    bool is_2400 = false;
 
     void capture_pulse_pattern(gpio_num_t rx_pin);
 

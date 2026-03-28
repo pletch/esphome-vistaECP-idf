@@ -11,15 +11,14 @@ public:
         return true;
     }
 
-    bool check_send_Q_impl(QueueHandle_t sendQueue, SendPacket &pkt, bool &req_to_send)
+    void check_send_Q_impl(const QueueHandle_t sendQueue, SendPacket &pkt)
     {
-        bool data_waiting = req_to_send;
         while (uxQueueMessagesWaiting(sendQueue))
         {
-            if (!data_waiting)
+            if (!this->req_to_send)
             {
                 xQueueReceive(sendQueue,&pkt,0);
-                data_waiting = true;
+                this->req_to_send = true;
             }
             if (pkt.size > 1) //split data into individual chars
             {   
@@ -39,12 +38,11 @@ public:
             else
                 break;
         }   
-        return data_waiting;
+        return;
     }
 
-    int handle_UART_events_impl(const QueueHandle_t uartevtQueue, const TaskHandle_t rx_tx_task_Handle, const TaskHandle_t monitor_rx_task_Handle, 
-                int uartNum, int rxPin, bool &req_to_send, bool &pulse_marked, int64_t &pulse_mark_time, bool &is_2400, 
-                const SendPacket &pkt_to_send, uint8_t * buf)
+    int handle_UART_events_impl(const QueueHandle_t uartevtQueue, const TaskHandle_t rx_tx_task_Handle, 
+            const TaskHandle_t monitor_rx_task_Handle, int uartNum, int rxPin, const SendPacket &pkt_to_send, uint8_t * buf)
     {
         int bytes = 0;
         uart_event_t event;
@@ -84,7 +82,7 @@ public:
                         {
                             //ESP_LOGE("TAG", "start - high_start: %lld", start-high_start);                
                             gpio_set_intr_type(static_cast<gpio_num_t>(rxPin), GPIO_INTR_POSEDGE);
-                            if (req_to_send && pkt_to_send.type == 1 && (high_time < 60000 || high_time > 150000)) //try to write
+                            if (this->req_to_send && pkt_to_send.type == 1 && (high_time < 60000 || high_time > 150000)) //try to write
                             {
                                 const esp_timer_create_args_t oneshot_timer_args = 
                                 {
@@ -115,7 +113,7 @@ public:
                                     data_written = false;
                                 if (data_written)
                                 {
-                                    req_to_send = false;
+                                    this->req_to_send = false;
                                 }
                                 uart_set_word_length(static_cast<uart_port_t>(uartNum), UART_DATA_8_BITS);
                                 uart_set_stop_bits(static_cast<uart_port_t>(uartNum), UART_STOP_BITS_2);
@@ -133,13 +131,13 @@ public:
                                     uart_set_baudrate(static_cast<uart_port_t>(uartNum),2400);
                                     bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(15), uartevtQueue);
                                     uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
-                                    is_2400 = true;
+                                    this->is_2400 = true;
                                 }
                             }
-                            else if (req_to_send && !pulse_marked && pkt_to_send.type == 2)
+                            else if (this->req_to_send && !this->pulse_marked && pkt_to_send.type == 2)
                             {
-                                pulse_marked = mark_pulse(uartNum, pkt_to_send.keypadaddress);
-                                pulse_mark_time = esp_timer_get_time();
+                                this->pulse_marked = mark_pulse(uartNum, pkt_to_send.keypadaddress);
+                                this->pulse_mark_time = esp_timer_get_time();
                                 bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(10), uartevtQueue);
                             }
                         }
@@ -153,7 +151,8 @@ public:
         return bytes;
     }
 
-    int monitor_task_sync_impl(int extuartNum, uint8_t * buf, uint32_t &val, QueueHandle_t receiveQueue, ReceivedPacket &rcvd_extPkt)
+    int monitor_task_sync_impl(int extuartNum, uint8_t * buf, uint32_t &val, 
+            const QueueHandle_t receiveQueue, ReceivedPacket &rcvd_extPkt)
     {
         int bytes = 0;
 

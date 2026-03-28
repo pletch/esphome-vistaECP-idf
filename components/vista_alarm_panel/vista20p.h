@@ -11,15 +11,14 @@ public:
         return false;
     }
     
-    bool check_send_Q_impl(QueueHandle_t sendQueue, SendPacket &pkt, bool &req_to_send)
+    void check_send_Q_impl(const QueueHandle_t sendQueue, SendPacket &pkt)
     {
-        bool data_waiting = req_to_send;
         while (uxQueueMessagesWaiting(sendQueue))
         {
-            if (!data_waiting)
+            if (!req_to_send)
             {
                 xQueueReceive(sendQueue,&pkt,0);
-                data_waiting = true;
+                req_to_send = true;
                 if (pkt.sequence == last_sequence && pkt.keypadaddress == last_address)
                     pkt.sequence += 0x40; // Iterate sequencing if needed when consolidation occurs
                 this->last_sequence = pkt.sequence;
@@ -41,12 +40,11 @@ public:
                 }
             }
         }   
-        return data_waiting;
+        return;
     }
 
-    int handle_UART_events_impl(const QueueHandle_t uartevtQueue, const TaskHandle_t rx_tx_task_Handle, const TaskHandle_t monitor_rx_task_Handle,
-                int uartNum, int rxPin, bool &req_to_send, bool &pulse_marked, int64_t &pulse_mark_time, bool &is_2400, 
-                const SendPacket &pkt_to_send, uint8_t * buf)
+    int handle_UART_events_impl(const QueueHandle_t uartevtQueue, const TaskHandle_t rx_tx_task_Handle, 
+            const TaskHandle_t monitor_rx_task_Handle, int uartNum, int rxPin, const SendPacket &pkt_to_send, uint8_t * buf)
     {
         int bytes = 0;
         uart_event_t event;
@@ -79,13 +77,13 @@ public:
                                 uart_set_baudrate(static_cast<uart_port_t>(uartNum),2400);
                                 bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(10), uartevtQueue);
                                 uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
-                                is_2400 = true;
+                                this->is_2400 = true;
                             }
                         } 
-                        else if (req_to_send && !pulse_marked)
+                        else if (this->req_to_send && !this->pulse_marked)
                         {
-                            pulse_marked = mark_pulse(uartNum, pkt_to_send.keypadaddress);
-                            pulse_mark_time = esp_timer_get_time();
+                            this->pulse_marked = mark_pulse(uartNum, pkt_to_send.keypadaddress);
+                            this->pulse_mark_time = esp_timer_get_time();
                             bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(10), uartevtQueue);
                         }
                     }
@@ -98,7 +96,8 @@ public:
         return bytes;
     }
 
-    int monitor_task_sync_impl(int extuartNum, uint8_t * buf, uint32_t &val, QueueHandle_t receiveQueue, ReceivedPacket &rcvd_extPkt)
+    int monitor_task_sync_impl(int extuartNum, uint8_t * buf, uint32_t &val, 
+            const QueueHandle_t receiveQueue, ReceivedPacket &rcvd_extPkt)
     {
         int bytes = uart_read_bytes(static_cast<uart_port_t>(extuartNum), buf, 1, portMAX_DELAY);
         if (val == 0)

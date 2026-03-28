@@ -263,7 +263,7 @@ void VistaBus::rx_tx_task(void * args)
         int uart_delay = 550;
 
         // Handle any queued device msgs via F1 request  
-        if (uxQueueMessagesWaiting(deviceMsgQueue) && !req_to_send && (esp_timer_get_time() - request_F1_time > uart_delay*1000))
+        if (uxQueueMessagesWaiting(deviceMsgQueue) && !vprotocol.req_to_send && (esp_timer_get_time() - request_F1_time > uart_delay*1000))
         {
             DeviceMsg q_msg;
             xQueuePeek(deviceMsgQueue,&q_msg,pdMS_TO_TICKS(0));
@@ -289,12 +289,11 @@ void VistaBus::rx_tx_task(void * args)
         }
 #endif
 
-        this->req_to_send = vprotocol.check_send_Q(this->sendQueue, pkt_to_send, this->req_to_send); 
+        vprotocol.check_send_Q(this->sendQueue, pkt_to_send); 
         int rxBytes = vprotocol.handle_UART_events(this->uartevtQueue, this->rx_tx_task_Handle, this->monitor_rx_task_Handle,
-                this->uartNum, this->rxPin, this->req_to_send, this->pulse_marked, this->pulse_mark_time, this->is_2400, 
-                pkt_to_send, data.get());
+                this->uartNum, this->rxPin, pkt_to_send, data.get());
 
-        if (this->req_to_send && !this->pulse_marked && !vprotocol.legacy_protocol()) //loop faster when needing to mark pulse to send
+        if (vprotocol.req_to_send && !vprotocol.pulse_marked && !vprotocol.legacy_protocol()) //loop faster when needing to mark pulse to send
             uart_delay = 20;
 
         if (rxBytes) 
@@ -305,9 +304,9 @@ void VistaBus::rx_tx_task(void * args)
             memset(received_packet.payload,'\0',sizeof(received_packet.payload));
             received_packet.payload[0] = data[0];
             received_packet.source = 0;
-            if (this->req_to_send && this->pulse_marked && pkt_to_send.type == 2)  //No ACK for this type of send
+            if (vprotocol.req_to_send && vprotocol.pulse_marked && pkt_to_send.type == 2)  //No ACK for this type of send
             {
-                this->req_to_send = false;
+                vprotocol.req_to_send = false;
             }
             if ( data[0] == 0xF2 ) //AUI
             {
@@ -337,7 +336,7 @@ void VistaBus::rx_tx_task(void * args)
                     received_packet.source = 0xF6;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
                 uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), &data[1], 1, pdMS_TO_TICKS(UART_DELAY), uartevtQueue); //flush lagging zero
-                if(req_to_send && data[0] == pkt_to_send.keypadaddress) //ACK was for us.  Try to send.
+                if(vprotocol.req_to_send && data[0] == pkt_to_send.keypadaddress) //ACK was for us.  Try to send.
                 { 
                     data[rxBytes] = 0;
                     keypad_write(static_cast<uart_port_t>(this->uartNum), pkt_to_send );
@@ -347,24 +346,24 @@ void VistaBus::rx_tx_task(void * args)
                     {
                         if (data[0] == pkt_to_send.sequence)
                         {
-                            req_to_send = false;
-                            pulse_marked = false;
+                            vprotocol.req_to_send = false;
+                            vprotocol.pulse_marked = false;
 #ifdef DEBUG_LOG
                             xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(20));
 #endif               
                         }
 
-                        if (req_to_send)
+                        if (vprotocol.req_to_send)
                         {
                             ESP_LOGW(TAG, "Did not find expected byte in response of %d bytes.", rxBytes);
-                            req_to_send = false;
+                            vprotocol.req_to_send = false;
                         }
                         
                     }
                     else
                     {
                         ESP_LOGW(TAG, "Did not receive any response bytes from panel.");
-                        req_to_send = false;
+                        vprotocol.req_to_send = false;
                     }
                 } 
                 else //ACK was for another device.
@@ -440,7 +439,7 @@ void VistaBus::rx_tx_task(void * args)
                     }
                 }
             }
-            else if ( data[0] == 0xFA && is_2400) //EXP
+            else if ( data[0] == 0xFA && vprotocol.is_2400) //EXP
             {                        
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,FA_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 if (validChksum(received_packet.payload,0,rxBytes+1))
@@ -456,7 +455,7 @@ void VistaBus::rx_tx_task(void * args)
                     received_packet.source = 0xCF;
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));     
             }
-            else if ( data[0] == 0xFB && is_2400) //5881EN traffic
+            else if ( data[0] == 0xFB && vprotocol.is_2400) //5881EN traffic
             {    
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,FB_MESSAGE_LENGTH-1,static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
                 if (validChksum(received_packet.payload,0,rxBytes+1))
@@ -474,7 +473,7 @@ void VistaBus::rx_tx_task(void * args)
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
             }
-            else if ( vprotocol.legacy_protocol() && data[0] == 0xFE && is_2400 ) //Vista20SE 
+            else if ( vprotocol.legacy_protocol() && data[0] == 0xFE && vprotocol.is_2400 ) //Vista20SE 
             {   
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
@@ -482,7 +481,7 @@ void VistaBus::rx_tx_task(void * args)
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
                 xQueueSend(this->receiveQueue,&received_packet,0);
             }
-            else if ( vprotocol.legacy_protocol() && data[0] == 0xFF && is_2400 ) //Vista20SE 
+            else if ( vprotocol.legacy_protocol() && data[0] == 0xFF && vprotocol.is_2400 ) //Vista20SE 
             {   
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
@@ -490,7 +489,7 @@ void VistaBus::rx_tx_task(void * args)
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
                 xQueueSend(this->receiveQueue,&received_packet,0);
             }
-            else if ( vprotocol.legacy_protocol() && is_2400 ) //Vista20SE 
+            else if ( vprotocol.legacy_protocol() && vprotocol.is_2400 ) //Vista20SE 
             {   
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),2400);
                 rxBytes = get_Packet_event(&received_packet,data.get(),1,4, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
@@ -513,23 +512,23 @@ void VistaBus::rx_tx_task(void * args)
             }
         }
 
-        if (req_to_send && pulse_marked && (esp_timer_get_time() - pulse_mark_time > 1200000 )) //should receive ack within 1.2 seconds
+        if (vprotocol.req_to_send && vprotocol.pulse_marked && (esp_timer_get_time() - vprotocol.pulse_mark_time > 1200000 )) //should receive ack within 1.2 seconds
         {
             ack_failures++;
-            pulse_marked = false;
+            vprotocol.pulse_marked = false;
         }
 
         if (ack_failures == 10)
         {
             ESP_LOGW(TAG, "Failure to receive F6 ACK after 10 successive pulse marks.  Giving up.");
-            req_to_send = false;
+            vprotocol.req_to_send = false;
             ack_failures = 0;
         }
 
-        if (!req_to_send)
+        if (!vprotocol.req_to_send)
         {
             ack_failures = 0;
-            pulse_marked = false;
+            vprotocol.pulse_marked = false;
         }
     }
     ESP_LOGI(TAG, "Stopping Task");
