@@ -1,4 +1,4 @@
-# Modified to work with idf fork version!!!
+# Modified to work with https://github.com/pletch/esphome-vistaECP-idf
 substitutions:
   name: "vista-ecp-idf" # Unique network name, system name
   friendlyName: "Vista Alarm"  # Used as the friendly name of your application in HomeAssistant
@@ -15,9 +15,11 @@ vista_alarm_panel:
                           # to output all messages. 
   debug_pulsing: "false" # Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 
                          # 60 seconds after startup and continues indefinitely.  DO NOT enable for routine use of component! 
+  legacy_protocol: "false" # Set to true if using an older panel such as the Vista-15SE or Vista20SE.  
 
-  # Assign a new virtual keypad address to each active partition using programs *190 - *196 (on Vista 15/20)
-  # and enter it below.  For unused partitions, use 0 as the keypad address or comment out associated keypad_addr line.
+  # Assign a new virtual keypad address to each active partition using programs *190 - *196 (on Vista 15P/20P)
+  # and enter it below. For older Vista 15SE/20SE, use address of 31. For unused partitions, use 0 as the 
+  # keypad address or comment out associated keypad_addr line.
   keypad_addr_1: "20" #partition 1 virtual keypad. Comment out or set to 0 to disable
   #keypad_addr_2: "0" #partition 2 virtual keypad. Comment out or set to 0 to disable
   #keypad_addr_3: "0" #partition 3 virtual keypad. Comment out or set to 0 to disable

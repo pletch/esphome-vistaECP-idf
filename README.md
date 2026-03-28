@@ -26,11 +26,13 @@ Fork is shared here for the benefits of any others that might want to use it.
 - Will not work with older ESP8266.
 - Unused residual code, bitwise operations, and variable handling cleaned up.
 - Capability to temporarily enable RMT module for outputting bus pulse pattern to log for debugging.
+- Unified code base supports both older Vista SE and newer Vista 20P protocol via configuration.
 
 ### ⚠️Caution: There may be features / capabilities carried over from original project but unused by me that are minimally tested.  Will test these more thoroughly in the future when I get time but please let me know if you try and they do not work.
 Some specifics include: 
 - Long Range Radio emulation
-- RF Receiver emulation and associated emulated RF zones.  
+- RF Receiver emulation and associated emulated RF zones.
+- Virtual zone emulation and other extended functionality on older SE panels not tested yet.  
 
 
 ### YAML Configuration Options (See YAML in repo for more examples):
@@ -55,6 +57,7 @@ Configuration variables:
 - **debug_log** (*Optional*, boolean): Set to true to enable additional bus activity logging and print full ecp packet contents to the log.  Global esphome and vista-alarm component (if configured)
 logging level must be set to DEBUG or higher in logging component section to output all messages.
 - **debug_pulsing** (*Optional*, boolean): Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 60 seconds after startup and continues indefinitely.  **DO NOT** enable for routine use of component!
+- **legacy_protocol** (*Optional*, boolean): Enables older protocol handling for use with Vista 15SE / Vista20SE panels.
 - **lrr_supervisor** (*Optional*, boolean): Set to true to enable Long Range Radio emulation for monitoring and decoding status updates. Do not enable if the system is monitored and an actual long range radio is already present in the system. Defaults to false.
 - **rf_receiver_emulation** (*Optional*, boolean): Set to true to enable RF Receiver module (5881ENH) emulation for creating virtual RF zones. Do not enable if the system already includes a physical RF receiver as these Vista systems only support a single RF receiver device. Defaults to false.
 - **rf_receiver_addr** (*Optional*, int): Set to suitable address for RF Receiver per your panel installation instructions. Only permissible address on Vista 15/20 panels is 0. Defaults to 0.
