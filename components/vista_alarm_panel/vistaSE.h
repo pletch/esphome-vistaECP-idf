@@ -75,7 +75,7 @@ public:
                     {
                         if(monitor_rx_task_Handle != NULL)                        
                         {
-                            uint32_t val = 0x11 << 8;
+                            uint32_t val = 0x12 << 8;
                             xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                         }            
                         int64_t start = esp_timer_get_time();
@@ -166,7 +166,7 @@ public:
             buf[0] = 0;
             memset(rcvd_extPkt.payload,'\0',sizeof(rcvd_extPkt.payload));
             xTaskNotifyWait(0xFFFFFFFF,0,&val,pdMS_TO_TICKS(portMAX_DELAY)); //start of low time after break
-            if (static_cast<uint8_t>(val >> 8) == 0x11)
+            if (static_cast<uint8_t>(val >> 8) == 0x12)
             {
                 rcvd_extPkt.source = 0xDD; //only VistaSE protocol writes here
                 bytes = get_Packet(&rcvd_extPkt, buf, 0, 3, static_cast<uart_port_t>(extuartNum), pdMS_TO_TICKS(8)); //wait minimum of 4ms for any data to start arriving
