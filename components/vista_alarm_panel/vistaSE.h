@@ -165,9 +165,12 @@ public:
             uart_set_word_length(static_cast<uart_port_t>(extuartNum), UART_DATA_5_BITS);
             buf[0] = 0;
             memset(rcvd_extPkt.payload,'\0',sizeof(rcvd_extPkt.payload));
-            xTaskNotifyWait(0xFFFFFFFF,0xFFFFFFFF,&val,pdMS_TO_TICKS(portMAX_DELAY)); //start of low time after break
-            rcvd_extPkt.source = 0xDD; //only VistaSE protocol writes here
-            bytes = get_Packet(&rcvd_extPkt, buf, 0, 3, static_cast<uart_port_t>(extuartNum), pdMS_TO_TICKS(8)); //wait up for 4 ms for any data to start arriving
+            xTaskNotifyWait(0xFFFFFFFF,0,&val,pdMS_TO_TICKS(portMAX_DELAY)); //start of low time after break
+            if (static_cast<uint8_t>(val >> 8) == 0x11)
+            {
+                rcvd_extPkt.source = 0xDD; //only VistaSE protocol writes here
+                bytes = get_Packet(&rcvd_extPkt, buf, 0, 3, static_cast<uart_port_t>(extuartNum), pdMS_TO_TICKS(8)); //wait minimum of 4ms for any data to start arriving
+            }
             uart_set_word_length(static_cast<uart_port_t>(extuartNum), UART_DATA_8_BITS);
             uart_set_stop_bits(static_cast<uart_port_t>(extuartNum), UART_STOP_BITS_2);
             uart_set_baudrate(static_cast<uart_port_t>(extuartNum),4800);
