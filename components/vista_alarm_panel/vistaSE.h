@@ -4,6 +4,10 @@
 #include "helperstructs.h"
 #include "helperfuncs.h"
 
+// ToDO: 
+//        Fix address of expander when emulating zones 8-16.
+//        Verify handling of mark bytes for expanders and RF receiver boards
+
 class VistaSE : public VistaProtocol<VistaSE> {
 public:
     bool legacy_protocol_impl()
@@ -126,12 +130,21 @@ public:
                                 int64_t end = esp_timer_get_time();
                                 if (end - start > 5700 && end - start < 6300)
                                 {
-                                    uart_flush(static_cast<uart_port_t>(uartNum));  // flush UART to ensure sync of read against 2400 preamble
-                                    uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(4), uartevtQueue); //flush leading zero
-                                    uart_set_baudrate(static_cast<uart_port_t>(uartNum),2400);
-                                    bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(15), uartevtQueue);
-                                    uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
-                                    this->is_2400 = true;
+                                    if (!this->legacy_programmode)
+                                    {
+                                        uart_flush(static_cast<uart_port_t>(uartNum));  // flush UART to ensure sync of read against 2400 preamble
+                                        uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(4), uartevtQueue); //flush leading zero
+                                        uart_set_baudrate(static_cast<uart_port_t>(uartNum),2400);
+                                        bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(15), uartevtQueue);
+                                        uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
+                                        this->is_2400 = true;
+                                    }
+                                    else
+                                    {
+                                        uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(4), uartevtQueue); //flush leading zero
+                                        bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(15), uartevtQueue);
+                                    }
+
                                 }
                             }
                             else if (this->req_to_send && !this->pulse_marked && pkt_to_send.type == 2)

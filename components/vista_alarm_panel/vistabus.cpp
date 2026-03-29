@@ -385,17 +385,25 @@ void VistaBus::rx_tx_task(void * args)
             }            
             else if ( data[0] == 0xF8 ) //Unknown Device
             {
-                rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                if (rxBytes == 2)
+                if (vprotocol.legacy_programmode)
                 {
-                    received_packet.payload[1] = data[0];
-                    received_packet.payload[2] = data[1];
-                    rxBytes = get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
-                    if (validChksum(received_packet.payload,0,rxBytes+3))
-                    { 
-                        uint32_t val = 0xF8 << 8 | received_packet.payload[1];
-                        if (monitor_rx_task_Handle != NULL)
-                            xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
+                    received_packet.source = 0xDD;
+                    rxBytes = get_Packet_event(&received_packet,data.get(),1,32, static_cast<uart_port_t>(this->uartNum), pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                }
+                else
+                {
+                    rxBytes = uart_read_bytes_event(static_cast<uart_port_t>(this->uartNum), data.get(), 2, pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                    if (rxBytes == 2)
+                    {
+                        received_packet.payload[1] = data[0];
+                        received_packet.payload[2] = data[1];
+                        rxBytes = get_Packet_event(&received_packet,data.get(),3,static_cast<int> (received_packet.payload[2]),static_cast<uart_port_t>(this->uartNum),pdMS_TO_TICKS(UART_DELAY), uartevtQueue);
+                        if (validChksum(received_packet.payload,0,rxBytes+3))
+                        { 
+                            uint32_t val = 0xF8 << 8 | received_packet.payload[1];
+                            if (monitor_rx_task_Handle != NULL)
+                                xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
+                        }
                     }
                 }
                 xQueueSend(this->receiveQueue,&received_packet,pdMS_TO_TICKS(0));
@@ -491,6 +499,10 @@ void VistaBus::rx_tx_task(void * args)
                 received_packet.source = 0xDD;
                 uart_set_baudrate(static_cast<uart_port_t>(this->uartNum),4800);
                 xQueueSend(this->receiveQueue,&received_packet,0);
+                if (rxBytes == 4)
+                {
+                    vprotocol.legacy_programmode = data[2] & 0x40;
+                }
             }
             else if (data[0] == 0)
             {

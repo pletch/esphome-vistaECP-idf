@@ -388,7 +388,7 @@ namespace esphome
 
                 statusFlagType statusFlags;
                 lrrstatusFlagType lrrstatusFlags;
-                void refreshStatusFlags(char * cbuf);
+                void refreshStatusFlags(char * cbuf, bool display_only = false);
                 void processF7();
                 int64_t last_refresh = 0;
 

@@ -33,6 +33,7 @@ public:
     bool pulse_marked = false;
     bool req_to_send = false;
     bool is_2400 = false;
+    bool legacy_programmode = false;
 };
 
 

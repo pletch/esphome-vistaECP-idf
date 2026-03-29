@@ -76,7 +76,7 @@ namespace esphome
                         }
                         else if (src == 0xDD) //Legacy Vista20SE protocol packets
                         {
-                            if( payload[0] != 0XFE && payload[0] != 0xFF && size >= 4) 
+                            if( payload[0] != 0XFE && payload[0] != 0xFF && size == 5) 
                             {
                                 legacy_packet_index = 0;
                                 memset(legacy_cmd_buffer,'\0',sizeof(legacy_cmd_buffer));
@@ -96,14 +96,22 @@ namespace esphome
                                 for (int i=1; i<5; i++)
                                     legacy_cmd_buffer[i+11+(legacy_packet_index -1)*4] = payload[i];
                             }
+                            else if (payload[0] == 0xF8 && size == 33)
+                            {
+                                legacy_packet_index = 20;
+                                memcpy(&legacy_cmd_buffer[12],&payload[1],32);
+                            }
                             else
                             {
                                 legacy_packet_index == 0;
                             }
-                            if ( legacy_packet_index == 8)
+                            if ( legacy_packet_index == 8 || legacy_packet_index == 20)
                             {
                                 legacy_cmd_buffer[44] = '\0';
-                                refreshStatusFlags(legacy_cmd_buffer);
+                                if ( legacy_packet_index == 8 )
+                                    refreshStatusFlags(legacy_cmd_buffer);
+                                else 
+                                    refreshStatusFlags(legacy_cmd_buffer, true);
                                 if (statusFlags.partition == 0) 
                                     ESP_LOGW(TAG, "No keypad associated with this partition in YAML definition.");
                                 else
@@ -115,7 +123,7 @@ namespace esphome
                                 ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt1);
                                 ESP_LOGI(TAG, "Prompt: %s", statusFlags.prompt2);
                                 ESP_LOGI(TAG, "Beeps: %d", statusFlags.beeps);
-                            }
+                            } 
                         }
                         else if (src == 0xF2)
                         {
@@ -445,62 +453,65 @@ namespace esphome
             tsk->processReceiveQueue(args);
         }
 
-        void vistaECPHome::refreshStatusFlags(char * cbuf) 
+        void vistaECPHome::refreshStatusFlags(char * cbuf, bool display_only) 
         {
             char prompt1[18];
             char prompt2[18];
             memcpy(prompt1,&cbuf[12], 16);
             memcpy(prompt2, &cbuf[28], 16);
-            statusFlags.keypad[0] = cbuf[1]; // 0 to 7
-
-            statusFlags.keypad[1] = cbuf[2]; // 8 to 15
-
-            statusFlags.keypad[2] = cbuf[3]; // 16 - 23
-
-            statusFlags.keypad[3] = cbuf[4]; // 24 - 31.
-
-            statusFlags.partition = 0;
-
-            for (const auto &it : known_partitions)
+            if (!display_only)
             {
-                if (cbuf[(it.assigned_keypad >> 3) + 1] & (0x01 << (it.assigned_keypad & 0x07)))
+                statusFlags.keypad[0] = cbuf[1]; // 0 to 7
+
+                statusFlags.keypad[1] = cbuf[2]; // 8 to 15
+
+                statusFlags.keypad[2] = cbuf[3]; // 16 - 23
+
+                statusFlags.keypad[3] = cbuf[4]; // 24 - 31.
+
+                statusFlags.partition = 0;
+
+                for (const auto &it : known_partitions)
                 {
-                    statusFlags.partition = it.partition;
-                    break;
+                    if (cbuf[(it.assigned_keypad >> 3) + 1] & (0x01 << (it.assigned_keypad & 0x07)))
+                    {
+                        statusFlags.partition = it.partition;
+                        break;
+                    }
                 }
+
+                statusFlags.zone = (int)toDec(cbuf[5]);
+
+                statusFlags.beeps = cbuf[6] & BIT_MASK_BYTE1_BEEP;
+
+                statusFlags.fire = ((cbuf[7] & BIT_MASK_BYTE2_FIRE) > 0);
+                statusFlags.systemFlag = ((cbuf[7] & BIT_MASK_BYTE2_SYSTEM_FLAG) > 0);
+                statusFlags.ready = ((cbuf[7] & BIT_MASK_BYTE2_READY) > 0);
+
+                statusFlags.night = ((cbuf[6] & BIT_MASK_BYTE1_NIGHT) > 0);
+                statusFlags.armedStay = ((cbuf[7] & BIT_MASK_BYTE2_ARMED_HOME) > 0);
+
+                statusFlags.lowBattery = ((cbuf[7] & BIT_MASK_BYTE2_LOW_BAT) > 0);
+
+                statusFlags.check = ((cbuf[7] & BIT_MASK_BYTE2_CHECK_FLAG) > 0);
+                statusFlags.fireZone = ((cbuf[7] & BIT_MASK_BYTE2_ALARM_ZONE) > 0);
+
+                statusFlags.inAlarm = ((cbuf[8] & BIT_MASK_BYTE3_IN_ALARM) > 0);
+                statusFlags.acPower = ((cbuf[8] & BIT_MASK_BYTE3_AC_POWER) > 0);
+                statusFlags.chime = ((cbuf[8] & BIT_MASK_BYTE3_CHIME_MODE) > 0);
+                statusFlags.bypass = ((cbuf[8] & BIT_MASK_BYTE3_BYPASS) > 0);
+                statusFlags.programMode = (cbuf[8] & BIT_MASK_BYTE3_PROGRAM);
+
+                statusFlags.instant = ((cbuf[8] & BIT_MASK_BYTE3_INSTANT) > 0);
+                statusFlags.armedAway = ((cbuf[8] & BIT_MASK_BYTE3_ARMED_AWAY) > 0);
+
+                if (!statusFlags.systemFlag) 
+                    statusFlags.alarm = ((cbuf[8] & BIT_MASK_BYTE3_ZONE_ALARM) > 0);
+
+                statusFlags.promptPos = cbuf[10];
+
+                statusFlags.backlight = ((cbuf[12] & 0x80) > 0);
             }
-
-            statusFlags.zone = (int)toDec(cbuf[5]);
-
-            statusFlags.beeps = cbuf[6] & BIT_MASK_BYTE1_BEEP;
-
-            statusFlags.fire = ((cbuf[7] & BIT_MASK_BYTE2_FIRE) > 0);
-            statusFlags.systemFlag = ((cbuf[7] & BIT_MASK_BYTE2_SYSTEM_FLAG) > 0);
-            statusFlags.ready = ((cbuf[7] & BIT_MASK_BYTE2_READY) > 0);
-
-            statusFlags.night = ((cbuf[6] & BIT_MASK_BYTE1_NIGHT) > 0);
-            statusFlags.armedStay = ((cbuf[7] & BIT_MASK_BYTE2_ARMED_HOME) > 0);
-
-            statusFlags.lowBattery = ((cbuf[7] & BIT_MASK_BYTE2_LOW_BAT) > 0);
-
-            statusFlags.check = ((cbuf[7] & BIT_MASK_BYTE2_CHECK_FLAG) > 0);
-            statusFlags.fireZone = ((cbuf[7] & BIT_MASK_BYTE2_ALARM_ZONE) > 0);
-
-            statusFlags.inAlarm = ((cbuf[8] & BIT_MASK_BYTE3_IN_ALARM) > 0);
-            statusFlags.acPower = ((cbuf[8] & BIT_MASK_BYTE3_AC_POWER) > 0);
-            statusFlags.chime = ((cbuf[8] & BIT_MASK_BYTE3_CHIME_MODE) > 0);
-            statusFlags.bypass = ((cbuf[8] & BIT_MASK_BYTE3_BYPASS) > 0);
-            statusFlags.programMode = (cbuf[8] & BIT_MASK_BYTE3_PROGRAM);
-
-            statusFlags.instant = ((cbuf[8] & BIT_MASK_BYTE3_INSTANT) > 0);
-            statusFlags.armedAway = ((cbuf[8] & BIT_MASK_BYTE3_ARMED_AWAY) > 0);
-
-            if (!statusFlags.systemFlag) 
-                statusFlags.alarm = ((cbuf[8] & BIT_MASK_BYTE3_ZONE_ALARM) > 0);
-
-            statusFlags.promptPos = cbuf[10];
-
-            statusFlags.backlight = ((cbuf[12] & 0x80) > 0);
             cbuf[12] = (cbuf[12] & 0x7F);
             //cbuf[14] = 0xE1;
             //cbuf[36] = 0xEF;  //Extended ascii code to test with
