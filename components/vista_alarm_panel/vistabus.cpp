@@ -383,7 +383,7 @@ void VistaBus::rx_tx_task(void * args)
                     received_packet.source = 0xCF;
                 xQueueSend(this->receiveQueue,&received_packet,0);
             }            
-            else if ( data[0] == 0xF8 ) //Unknown Device
+            else if ( data[0] == 0xF8 ) //Unknown Device on vista20P. VistaSE uses to send display updates in program mode.
             {
                 if (vprotocol.legacy_programmode)
                 {
