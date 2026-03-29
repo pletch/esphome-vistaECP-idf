@@ -27,7 +27,7 @@ public:
             else
             {
                 SendPacket next_pkt;
-                xQueuePeek(sendQueue, &next_pkt,pdMS_TO_TICKS(20));
+                xQueuePeek(sendQueue, &next_pkt,pdMS_TO_TICKS(0));
                 if(next_pkt.keypadaddress == pkt.keypadaddress && (next_pkt.size + pkt.size) <= 24)
                 {
                     xQueueReceive(sendQueue, &next_pkt, 0);
@@ -40,7 +40,6 @@ public:
                 }
             }
         }   
-        return;
     }
 
     int handle_UART_events_impl(const QueueHandle_t uartevtQueue, const TaskHandle_t rx_tx_task_Handle, 
@@ -55,7 +54,7 @@ public:
                 bytes = uart_read_bytes(static_cast<uart_port_t>(uartNum), buf, 1, 0);
                 break;
             case UART_BREAK:
-                gpioTaskArgs taskargs;
+                static gpioTaskArgs taskargs;
                 taskargs.task_handle = rx_tx_task_Handle;
                 taskargs.pin = rxPin;
 
@@ -87,8 +86,8 @@ public:
                             bytes = uart_read_bytes_event(static_cast<uart_port_t>(uartNum), buf, 1, pdMS_TO_TICKS(10), uartevtQueue);
                         }
                     }
+                    gpio_isr_handler_remove(static_cast<gpio_num_t>(rxPin));
                 }
-                gpio_isr_handler_remove(static_cast<gpio_num_t>(rxPin));
                 break;
             default:
                 break;

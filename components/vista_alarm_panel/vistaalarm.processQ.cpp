@@ -32,7 +32,7 @@ namespace esphome
                     }
                 }
             }
-            vTaskDelay(250);
+            vTaskDelay(pdMS_TO_TICKS(250));
             uint8_t legacy_packet_index = 0;
             char legacy_cmd_buffer[48];
             while (1)
@@ -98,14 +98,14 @@ namespace esphome
                             }
                             else if (payload[0] == 0xF8 && size == 33)
                             {
-                                legacy_packet_index = 20;
+                                legacy_packet_index = 8;
                                 memcpy(&legacy_cmd_buffer[12],&payload[1],32);
                             }
                             else
                             {
-                                legacy_packet_index == 0;
+                                legacy_packet_index = 0;
                             }
-                            if ( legacy_packet_index == 8 || legacy_packet_index == 20)
+                            if ( legacy_packet_index == 8 )
                             {
                                 legacy_cmd_buffer[44] = '\0';
                                 refreshStatusFlags(legacy_cmd_buffer);
@@ -339,7 +339,7 @@ namespace esphome
                         {
                             //FD 09 31 00 30 open
                             //FD 09 31 00 20 closed
-                            if (src = 0xFA && size == 4)
+                            if (src == 0xFA && size == 4)
                             {
                                 int z = payload[3] >> 5;
                                 switch (payload[0])
@@ -369,7 +369,7 @@ namespace esphome
                                     zoneStatusUpdate(zt);
                                 }
                             }
-                            else if (src = 0xFB && size == 7)
+                            else if (src == 0xFB && size == 7)
                             {
                                 char rf_serial_char[14];
                                 /* char rf_serial_char_out[20];
@@ -1085,7 +1085,7 @@ namespace esphome
                     }           
                 }   
 
-                for (uint8_t i = 0; i < strlen(zones); i++)
+                for (uint8_t i = 0; i < zone_ct; i++)
                 {
                     if (zones[i] <= 32)
                         zonestatusmask1to32 = zonestatusmask1to32 | (1 << (zones[i]-1));
@@ -1115,7 +1115,7 @@ namespace esphome
                 {
                     if (it.open != static_cast<bool>((zonestatusmask33to64 >> (it.zone - 32 - 1)) & 0x01))
                     {
-                        it.open = (zonestatusmask33to64 >> (it.zone - 1)) & 0x01;
+                        it.open = (zonestatusmask33to64 >> (it.zone - 32 - 1)) & 0x01;
                         if (it.open)
                             it.time = esp_timer_get_time();
                         zoneStatusUpdate(&it);
@@ -1125,7 +1125,7 @@ namespace esphome
                 {
                     if (it.open != static_cast<bool>((zonestatusmask65to96 >> (it.zone - 64 - 1)) & 0x01))
                     {
-                        it.open = (zonestatusmask65to96 >> (it.zone - 1)) & 0x01;
+                        it.open = (zonestatusmask65to96 >> (it.zone - 64 - 1)) & 0x01;
                         if (it.open)
                             it.time = esp_timer_get_time();
                         zoneStatusUpdate(&it);
@@ -1135,7 +1135,7 @@ namespace esphome
                 {
                     if (it.open != static_cast<bool>((zonestatusmask97to128 >> (it.zone - 96 - 1)) & 0x01))
                     {
-                        it.open = (zonestatusmask97to128 >> (it.zone - 1)) & 0x01;
+                        it.open = (zonestatusmask97to128 >> (it.zone - 96 - 1)) & 0x01;
                         if (it.open)
                             it.time = esp_timer_get_time();
                         zoneStatusUpdate(&it);

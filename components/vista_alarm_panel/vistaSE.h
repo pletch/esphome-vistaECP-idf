@@ -42,7 +42,6 @@ public:
             else
                 break;
         }   
-        return;
     }
 
     int handle_UART_events_impl(const QueueHandle_t uartevtQueue, const TaskHandle_t rx_tx_task_Handle, 
@@ -59,7 +58,7 @@ public:
                     bytes = 0;
                 break;
             case UART_BREAK:
-                gpioTaskArgs taskargs;
+                static gpioTaskArgs taskargs;
                 taskargs.task_handle = rx_tx_task_Handle;
                 taskargs.pin = rxPin;
                 if(monitor_rx_task_Handle != NULL)                     
@@ -123,6 +122,7 @@ public:
                                 uart_set_stop_bits(static_cast<uart_port_t>(uartNum), UART_STOP_BITS_2);
                                 uart_set_baudrate(static_cast<uart_port_t>(uartNum),4800);
 
+                                esp_timer_stop(oneshot_timer);
                                 esp_timer_delete(oneshot_timer);
                             }
                             else if (xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(10)) == pdPASS)
@@ -169,7 +169,7 @@ public:
     {
         int bytes = 0;
 
-        xTaskNotifyWait(0xFFFFFFFF,0xFFFFFFFF,&val,pdMS_TO_TICKS(portMAX_DELAY));
+        xTaskNotifyWait(0xFFFFFFFF,0xFFFFFFFF,&val,portMAX_DELAY);
         if (static_cast<uint8_t>(val >> 8) == 0x11) //in a break
         {
             uart_set_baudrate(static_cast<uart_port_t>(extuartNum),2400);
@@ -177,7 +177,7 @@ public:
             uart_set_word_length(static_cast<uart_port_t>(extuartNum), UART_DATA_5_BITS);
             buf[0] = 0;
             memset(rcvd_extPkt.payload,'\0',sizeof(rcvd_extPkt.payload));
-            xTaskNotifyWait(0xFFFFFFFF,0,&val,pdMS_TO_TICKS(portMAX_DELAY)); //start of low time after break
+            xTaskNotifyWait(0xFFFFFFFF,0,&val,portMAX_DELAY); //start of low time after break
             if (static_cast<uint8_t>(val >> 8) == 0x12)
             {
                 rcvd_extPkt.source = 0xDD; //only VistaSE protocol writes here

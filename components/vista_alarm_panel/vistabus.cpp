@@ -64,7 +64,7 @@ bool VistaBus::stop()
     }
     while(rx_tx_task_Handle != NULL) //wait for task to terminate
     {
-        vTaskDelay(20);
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
     uart_driver_delete(static_cast<uart_port_t>(this->uartNum));
     if(this->monitorPin != -1) {
@@ -73,7 +73,7 @@ bool VistaBus::stop()
     return true;
 }
 
-bool VistaBus::write(const char * data_to_write, int size, int keypadaddress, int sequence) //move
+bool VistaBus::write(const char * data_to_write, int size, int keypadaddress, int sequence)
 {
     SendPacket sendpkt;
     strncpy(sendpkt.payload,data_to_write,24);
@@ -86,7 +86,7 @@ bool VistaBus::write(const char * data_to_write, int size, int keypadaddress, in
     return result;
 }
 
-bool VistaBus::writedirect(const char * hex_data_to_write, int size, int keypadaddress, int sequence) //move
+bool VistaBus::writedirect(const char * hex_data_to_write, int size, int keypadaddress, int sequence)
 {
     SendPacket sendpkt;
     if (size > 24)
@@ -175,7 +175,7 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
 }
 #endif
 
-bool VistaBus::read_packet(char * data, int &len, int &type, int &src, bool with_delay) //move
+bool VistaBus::read_packet(char * data, int &len, int &type, int &src, bool with_delay)
 {
     ReceivedPacket pkt;
     bool result = false;
@@ -913,7 +913,7 @@ void VistaBus::processFB(const char * cbuf)
         {
             chksum += lcbuf[x];
         }
-        lcbuflen ++;
+        //lcbuflen ++;
         chksum = ~chksum + 1;
         lcbuf[lcbuflen-1] = chksum;
         uart_write_bytes(static_cast<uart_port_t>(this->uartNum),lcbuf, lcbuflen);

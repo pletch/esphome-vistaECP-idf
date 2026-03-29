@@ -380,7 +380,7 @@ namespace esphome
             addr = known_partitions[partition - 1].assigned_keypad;
             seq = known_partitions[partition - 1].keypad_sequence;
             bool result = false;
-            if (addr > 0 and addr < 24 || addr == 31)
+            if ((addr > 0 and addr < 24 ) || addr == 31)
                 result = vistabus.write(keystring.c_str(), keystring.length(), addr, seq);
             if (result)
                 ESP_LOGD(TAG, "Writing keys: %s to partition %li", keystring.c_str(), partition);
@@ -399,11 +399,11 @@ namespace esphome
 
         int vistaECPHome::toDec(int n)
         {
-            char b[4];
-            char *p;
-            itoa(n, b, 16);
-            long int li = strtol(b, &p, 10);
-            return (int)li;
+            //char b[4];
+            //char *p;
+            //itoa(n, b, 16);
+            //long int li = strtol(b, &p, 10);
+            return ((n >> 4) * 10) + (n & 0x0F);
         }
 
         long int vistaECPHome::toInt(std::string s, int base)
@@ -472,7 +472,7 @@ namespace esphome
             std::string s = "";
             char s2[48];
             packetType source = static_cast<packetType>(src);
-            char device[4];
+            char device[5];
             switch(source)
             {
                 case unspecified:
@@ -543,7 +543,7 @@ namespace esphome
             if (code.length() != 4 || !isInt(code, 10))
                 code = accessCode; // ensure we get a numeric 4 digit code
 
-            if (partition > 3 || partition < 1)
+            if (partition > 8 || partition < 1)
                 return;
                 
             uint8_t kpi = 0;
