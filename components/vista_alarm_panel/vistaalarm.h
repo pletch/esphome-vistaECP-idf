@@ -389,7 +389,7 @@ namespace esphome
                 statusFlagType statusFlags;
                 lrrstatusFlagType lrrstatusFlags;
                 void refreshStatusFlags(char * cbuf);
-                void processF7();
+                void processStatus();
                 int64_t last_refresh = 0;
 
                 void refreshSensors();

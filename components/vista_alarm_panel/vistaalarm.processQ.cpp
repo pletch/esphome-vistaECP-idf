@@ -2,7 +2,7 @@
 Functions in this file:
 processReceiveQueue
 processReceiveQueue_task_start
-processF7
+processStatus
 refreshStatusFlags
 refreshLRRStatusFlags
 refreshSensors
@@ -66,7 +66,7 @@ namespace esphome
                                 ESP_LOGW(TAG, "No keypad associated with this partition in YAML definition.");
                             else
                             {
-                                processF7();
+                                processStatus();
                                 refreshSensors();
                                 ESP_LOGI(TAG, "Partition: %u", statusFlags.partition);
                             }
@@ -113,7 +113,7 @@ namespace esphome
                                     ESP_LOGW(TAG, "No keypad associated with this partition in YAML definition.");
                                 else
                                 {
-                                    processF7();
+                                    processStatus();
                                     refreshSensors();
                                     ESP_LOGI(TAG, "Partition: %u", statusFlags.partition);
                                 }
@@ -552,7 +552,7 @@ namespace esphome
             memcpy(statusFlags.prompt2, tempbuf, 32);
         }
 
-        void vistaECPHome::processF7()
+        void vistaECPHome::processStatus()
         {
             uint8_t kpi = 0;
             bool forceRefresh = false;
