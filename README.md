@@ -164,7 +164,7 @@ Configuration variables:
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;beeps = beeps output
 
 
-### Example log output for working installation:
+### Example log output for working Vista20P installation:
 ```
 [13:04:52.169][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:04:51.73] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
 [13:04:52.172][I][vista-alarm:063][pRQtask]: Partition: 1
@@ -231,4 +231,42 @@ Configuration variables:
 [10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00214  High Duration(us) 00410
 [10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01243  High Duration(us) 00000
 [10:06:37][D][esp-idf:000][uart_rx_tx_task]: I (62260) gpio: GPIO[22]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0
+```
+
+### Example log output for working Vista20SE installation on legacy protocol:
+```
+[20:17:26.197][D][text_sensor:120][pRQtask]: 'Line1' >> '****DISARMED****'
+[20:17:26.197][D][text_sensor:120][pRQtask]: 'Line2' >> '  READY TO ARM  '
+[20:17:26.197][I][vista-alarm:113][pRQtask]: Partition: 1
+[20:17:26.201][I][vista-alarm:115][pRQtask]: Prompt: ****DISARMED****
+[20:17:26.201][I][vista-alarm:116][pRQtask]: Prompt:   READY TO ARM  
+[20:17:26.201][I][vista-alarm:117][pRQtask]: Beeps: 0
+[20:17:27.643][D][vista-alarm:386]: Writing keys: 12 to partition 1
+[20:17:27.994][D][vista-alarm:537][pRQtask]: (KPDL-->PANEL) [20:17:27.353] 01 01 01 
+[20:17:28.338][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:27.701] 00 00 5C 08 00 
+[20:17:28.575][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:27.931] FE 53 59 53 54 
+[20:17:28.815][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:28.167] FF 45 4D 20 4C 
+[20:17:29.040][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:28.403] FF 4F 20 42 41 
+[20:17:29.275][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:28.638] FF 54 20 20 20 
+[20:17:29.531][D][vista-alarm:537][pRQtask]: (KPDL-->PANEL) [20:17:28.894] 02 
+[20:17:29.555][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:28.918] FE 03 20 20 20 
+[20:17:29.632][D][vista-alarm:537][pRQtask]: (KPDL-->PANEL) [20:17:28.990] 02 02 02 
+[20:17:29.793][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:29.156] FE 03 20 20 20 
+[20:17:30.029][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:29.392] FF 20 20 20 20 
+[20:17:30.265][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:29.627] FF 20 20 20 20 
+[20:17:32.222][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:31.585] 00 00 5C 08 00 
+[20:17:32.453][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:31.815] FE 2A 2A 2A 2A 
+[20:17:32.690][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:32.051] FF 44 49 53 41 
+[20:17:32.924][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:32.286] FF 52 4D 45 44 
+[20:17:33.159][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:32.522] FF 2A 2A 2A 2A 
+[20:17:33.442][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:32.805] FF 20 20 52 45 
+[20:17:33.685][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:33.040] FF 41 44 59 20 
+[20:17:33.915][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:33.276] FF 54 4F 20 41 
+[20:17:34.151][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:33.511] FF 52 4D 20 20 
+[20:17:34.152][D][text_sensor:120][pRQtask]: 'Line1' >> '****DISARMED****'
+[20:17:34.152][D][text_sensor:120][pRQtask]: 'Line2' >> '  READY TO ARM  '
+[20:17:34.152][I][vista-alarm:113][pRQtask]: Partition: 1
+[20:17:34.156][I][vista-alarm:115][pRQtask]: Prompt: ****DISARMED****
+[20:17:34.156][I][vista-alarm:116][pRQtask]: Prompt:   READY TO ARM  
+[20:17:34.160][I][vista-alarm:117][pRQtask]: Beeps: 0
 ```
