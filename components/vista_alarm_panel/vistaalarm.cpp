@@ -399,11 +399,7 @@ namespace esphome
 
         int vistaECPHome::toDec(int n)
         {
-            //char b[4];
-            //char *p;
-            //itoa(n, b, 16);
-            //long int li = strtol(b, &p, 10);
-            return ((n >> 4) * 10) + (n & 0x0F);
+            return ((n >> 8) * 100) + (((n & 0xFF) >> 4) * 10) + (n & 0x0F);
         }
 
         long int vistaECPHome::toInt(std::string s, int base)
