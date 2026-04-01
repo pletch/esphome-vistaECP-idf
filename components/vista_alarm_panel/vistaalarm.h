@@ -8,88 +8,17 @@
 #include "esphome/components/api/custom_api_device.h"
 
 #include "vistabus.h"
-#include "LRRstrings.h"
+#include "LRR_strings.h"
 #include "translation.h"
 #include <string>
 #include "esp_random.h"
-#include "paneltext.h"
-
-// for documentation see project at https://github.com/pletch/esphome-vistaECP-idf
-
-#define BIT_MASK_BYTE1_BEEP 0x07
-#define BIT_MASK_BYTE1_NIGHT 0x10
-
-#define BIT_MASK_BYTE2_ARMED_HOME 0x80
-#define BIT_MASK_BYTE2_LOW_BAT 0x40
-#define BIT_MASK_BYTE2_ALARM_ZONE 0x20
-#define BIT_MASK_BYTE2_READY 0x10
-#define BIT_MASK_BYTE2_UNKNOWN 0x08
-#define BIT_MASK_BYTE2_SYSTEM_FLAG 0x04
-#define BIT_MASK_BYTE2_CHECK_FLAG 0x02
-#define BIT_MASK_BYTE2_FIRE 0x01
-
-#define BIT_MASK_BYTE3_INSTANT 0x80
-#define BIT_MASK_BYTE3_PROGRAM 0x40
-#define BIT_MASK_BYTE3_CHIME_MODE 0x20
-#define BIT_MASK_BYTE3_BYPASS 0x10
-#define BIT_MASK_BYTE3_AC_POWER 0x08
-#define BIT_MASK_BYTE3_ARMED_AWAY 0x04
-#define BIT_MASK_BYTE3_ZONE_ALARM 0x02
-#define BIT_MASK_BYTE3_IN_ALARM 0x01
+#include "panel_text.h"
+#include "helper_enums.h"
 
 namespace esphome
 {
     namespace alarm_panel
     {
-        enum sysState
-        {
-            soffline,
-            sarmedaway,
-            sarmedstay,
-            sbypass,
-            sac,
-            schime,
-            sbat,
-            scheck,
-            sarmednight,
-            sdisarmed,
-            striggered,
-            sunavailable,
-            strouble,
-            salarm,
-            sfire,
-            sinstant,
-            sready,
-            sarmed,
-            sarming
-        };
-
-        enum reqStates
-        {
-            rsidle,
-            rsopenzones,
-            rsbypasszones,
-            rszonecount,
-            rspartitionlist,
-            rspartitionid,
-            rszoneinfo,
-            rsicode,
-            rsdate
-        };
-
-        enum packetType
-        {
-            unspecified = 0,
-            legacy_protocol = 0xDD,
-            chksum_fail = 0xCF,
-            aui = 0xF2,
-            keypad_ack = 0xF6,
-            keypad = 0xF7,
-            long_range_radio = 0xF9,
-            expander = 0xFA,
-            rf_receiver = 0xFB
-        };
-
         class vistaECPBinarySensor
         {
             public:
@@ -120,7 +49,7 @@ namespace esphome
                 void initialize_partition_sensors();
                 void set_partitionKeypad(uint8_t idx, uint8_t addr)
                 {
-                    partitionType new_partition;
+                    Partition new_partition;
                     new_partition.assigned_keypad = addr;
                     new_partition.partition = idx;
                     new_partition.keypad_sequence = (addr & 0x0F) | 0x10;
@@ -153,6 +82,60 @@ namespace esphome
                 void stop();
 
             private:
+struct TextSensorPartition
+{
+    vistaECPTextSensor *system_status {nullptr};
+    vistaECPTextSensor *line1 {nullptr};
+    vistaECPTextSensor *line2 {nullptr};
+    vistaECPTextSensor *beeps {nullptr};
+};
+
+struct TextSensorCommon
+{
+    vistaECPTextSensor *zone_status {nullptr};
+    vistaECPTextSensor *rf_messages {nullptr};
+    vistaECPTextSensor *lrr_messages {nullptr};
+};
+
+struct StatusSensorPartition
+{
+    vistaECPBinarySensor *rdy {nullptr};
+    vistaECPBinarySensor *trbl {nullptr};
+    vistaECPBinarySensor *byp {nullptr};
+    vistaECPBinarySensor *arm {nullptr};
+    vistaECPBinarySensor *arma {nullptr};
+    vistaECPBinarySensor *arms {nullptr};
+    vistaECPBinarySensor *armi {nullptr};
+    vistaECPBinarySensor *armn {nullptr};
+    vistaECPBinarySensor *chm {nullptr};
+    vistaECPBinarySensor *alm {nullptr};
+    vistaECPBinarySensor *fire {nullptr};
+};
+
+struct Zone
+{
+    vistaECPBinarySensor *binary_sensor {nullptr};
+    vistaECPTextSensor *text_sensor {nullptr};
+    uint8_t zone {0};
+    int64_t time {0};
+    uint32_t rfserial {0};
+    uint8_t rfloop {0};
+    int64_t rfnext_hb {0};
+    uint8_t partition {0};
+    bool open {false};
+    bool bypass {false};
+    bool alarm {false};
+    bool check {false};
+    bool active {false};
+    bool rflowbat {false};
+};
+
+struct TextSensor
+{
+    vistaECPTextSensor *text_sensor {nullptr};
+    uint8_t partition {0};
+    const char * type {nullptr};
+};
                 VistaBus vistabus;
                 const char *const TAG = "vista-alarm";
                 esp_log_level_t log_level = ESP_LOG_DEBUG;
@@ -171,147 +154,24 @@ namespace esphome
                 TaskHandle_t processReceiveQHandle;
                 bool api_connection_state;
 
-                struct lightStates
-                {
-                    bool away;
-                    bool stay;
-                    bool night;
-                    bool instant;
-                    bool bypass;
-                    bool ready;
-                    bool ac;
-                    bool chime;
-                    bool bat;
-                    bool alarm;
-                    bool check;
-                    bool fire;
-                    bool trouble;
-                    bool armed;
-                };
+                LightStates currentLightState,previousLightState;
 
-                lightStates currentLightState,previousLightState;
+                std::vector<Partition> known_partitions{};
 
-                struct partitionStateType
-                {
-                    sysState previousSystemState;
-                    lightStates previousLightState;
-                    int lastbeeps;
-                    bool refreshStatus;
-                };
+                PanelClock panel_clock;
 
-                struct partitionType
-                {
-                    uint8_t partition = 0;
-                    uint8_t assigned_keypad = 0;
-                    uint8_t keypad_sequence = 0;
-                    partitionStateType partition_state;
-                };
+                AUIDevice aui_device;
 
-                std::vector<partitionType> known_partitions{};
-
-                struct statusFlagType
-                {
-                    uint8_t beeps = 0;
-                    bool armedStay = false;
-                    bool armedAway = false;
-                    bool night = false;
-                    bool instant = false;
-                    bool chime = false;
-                    bool acPower = false;
-                    bool acLoss = false;
-                    bool ready = false;
-                    bool entryDelay = false;
-                    bool programMode = false;
-                    bool zoneBypass = false;
-                    bool zoneAlarm = false;
-                    bool alarm = false;
-                    bool check = false;
-                    bool systemFlag = false;
-                    bool lowBattery = false;
-                    bool systemTrouble = false;
-                    bool fire = false;
-                    bool fireZone = false;
-                    bool backlight = false;
-                    bool armed = false;
-                    bool away = false;
-                    bool bypass = false;
-                    bool inAlarm = false;
-                    bool fault = false;
-                    bool panicAlarm = false;
-                    char keypad[4];
-                    uint8_t partition = 0;
-                    int zone;
-                    char prompt1[32] = {0};
-                    char prompt2[32] = {0};
-                    char promptPos;
-                    uint8_t attempts = 10;
-                };
-
-                struct lrrstatusFlagType
-                {
-                    int code;
-                    uint8_t qual;
-                    int data;
-                    uint8_t partition;
-                };
-
-                struct panelClockType
-                {
-                    int64_t next_sync = 2*60*1000*1000; //first sync 2 min after boot
-                    bool auto_sync = false;
-                };
-                panelClockType panel_clock;
-
-                struct AUIdeviceType
-                {
-                    uint8_t address = 0;
-                    uint8_t sequence1 = 0;
-                    uint8_t sequence2 = 0x6F;
-                };
-                AUIdeviceType aui_device;
-
-                struct AUIrequest
-                {
-                    bool pending = false;
-                    int64_t time = 0;
-                };
-                AUIrequest aui_request;
+                AUIRequest aui_request;
                 
                 std::vector<binary_sensor::BinarySensor *> bMap;
                 std::vector<text_sensor::TextSensor *> tMap;
 
-                struct textSensorPartition
-                {
-                    vistaECPTextSensor *system_status {NULL};
-                    vistaECPTextSensor *line1 {NULL};
-                    vistaECPTextSensor *line2 {NULL};
-                    vistaECPTextSensor *beeps {NULL};
-                };
-                std::vector<textSensorPartition> text_sensors_partition;
+                std::vector<TextSensorPartition> text_sensors_partition;
 
-                struct statusSensorPartition
-                {
-                    vistaECPBinarySensor *rdy {NULL};
-                    vistaECPBinarySensor *trbl {NULL};
-                    vistaECPBinarySensor *byp {NULL};
-                    vistaECPBinarySensor *arm {NULL};
-                    vistaECPBinarySensor *arma {NULL};
-                    vistaECPBinarySensor *arms {NULL};
-                    vistaECPBinarySensor *armi {NULL};
-                    vistaECPBinarySensor *armn {NULL};
-                    vistaECPBinarySensor *chm {NULL};
-                    vistaECPBinarySensor *alm {NULL};
-                    vistaECPBinarySensor *fire {NULL};
-                };
-                std::vector<statusSensorPartition> status_sensors_partition;
+                std::vector<StatusSensorPartition> status_sensors_partition;
 
-                struct textSensorCommon
-                {
-                    vistaECPTextSensor *zone_status {NULL};
-                    vistaECPTextSensor *rf_messages {NULL};
-                    vistaECPTextSensor *lrr_messages {NULL};
-                };
-                textSensorCommon text_sensors_common;
+                TextSensorCommon text_sensors_common;
 
                 const char *accessCode;
                 const char *rfSerialLookup;
@@ -321,73 +181,25 @@ namespace esphome
                 uint8_t rfrEmulation[2];
                 int defaultPartition;
 
-                struct zoneType
-                {
-                    vistaECPBinarySensor *binary_sensor;
-                    vistaECPTextSensor *text_sensor;
-                    uint8_t zone;
-                    int64_t time;
-                    uint32_t rfserial;
-                    uint8_t rfloop;
-                    int64_t rfnext_hb;
-                    uint8_t partition;
-                    bool open;
-                    bool bypass;
-                    bool alarm;
-                    bool check;
-                    bool active;
-                    bool rflowbat;
-                };
-                zoneType zonetype_INIT = 
-                {
-                    .binary_sensor = NULL,
-                    .text_sensor = NULL,
-                    .zone = 0,
-                    .time = 0,
-                    .rfserial = 0,
-                    .rfloop = 0,
-                    .rfnext_hb = 0,
-                    .partition = 0,
-                    .open = false,
-                    .bypass = false,
-                    .alarm = false,
-                    .check = false,
-                    .active = false,
-                    .rflowbat = false
-                };
-
-                struct textSensor
-                {
-                    vistaECPTextSensor *text_sensor;
-                    uint8_t partition;
-                    const char * type;
-                };
-                textSensor textSensor_INIT = 
-                {
-                    .text_sensor = NULL,
-                    .partition = 0,
-                    .type = NULL
-                };
-
                 int64_t lowBatteryTime;
 
-                sysState currentSystemState,previousSystemState;
+                SysState currentSystemState,previousSystemState;
 
                 std::string previousZoneStatusMsg = " ";
 
                 uint8_t partitionTargets;
-      
-                std::vector<zoneType> alarmZones{};
+
+                std::vector<Zone> alarmZones{};
                 vistaECPBinarySensor *ac_bin_sensor = NULL;
                 vistaECPBinarySensor *bat_bin_sensor = NULL;
 
-                zoneType *getZone(uint16_t z);
-                zoneType *getRfSerialLookup(uint32_t serialCode);
+                Zone *getZone(uint16_t z);
+                Zone *getRfSerialLookup(uint32_t serialCode);
 
-                void zoneStatusUpdate(zoneType *zt);
+                void zoneStatusUpdate(Zone *zt);
 
-                statusFlagType statusFlags;
-                lrrstatusFlagType lrrstatusFlags;
+                StatusFlags statusFlags;
+                LrrStatusFlags lrrstatusFlags;
                 void refreshStatusFlags(char * cbuf);
                 void processStatus();
                 int64_t last_refresh = 0;
@@ -411,13 +223,8 @@ namespace esphome
                 void AUIget_zone_faults();
                 void AUIprocess_zone_faults(char *list);
 
-                bool isInt(std::string s, int base);
-                int toDec(int n);
-                long int toInt(std::string s, int base);
-                bool areEqual(char *a1, char *a2, uint8_t len);
-
+                void print_packet(char cbuf[], int type, int src, int len);
                 int getZoneFromPrompt(char *p1);
-                void printPacket(char cbuf[], int type, int src, int len);
                 void updateDisplayLines(uint8_t partition);
         };
     } // namespace

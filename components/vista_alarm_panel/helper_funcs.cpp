@@ -1,8 +1,8 @@
-#include "helperfuncs.h"
+#include "helper_funcs.h"
 
 void IRAM_ATTR gpio_isr_handler(void * args)
 {
-    gpioTaskArgs * taskargs = (gpioTaskArgs *) args; 
+    GpioTaskArgs * taskargs = (GpioTaskArgs *) args; 
     BaseType_t xHigherPriorityTaskWoken;
     xHigherPriorityTaskWoken = pdFALSE;
     int val = gpio_get_level(static_cast<gpio_num_t>(taskargs->pin));
@@ -82,7 +82,7 @@ bool mark_pulse(int uartNum, uint8_t address)
     return sent_request;
 }
 
-int get_Packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, 
+int get_packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, 
         int len, uart_port_t uart_num, int timeout, QueueHandle_t queue)
 {
     const int rxBytes = uart_read_bytes_event(uart_num, rxbuf, len, timeout, queue);
@@ -92,7 +92,7 @@ int get_Packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf, i
     return rxBytes;
 }
 
-int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, 
+int get_packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, 
         int len, uart_port_t uart_num, int timeout)
 {
     const int rxBytes = uart_read_bytes(uart_num, rxbuf, len, timeout);
@@ -102,7 +102,7 @@ int get_Packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int sta
     return rxBytes;
 }
 
-bool validChksum(const char * cbuf, int start, int len)
+bool valid_chksum(const char * cbuf, int start, int len)
 {
   uint16_t chksum = 0;
   for (uint8_t x = start; x < len; x++)
@@ -110,6 +110,19 @@ bool validChksum(const char * cbuf, int start, int len)
     chksum += cbuf[x];
   }
   if (chksum % 256 == 0)
+    return true;
+  else
+    return false;
+}
+
+bool valid_chksum_two(const char * cbuf, int start, int len) //2's complement negation
+{
+  uint8_t sum = 0;
+  for (uint8_t x = start; x < len - 1; x++)
+  {
+    sum += cbuf[x];
+  }
+  if (~(sum) + 1 == cbuf[len - 1])
     return true;
   else
     return false;
@@ -152,4 +165,37 @@ int keypad_write(const uart_port_t uart_n, const SendPacket &pkt_to_send)
     }
     outbuffer[pkt_to_send.size+2] = ~chksum+1;
     return uart_write_bytes(uart_n, outbuffer, pkt_to_send.size+3);   
+}
+
+bool isInt(std::string s, int base)
+{
+    if (s.empty() || std::isspace(s[0]))
+        return false;
+    char *p;
+    strtol(s.c_str(), &p, base);
+    return (*p == 0);
+}
+
+int toDec(int n)
+{
+    return ((n >> 8) * 100) + (((n & 0xFF) >> 4) * 10) + (n & 0x0F);
+}
+
+int toInt(std::string s, int base)
+{
+    if (s.empty() || std::isspace(s[0]))
+        return 0;
+    char *p;
+    int li = strtol(s.c_str(), &p, base);
+    return li;
+}
+
+bool areEqual(char *a1, char *a2, uint8_t len)
+{
+    for (int x = 0; x < len; x++)
+    {
+        if (a1[x] != a2[x])
+            return false;     
+    }
+    return true;
 }

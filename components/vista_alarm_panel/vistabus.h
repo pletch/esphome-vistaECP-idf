@@ -26,22 +26,8 @@ Date: 2-Feb-2025
 #include <vector>
 #include <memory>
 #include "esphome/core/defines.h"
-#include "helperstructs.h"
-#include "helperfuncs.h"
-
-
-#define F6_ACK_MESSAGE_LENGTH 4
-#define F7_MESSAGE_LENGTH 48
-#define F9_MESSAGE_LENGTH 12
-#define F9_EXT_MESSAGE_LENGTH 8
-#define RF_ZONE_MESSAGE_LENGTH 7
-#define FA_MESSAGE_LENGTH 6
-#define FB_MESSAGE_LENGTH 5
-
-#define RX_BUF_SIZE (128)
-#define UART_RX_TASK_STACK_SIZE (4096)
-#define UART_RX_EXT_TASK_STACK_SIZE (3072)
-#define UART_DELAY 15
+#include "helper_structs.h"
+#include "helper_funcs.h"
 
 #ifdef LEGACY_SE_PROTOCOL
 #include "vistaSE.h"
@@ -98,28 +84,16 @@ private:
 
     void capture_pulse_pattern(gpio_num_t rx_pin);
 
-    struct DeviceMsg
-    {
-        uint8_t address{255};
-        uint32_t source{0}; //either zone or serial
-        uint8_t msg{0};
-    };
-
-    struct emulatedExpander  
+    struct EmulatedExpander  
     {   
         uint8_t address{0};
         char fault_NO_Bits{0};
         char fault_NC_Bits{0xFF};
     };
 
-    struct emulatedRFReceiver  
-    {   
-        uint8_t address{0};
-    };
-
-    emulatedExpander *getExpander(uint8_t address);
-    std::vector<emulatedExpander> emulated_expanders{};
-    emulatedRFReceiver emulated_rf_receiver;
+    EmulatedExpander *getExpander(uint8_t address);
+    std::vector<EmulatedExpander> emulated_expanders{};
+    EmulatedRFReceiver emulated_rf_receiver;
     TaskHandle_t rx_tx_task_Handle;
     TaskHandle_t monitor_rx_task_Handle;
     QueueHandle_t receiveQueue;

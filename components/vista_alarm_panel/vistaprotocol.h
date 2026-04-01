@@ -1,9 +1,8 @@
 #pragma once
-#include "helperstructs.h"
-#include "helperfuncs.h"
-#define PULSE_CYCLE_PERIOD 550 // maximum period of long low pulse cycle on yellow wire. sets maximum delay of rx_tx_task looping.
-                             // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
 
+#include "helper_structs.h"
+#include "helper_funcs.h"
+#include "constants.h"
 template <typename VistaProtocolDeriv>
 class VistaProtocol 
 {

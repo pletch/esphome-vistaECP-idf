@@ -1,10 +1,9 @@
 #pragma once
 
 #include "vistaprotocol.h"
-#include "helperstructs.h"
-#include "helperfuncs.h"
 
-class Vista20P : public VistaProtocol<Vista20P> {
+class Vista20P : public VistaProtocol<Vista20P> 
+{
 public:
     bool legacy_protocol_impl()
     {
@@ -47,14 +46,14 @@ public:
     {
         int bytes = 0;
         uart_event_t event;
-        xQueueReceive(uartevtQueue, (void *)&event, pdMS_TO_TICKS(PULSE_CYCLE_PERIOD));
+        xQueueReceive(uartevtQueue, (void *)&event, pdMS_TO_TICKS(kPulseCyclePeriod));
         switch (event.type)
         {
             case UART_DATA:
                 bytes = uart_read_bytes(static_cast<uart_port_t>(uartNum), buf, 1, 0);
                 break;
             case UART_BREAK:
-                static gpioTaskArgs taskargs;
+                static GpioTaskArgs taskargs;
                 taskargs.task_handle = rx_tx_task_Handle;
                 taskargs.pin = rxPin;
 

@@ -34,7 +34,7 @@ namespace esphome
             api_connection_state = false;
         }
 
-        void vistaECPHome::zoneStatusUpdate(zoneType *zt)
+        void vistaECPHome::zoneStatusUpdate(Zone *zt)
         {
             if (zt->text_sensor != NULL)
             {
@@ -98,7 +98,7 @@ namespace esphome
                     return;
                 }
             }
-            zoneType zt = zonetype_INIT;
+            Zone zt;
             zt.binary_sensor = binary_sensor;
             zt.partition = partition_number;
             zt.zone = zone_number;
@@ -120,7 +120,7 @@ namespace esphome
         }
 
 
-        vistaECPHome::zoneType *vistaECPHome::getZone(uint16_t z)
+        vistaECPHome::Zone *vistaECPHome::getZone(uint16_t z)
         {
             for (auto &it: alarmZones)
             {
@@ -131,7 +131,7 @@ namespace esphome
         }
     
 
-        vistaECPHome::zoneType *vistaECPHome::getRfSerialLookup(uint32_t serialCode)
+        vistaECPHome::Zone *vistaECPHome::getRfSerialLookup(uint32_t serialCode)
         {
             for (auto &it: alarmZones)
             {
@@ -153,7 +153,7 @@ namespace esphome
                     return;
                 }
             }
-            zoneType zt = zonetype_INIT;
+            Zone zt;
             zt.binary_sensor = NULL;
             zt.text_sensor = text_sensor;
             zt.partition = partition_number;
@@ -320,8 +320,8 @@ namespace esphome
         {
             for (int i=0; i < known_partitions.size(); i++)
             {
-                textSensorPartition ts;
-                statusSensorPartition ss;
+                TextSensorPartition ts;
+                StatusSensorPartition ss;
                 text_sensors_partition.push_back(ts);
                 status_sensors_partition.push_back(ss);
             }
@@ -388,39 +388,6 @@ namespace esphome
                 ESP_LOGE(TAG, "Failed to write keys: %s to partition %li. Send Queue Full.", keystring.c_str(), partition);
         }
 
-        bool vistaECPHome::isInt(std::string s, int base)
-        {
-            if (s.empty() || std::isspace(s[0]))
-                return false;
-            char *p;
-            strtol(s.c_str(), &p, base);
-            return (*p == 0);
-        }
-
-        int vistaECPHome::toDec(int n)
-        {
-            return ((n >> 8) * 100) + (((n & 0xFF) >> 4) * 10) + (n & 0x0F);
-        }
-
-        long int vistaECPHome::toInt(std::string s, int base)
-        {
-            if (s.empty() || std::isspace(s[0]))
-                return 0;
-            char *p;
-            long int li = strtol(s.c_str(), &p, base);
-            return li;
-        }
-
-        bool vistaECPHome::areEqual(char *a1, char *a2, uint8_t len)
-        {
-            for (int x = 0; x < len; x++)
-            {
-                if (a1[x] != a2[x])
-                    return false;     
-            }
-            return true;
-        }
-
         int vistaECPHome::getZoneFromPrompt(char *p1)
         {
             char z_text[4];
@@ -462,40 +429,40 @@ namespace esphome
             return 0;
         }
 
-        void vistaECPHome::printPacket(char cbuf[], int type, int src, int len)
+        void vistaECPHome::print_packet(char cbuf[], int type, int src, int len)
         {
             char s1[4];
             std::string s = "";
             char s2[48];
-            packetType source = static_cast<packetType>(src);
+            PacketType source = static_cast<PacketType>(src);
             char device[5];
             switch(source)
             {
-                case unspecified:
+                case kUnspecified:
                     sprintf(device, "EXT");
                     break;
-                case chksum_fail:
+                case kChksumFail:
                     sprintf(device, "CHK");
                     break;
-                case expander:
+                case kExpander:
                     sprintf(device, "EXP");
                     break;
-                case rf_receiver:
+                case kRFReceiver:
                     sprintf(device, "RFR");
                     break;
-                case aui:
+                case kAUI:
                     sprintf(device, "AUI");
                     break;
-                case keypad_ack:
+                case kKeypadAck:
                     sprintf(device, "KPA");
                     break;
-                case keypad:
+                case kKeypad:
                     sprintf(device, "KPD");
                     break;
-                case legacy_protocol:
+                case kLegacyProtocol:
                     sprintf(device, "KPDL");
                     break;
-                case long_range_radio:
+                case kLongRangeRadio:
                     sprintf(device, "LRR");
                     break;
                 default:
@@ -527,12 +494,12 @@ namespace esphome
             }
             if (abbr)
                 s = s.append("...");
-            if (source == chksum_fail)
+            if (source == kChksumFail)
                 ESP_LOGE(TAG, "%s %s", s2, s.c_str());
             else
                 ESP_LOGD(TAG, "%s %s", s2, s.c_str());
         }
-
+        
         void vistaECPHome::set_alarm_state(std::string const &state, std::string code, int partition)
         {
 
@@ -558,7 +525,7 @@ namespace esphome
                 return;
 
             // Arm stay
-            if (state.compare("S") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
+            if (state.compare("S") == 0 && !known_partitions[kpi].partition_state.previous_light_states.armed)
             {
                 if (quickArm)
                     vistabus.write("#3",2, addr, seq);
@@ -571,7 +538,7 @@ namespace esphome
                 }
             }
             // Arm away
-            else if ((state.compare("A") == 0 || state.compare("W") == 0) && !known_partitions[kpi].partition_state.previousLightState.armed)
+            else if ((state.compare("A") == 0 || state.compare("W") == 0) && !known_partitions[kpi].partition_state.previous_light_states.armed)
             {
                 if (quickArm)
                     vistabus.write("#2",2, addr, seq);
@@ -583,7 +550,7 @@ namespace esphome
                     vistabus.write(send_str,5, addr, seq);
                 }
             }
-            else if (state.compare("I") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
+            else if (state.compare("I") == 0 && !known_partitions[kpi].partition_state.previous_light_states.armed)
             {
                 if (quickArm)
                     vistabus.write("#7",2, addr, seq);
@@ -595,7 +562,7 @@ namespace esphome
                     vistabus.write(send_str,5, addr, seq);
                 }
             }
-            else if (state.compare("N") == 0 && !known_partitions[kpi].partition_state.previousLightState.armed)
+            else if (state.compare("N") == 0 && !known_partitions[kpi].partition_state.previous_light_states.armed)
             {
                 if (quickArm)
                     vistabus.write("#33",3, addr, seq);

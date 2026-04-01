@@ -1,8 +1,6 @@
 #pragma once
 
 #include "vistaprotocol.h"
-#include "helperstructs.h"
-#include "helperfuncs.h"
 
 // ToDO: 
 //        Fix address of expander when emulating zones 8-16.
@@ -49,7 +47,7 @@ public:
     {
         int bytes = 0;
         uart_event_t event;
-        xQueueReceive(uartevtQueue, (void *)&event, pdMS_TO_TICKS(PULSE_CYCLE_PERIOD));
+        xQueueReceive(uartevtQueue, (void *)&event, pdMS_TO_TICKS(kPulseCyclePeriod));
         switch (event.type)
         {
             case UART_DATA:
@@ -58,7 +56,7 @@ public:
                     bytes = 0;
                 break;
             case UART_BREAK:
-                static gpioTaskArgs taskargs;
+                static GpioTaskArgs taskargs;
                 taskargs.task_handle = rx_tx_task_Handle;
                 taskargs.pin = rxPin;
                 if(monitor_rx_task_Handle != NULL)                     
@@ -181,7 +179,7 @@ public:
             if (static_cast<uint8_t>(val >> 8) == 0x12)
             {
                 rcvd_extPkt.source = 0xDD; //only VistaSE protocol writes here
-                bytes = get_Packet(&rcvd_extPkt, buf, 0, 3, static_cast<uart_port_t>(extuartNum), pdMS_TO_TICKS(8)); //wait minimum of 4ms for any data to start arriving
+                bytes = get_packet(&rcvd_extPkt, buf, 0, 3, static_cast<uart_port_t>(extuartNum), pdMS_TO_TICKS(8)); //wait minimum of 4ms for any data to start arriving
             }
             uart_set_word_length(static_cast<uart_port_t>(extuartNum), UART_DATA_8_BITS);
             uart_set_stop_bits(static_cast<uart_port_t>(extuartNum), UART_STOP_BITS_2);
