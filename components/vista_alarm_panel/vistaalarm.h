@@ -14,6 +14,7 @@
 #include "esp_random.h"
 #include "panel_text.h"
 #include "helper_enums.h"
+#include "constants.h"
 
 namespace esphome
 {

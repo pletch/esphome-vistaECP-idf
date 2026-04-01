@@ -29,10 +29,10 @@ Date: 2-Feb-2025
 #include "helper_structs.h"
 #include "helper_funcs.h"
 
-#ifdef LEGACY_SE_PROTOCOL
-#include "vistaSE.h"
+#ifndef LEGACY_SE_PROTOCOL
+class Vista20P;
 #else
-#include "vista20p.h"
+class VistaSE;
 #endif
 
 class VistaBus
@@ -52,18 +52,25 @@ public:
     void setExpFaultBits(uint8_t zone, bool fault);
     void setExpTamper(uint8_t zone, bool tamper_active);
     void sendRFmsg(uint32_t serial, uint8_t msg);
+    QueueHandle_t uartevtQueue;
+    QueueHandle_t sendQueue;
+    QueueHandle_t receiveQueue;
+    TaskHandle_t rx_tx_task_Handle;
+    TaskHandle_t monitor_rx_task_Handle;
+    uart_port_t uart_num;
+    uart_port_t ext_uart_num;
+    gpio_num_t rx_pin;
+
 
 private:
-#ifdef LEGACY_SE_PROTOCOL
-    VistaSE vprotocol;
+#ifndef LEGACY_SE_PROTOCOL
+    Vista20P* vprotocol;
 #else
-    Vista20P vprotocol;
+    VistaSE* vprotocol;
 #endif
     const char* const TAG = "vistabus";
-    int rxPin, txPin;
-    int uartNum;
-    int extuartNum;
-    int monitorPin;
+    gpio_num_t tx_pin;
+    gpio_num_t monitor_pin;
     bool panel_connected;
     bool stop_requested;
     bool LRRemulation;
@@ -94,12 +101,8 @@ private:
     EmulatedExpander *getExpander(uint8_t address);
     std::vector<EmulatedExpander> emulated_expanders{};
     EmulatedRFReceiver emulated_rf_receiver;
-    TaskHandle_t rx_tx_task_Handle;
-    TaskHandle_t monitor_rx_task_Handle;
-    QueueHandle_t receiveQueue;
-    QueueHandle_t sendQueue;
+
     QueueHandle_t deviceMsgQueue;
-    QueueHandle_t uartevtQueue;
 
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
 };
