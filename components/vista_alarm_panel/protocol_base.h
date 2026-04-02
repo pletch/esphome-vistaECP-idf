@@ -23,6 +23,11 @@ public:
         return static_cast<ProtocolType*>(this)->monitor_task_sync_impl(buf, val, rcvd_extPkt);
     }
 
+    void processFA(const char * cbuf)
+    {
+        static_cast<ProtocolType*>(this)->processFA_impl(cbuf);
+    }
+
 private:
 
 };

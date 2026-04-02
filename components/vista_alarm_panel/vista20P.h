@@ -101,6 +101,56 @@ public:
     }
     
 
+    void processFA_impl(const char * cbuf)
+    {
+        // For timing , must handle 0xFA packet here if emulating rather than through queues in vistaalarm process. 
+        char type = cbuf[4];
+        char seq = cbuf[3];
+        char lcbuf[5];
+        bool valid_address = false;
+        uint8_t address = 0;
+        uint8_t exp_sequence = (seq == 0x20 || seq == 0x21 ? 0x34 : 0x31);
+        for (int index = 1; index <= 5; index++)
+        {
+            if (cbuf[2] == 0x01 << index)
+            {
+                address = 6+index;
+                valid_address = true;
+                break;
+            }
+        }
+        if (vistabus_.emulated_expanders.size() && valid_address)  //check if any emulated expanders present
+        {
+            VistaBus::EmulatedExpander *expander = vistabus_.getExpander(address);
+            // we use zone to either | or & bits depending if in fault or reset
+            // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry
+            if (expander != NULL)
+            {
+                if (type == 0xF1)
+                {  
+                    DeviceMsg expMsg;
+                    xQueueReceive(vistabus_.deviceMsgQueue,&expMsg,portMAX_DELAY);
+                    lcbuf[0] = address;
+                    lcbuf[1] = exp_sequence;
+                    uint8_t z = expMsg.source & 0x07;
+                    lcbuf[2] = z ? 0 : 0x01;
+                    lcbuf[3] = (z << 5) ^ (0x10*expMsg.msg); // we send out the current zone state
+                    lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
+                    uart_write_bytes(vistabus_.uart_num,lcbuf, 5);
+                }
+                else if (type == 0xF7)
+                {
+                    lcbuf[0] = 0xF0;
+                    lcbuf[1] = exp_sequence;
+                    lcbuf[2] = expander->fault_NO_Bits;                      
+                    lcbuf[3] = expander->fault_NC_Bits; 
+                    lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
+                    uart_write_bytes(vistabus_.uart_num,lcbuf, 5);
+                }
+            }
+        }
+    }
+
 private:
     uint8_t last_sequence = 0;
     uint8_t last_address = 99;

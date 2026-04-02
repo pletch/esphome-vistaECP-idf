@@ -3,10 +3,6 @@
 
 #include "protocol_base.h"
 
-// ToDO: 
-//        Fix address of expander when emulating zones 8-16.
-//        Verify handling of mark bytes for expanders and RF receiver boards
-
 class VistaSE : public ProtocolBase<VistaSE> {
 public:
     using ProtocolBase<VistaSE>::ProtocolBase;
@@ -194,6 +190,37 @@ public:
             bytes = uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1, pdMS_TO_TICKS(20));
         }
         return bytes;
+    }
+
+    void processFA_impl(const char * cbuf)
+    {
+        // For timing , must handle 0xFA packet here if emulating rather than through queues in vistaalarm process.
+        VistaBus::EmulatedExpander *expander = vistabus_.getExpander(0x01); 
+        char lcbuf[5];
+        char type = cbuf[2];
+        char exp_sequence = (cbuf[1] == 0x21 ? 0x35 : 0x30);
+        if (type == 0xF1)
+        {
+            DeviceMsg expMsg;
+            xQueueReceive(vistabus_.deviceMsgQueue,&expMsg,portMAX_DELAY);
+            lcbuf[0] = 0x01;
+            lcbuf[1] = exp_sequence;
+            uint8_t z = expMsg.source & 0x07;
+            lcbuf[2] = z ? 0 : 0x01;
+            uint8_t chksum = 0;
+            lcbuf[3] = (z << 5) ^ (0x10*expMsg.msg); // we send out the current zone state
+            lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
+            uart_write_bytes(vistabus_.uart_num,lcbuf, 5);
+        }
+        else if (type == 0xF7)
+        {
+            lcbuf[0] = 0xF0;
+            lcbuf[1] = exp_sequence;
+            lcbuf[2] = expander->fault_NO_Bits;                      
+            lcbuf[3] = expander->fault_NC_Bits; 
+            lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
+            uart_write_bytes(vistabus_.uart_num,lcbuf, 5);
+        }
     }
 
 private:

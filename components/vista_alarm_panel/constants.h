@@ -27,6 +27,7 @@ inline constexpr uint8_t kF9MessageLength = 12;
 inline constexpr uint8_t kF9ExtMessageLength = 8;
 inline constexpr uint8_t kRFZoneMessageLength = 7;
 inline constexpr uint8_t kFAMessageLength = 6;
+inline constexpr uint8_t kFALegacyMessageLength = 4;
 inline constexpr uint8_t kFBMessageLength = 5;
 
 inline constexpr uint8_t kRXBufSize = 128;

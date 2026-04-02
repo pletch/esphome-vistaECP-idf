@@ -55,11 +55,21 @@ public:
     QueueHandle_t uartevtQueue;
     QueueHandle_t sendQueue;
     QueueHandle_t receiveQueue;
+    QueueHandle_t deviceMsgQueue;
     TaskHandle_t rx_tx_task_Handle;
     TaskHandle_t monitor_rx_task_Handle;
     uart_port_t uart_num;
     uart_port_t ext_uart_num;
     gpio_num_t rx_pin;
+    
+    struct EmulatedExpander  
+    {   
+        uint8_t address{0};
+        char fault_NO_Bits{0};
+        char fault_NC_Bits{0xFF};
+    };
+    std::vector<EmulatedExpander> emulated_expanders{};
+    EmulatedExpander *getExpander(uint8_t address);
 
 
 private:
@@ -81,7 +91,6 @@ private:
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
     void processF9(const char * cbuf);
-    void processFA(const char * cbuf);
     void processFB(const char * cbuf);
     void requestF1(uint8_t address);
 
@@ -91,18 +100,7 @@ private:
 
     void capture_pulse_pattern(gpio_num_t rx_pin);
 
-    struct EmulatedExpander  
-    {   
-        uint8_t address{0};
-        char fault_NO_Bits{0};
-        char fault_NC_Bits{0xFF};
-    };
-
-    EmulatedExpander *getExpander(uint8_t address);
-    std::vector<EmulatedExpander> emulated_expanders{};
     EmulatedRFReceiver emulated_rf_receiver;
-
-    QueueHandle_t deviceMsgQueue;
 
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
 };

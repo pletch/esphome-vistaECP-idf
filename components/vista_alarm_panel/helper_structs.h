@@ -33,6 +33,7 @@ struct DeviceMsg
     uint8_t address{255};
     uint32_t source{0}; //either zone or serial
     uint8_t msg{0};
+    int64_t time{0};
 };
 
 struct EmulatedExpander  

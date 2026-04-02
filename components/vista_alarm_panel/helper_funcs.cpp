@@ -13,6 +13,18 @@ bool valid_chksum(const char * cbuf, int start, int len)
     return false;
 }
 
+//Calculate checksum via 2's complement negation from start and where len is number of bytes to include in calculation. 
+uint8_t calc_chksum_two(const char * cbuf, int start, int len) 
+{
+    uint8_t chksum = 0;
+    for (int x = 0; x < len; x++)
+    {
+        chksum += cbuf[x];
+    }
+    chksum = ~chksum + 1;
+    return chksum;
+}
+
 bool valid_chksum_two(const char * cbuf, int start, int len) //2's complement negation
 {
   uint8_t sum = 0;

@@ -30,7 +30,7 @@ VistaBus::VistaBus()
 
 VistaBus::~VistaBus()
 {
-    if (this->rx_tx_task_Handle != NULL) 
+    if (this->rx_tx_task_Handle != nullptr) 
         stop();
     vQueueDelete(this->receiveQueue);
     vQueueDelete(this->sendQueue);
@@ -44,7 +44,7 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int
     this->ext_uart_num = static_cast<uart_port_t>(extuartnum);
     this->monitor_pin = static_cast<gpio_num_t>(monitorpin);
 
-    if (this->receiveQueue == NULL || this->sendQueue == NULL || this->deviceMsgQueue == NULL)
+    if (this->receiveQueue == nullptr || this->sendQueue == nullptr || this->deviceMsgQueue == nullptr)
     {
         ESP_LOGE(TAG, "Memory for task queues was not allocated. Aborting!");
         return;
@@ -68,12 +68,12 @@ bool VistaBus::stop()
     //send an FF byte to wake so it shuts down. Must shut down gracefully to delete data.
     char tmp[1];
     tmp[0] = 0xFF;
-    while (monitor_rx_task_Handle != NULL) //wait for task to terminate
+    while (monitor_rx_task_Handle != nullptr) //wait for task to terminate
     {
         uart_write_bytes(this->uart_num,tmp,1);
         vTaskDelay(pdMS_TO_TICKS(500));
     }
-    while(rx_tx_task_Handle != NULL) //wait for task to terminate
+    while(rx_tx_task_Handle != nullptr) //wait for task to terminate
     {
         vTaskDelay(pdMS_TO_TICKS(20));
     }
@@ -134,7 +134,7 @@ static bool rmt_rx_done_callback(rmt_channel_handle_t channel, const rmt_rx_done
 
 void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
 {
-    rmt_channel_handle_t rx_chan = NULL;
+    rmt_channel_handle_t rx_chan = nullptr;
     rmt_rx_channel_config_t rx_chan_config = {
         .gpio_num = rx_pin,                    // GPIO number
         .clk_src = RMT_CLK_SRC_DEFAULT,   // select source clock
@@ -224,7 +224,7 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
 
     if (static_cast<int>(tx_pin) == -1)
     {      
-        ESP_ERROR_CHECK(uart_driver_install(u_n, kRXBufSize + 8, 0, 0, NULL, intr_alloc_flags));
+        ESP_ERROR_CHECK(uart_driver_install(u_n, kRXBufSize + 8, 0, 0, nullptr, intr_alloc_flags));
     }
     else
     {
@@ -276,10 +276,18 @@ void VistaBus::rx_tx_task(void * args)
         {
             DeviceMsg q_msg;
             xQueuePeek(deviceMsgQueue,&q_msg,pdMS_TO_TICKS(0));
-            requestF1(q_msg.address);
-            request_F1_time = esp_timer_get_time();  
+            if(esp_timer_get_time() - q_msg.time < 5*1000*1000)
+            {
+                requestF1(q_msg.address);
+                request_F1_time = esp_timer_get_time();
+            }
+            else
+            {
+                xQueueReceive(deviceMsgQueue,&q_msg,pdMS_TO_TICKS(0));
+                ESP_LOGE(TAG,"Dropping msg for device at address %d.  No F1 response in 5 seconds.",q_msg.address);
+            }  
         }
-        if(this->stop_requested && monitor_rx_task_Handle == NULL)
+        if(this->stop_requested && monitor_rx_task_Handle == nullptr)
         {
             this->panel_connected = false;
             break;
@@ -327,7 +335,7 @@ void VistaBus::rx_tx_task(void * args)
             else if ( data[0] == 0xF6) //SEND ACK Received
             {                 
                 rxBytes = vprotocol->uart_read_bytes_event(this->uart_num, data.get(), 1, pdMS_TO_TICKS(kUartDelay), uartevtQueue); //Get Address
-                if(data[0] != 0 && monitor_rx_task_Handle != NULL)
+                if(data[0] != 0 && monitor_rx_task_Handle != nullptr)
                 {
                     uint32_t val = 0xF6 << 8 | data[0];
                     xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
@@ -411,7 +419,7 @@ void VistaBus::rx_tx_task(void * args)
                         if (valid_chksum(received_packet.payload,0,rxBytes+3))
                         { 
                             uint32_t val = 0xF8 << 8 | received_packet.payload[1];
-                            if (monitor_rx_task_Handle != NULL)
+                            if (monitor_rx_task_Handle != nullptr)
                                 xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);
                         }
                     }
@@ -430,7 +438,7 @@ void VistaBus::rx_tx_task(void * args)
                     {
                         received_packet.source = 0xF9;
                         uint32_t val = 0xF9 << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
-                        if (monitor_rx_task_Handle != NULL)
+                        if (monitor_rx_task_Handle != nullptr)
                             xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                         if (LRRemulation)
                             this->processF9(received_packet.payload);
@@ -453,15 +461,30 @@ void VistaBus::rx_tx_task(void * args)
                 }
             }
             else if ( data[0] == 0xFA && vprotocol->is_2400) //EXP
-            {                        
-                rxBytes = vprotocol->get_packet_event(&received_packet,data.get(),1,kFAMessageLength-1,this->uart_num,pdMS_TO_TICKS(kUartDelay), uartevtQueue);
-                if (valid_chksum(received_packet.payload,0,rxBytes+1))
+            {   
+                uint8_t length = 0;
+                if (!vprotocol->legacy_protocol)
+                    length = kFAMessageLength;
+                else
+                    length = kFALegacyMessageLength;
+
+                rxBytes = vprotocol->get_packet_event(&received_packet,data.get(),1,length-1,this->uart_num,pdMS_TO_TICKS(kUartDelay), uartevtQueue);
+                bool chk;
+                if (!vprotocol->legacy_protocol)
+                    chk = valid_chksum(received_packet.payload,0,rxBytes+1);
+                else
+                    chk = valid_chksum_two(received_packet.payload,0,rxBytes+1);
+                uint32_t val;
+                if (chk)
                 {
-                    uint32_t val = 0xFA << 16 | (received_packet.payload[2] << 8) | received_packet.payload[4];
-                    if (monitor_rx_task_Handle != NULL)
+                    if (!vprotocol->legacy_protocol)
+                        val = 0xFA << 16 | (received_packet.payload[2] << 8) | received_packet.payload[4];
+                    else
+                        val = 0xFA << 16 | (received_packet.payload[1] << 8) | received_packet.payload[2];
+                    if (monitor_rx_task_Handle != nullptr)
                             xTaskNotify(monitor_rx_task_Handle,val, eSetValueWithOverwrite);
                     if (EXPemulation)
-                        this->processFA(received_packet.payload);
+                        vprotocol->processFA(received_packet.payload);
                     received_packet.source = 0xFA;
                 }
                 else
@@ -474,7 +497,7 @@ void VistaBus::rx_tx_task(void * args)
                 if (valid_chksum(received_packet.payload,0,rxBytes+1))
                 {
                     uint32_t val = 0xFB << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
-                    if (monitor_rx_task_Handle != NULL)
+                    if (monitor_rx_task_Handle != nullptr)
                         xTaskNotify(monitor_rx_task_Handle,val,eSetValueWithOverwrite);                
                     if (RFRemulation)
                         this->processFB(received_packet.payload);
@@ -549,8 +572,8 @@ void VistaBus::rx_tx_task(void * args)
         }
     }
     ESP_LOGI(TAG, "Stopping Task");
-    this->rx_tx_task_Handle = NULL;
-    vTaskDelete(NULL);
+    this->rx_tx_task_Handle = nullptr;
+    vTaskDelete(nullptr);
 }
 
 void VistaBus::monitor_rx_task(void * args)
@@ -758,8 +781,8 @@ void VistaBus::monitor_rx_task(void * args)
         }
     }
     ESP_LOGI(TAG, "Stopping Task");
-    this->monitor_rx_task_Handle = NULL;
-    vTaskDelete(NULL);
+    this->monitor_rx_task_Handle = nullptr;
+    vTaskDelete(nullptr);
 }
 
 static uint8_t getExpanderAddress(uint8_t zone)
@@ -790,7 +813,7 @@ VistaBus::EmulatedExpander *VistaBus::getExpander(uint8_t address)
         if (it.address == address)
             return &(it);
     }
-    return NULL;
+    return nullptr;
 }
 
 void VistaBus::processF9(const char * cbuf)
@@ -815,69 +838,6 @@ void VistaBus::processF9(const char * cbuf)
     }
 }
 
-void VistaBus::processFA(const char * cbuf)
-{
-    // For timing , must handle 0xFA packet here if emulating rather than through queues in vistaalarm process. 
-    char type = cbuf[4];
-    char seq = cbuf[3];
-    char lcbuf[5];
-    int lcbuflen = 5;
-    bool valid_address = false;
-    uint8_t address = 0;
-    uint8_t expSeq = (seq == 0x20 || seq == 0x21 ? 0x34 : 0x31);
-    for (int index = 1; index <= 5; index++)
-    {
-        if (cbuf[2] == 0x01 << index)
-        {
-            address = 6+index;
-            valid_address = true;
-            break;
-        }
-    }
-    if (emulated_expanders.size() && valid_address)  //check if any emulated expanders present
-    {
-        EmulatedExpander *expander = getExpander(address);
-        // we use zone to either | or & bits depending if in fault or reset
-        // 0xF1 - response to request, 0xf7 - poll, 0x80 - retry
-        if (expander != NULL)
-        {
-            if (type == 0xF1)
-            {  
-                DeviceMsg expMsg;
-                xQueueReceive(this->deviceMsgQueue,&expMsg,portMAX_DELAY);
-                lcbuf[0] = address;
-                lcbuf[1] = expSeq;
-                uint8_t z = expMsg.source & 0x07;
-                lcbuf[2] = z ? 0 : 0x01;
-                uint8_t chksum = 0;
-                lcbuf[3] = (z << 5) ^ (0x10*expMsg.msg); // we send out the current zone state
-                for (int x = 0; x < lcbuflen-1; x++)
-                {
-                    chksum += lcbuf[x];
-                }
-                chksum = ~chksum + 1;
-                lcbuf[lcbuflen-1] = chksum;
-                uart_write_bytes(this->uart_num,lcbuf, lcbuflen);
-            }
-            else if (type == 0xF7)
-            {
-                lcbuf[0] = 0xF0;
-                lcbuf[1] = expSeq;
-                lcbuf[2] = expander->fault_NO_Bits;                      
-                lcbuf[3] = expander->fault_NC_Bits; 
-                uint8_t chksum = 0;
-                for (int x = 0; x < lcbuflen-1; x++)
-                {
-                    chksum += lcbuf[x];
-                }
-                chksum = ~chksum + 1;
-                lcbuf[lcbuflen-1] = chksum;
-                uart_write_bytes(this->uart_num,lcbuf, lcbuflen);
-            }
-        }
-    }
-}
-
 void VistaBus::processFB(const char * cbuf)
 {
     // For timing , must handle 0xFB packet here if emulating rather than through queues in vistaalarm process. 
@@ -890,7 +850,6 @@ void VistaBus::processFB(const char * cbuf)
         {
             char seq = cbuf[2];
             char lcbuf[7];
-            int lcbuflen = 7;
             uint8_t expSeq = (seq == 0x20 ? 0x54 : 0x51);
             lcbuf[0] = emulated_rf_receiver.address;
             lcbuf[1] = expSeq;
@@ -898,18 +857,12 @@ void VistaBus::processFB(const char * cbuf)
             lcbuf[3] = rfMsg.source >> 8 & 0xFF;
             lcbuf[4] = rfMsg.source & 0xFF;
             lcbuf[5] = rfMsg.msg; //Set to fault status with loop mask
-            uint8_t chksum = 0;
-            for (int x = 0; x < lcbuflen-1; x++)
-            {
-                chksum += lcbuf[x];
-            }
-            chksum = ~chksum + 1;
-            lcbuf[lcbuflen-1] = chksum;
-            uart_write_bytes(this->uart_num,lcbuf, lcbuflen);
+            lcbuf[6] = calc_chksum_two(lcbuf,0,6);
+            uart_write_bytes(this->uart_num,lcbuf, 7);
         }
     }
     else if (type == 0x60 || type == 0x81 || type == 0x82)
-    { // supervision query
+    { // supervision query  ToDo:  Come back and check this.
         char seq = cbuf[2];
         char lcbuf[4];
         uint8_t address = emulated_rf_receiver.address;  //Set this to rf address
@@ -930,7 +883,7 @@ void VistaBus::processFB(const char * cbuf)
     }
 }
 
-//Nudge panel to send F1 request
+//Put request in Queue to nudge panel to send F1 request
 void VistaBus::requestF1(uint8_t address)
 {
     SendPacket pkt;
@@ -943,9 +896,13 @@ void VistaBus::requestF1(uint8_t address)
 
 void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
 {
-    uint8_t address = getExpanderAddress(zone);
+    uint8_t address = 0;
+    if (!vprotocol->legacy_protocol)
+        address = getExpanderAddress(zone);
+    else
+        address = 1;
     EmulatedExpander *expander = getExpander(address);
-    if (expander != NULL)
+    if (expander != nullptr)
     {
         uint8_t z = zone & 0x07;
         expander->fault_NO_Bits = fault ? expander->fault_NO_Bits | (0x01 << (8-z)) : expander->fault_NO_Bits & ~(0x01 << (8-z));
@@ -953,7 +910,8 @@ void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
         expMsg.address = address;
         expMsg.source = zone;
         expMsg.msg = fault;
-        xQueueSend(deviceMsgQueue,&expMsg,0);       
+        expMsg.time = esp_timer_get_time();
+        xQueueSend(deviceMsgQueue,&expMsg,0);     
     }
 }
 
@@ -961,7 +919,7 @@ void VistaBus::setExpTamper(uint8_t zone, bool tamper_active)
 {
     uint8_t address = getExpanderAddress(zone);
     EmulatedExpander *expander = getExpander(address);
-    if (expander != NULL)
+    if (expander != nullptr)
     {
         uint8_t z = zone & 0x07;
         expander->fault_NC_Bits = tamper_active ? expander->fault_NC_Bits | (0x01 << (8-z)) : expander->fault_NC_Bits & ~(0x01 << (8-z));
@@ -975,18 +933,23 @@ void VistaBus::sendRFmsg(uint32_t serial, uint8_t msg)
     rfMsg.address = emulated_rf_receiver.address;
     rfMsg.source = serial;
     rfMsg.msg = msg;
+    rfMsg.time = esp_timer_get_time();
     xQueueSend(deviceMsgQueue,&rfMsg,0);
 }
 
 void VistaBus::add_emulated_expander(uint8_t zone)
 {   
-    uint8_t address = getExpanderAddress(zone);
+    uint8_t address = 0;
+    if (!vprotocol->legacy_protocol)
+        address = getExpanderAddress(zone);
+    else
+        address = 1;
     EmulatedExpander *expander = getExpander(address);
     uint8_t z = zone & 0x07;
-    if (expander == NULL) //emulated expander does not exist, add it
+    if (expander == nullptr) //emulated expander does not exist, add it
     {   
         EmulatedExpander new_expander;
-        new_expander.address = getExpanderAddress(zone);
+        new_expander.address = address;
         new_expander.fault_NC_Bits = new_expander.fault_NC_Bits & ~(0x01 << (8-z));
         this->emulated_expanders.push_back(new_expander);
         ESP_LOGI(TAG,"Adding new emulated expander on address:%d for emulated zone:%d",new_expander.address,zone);

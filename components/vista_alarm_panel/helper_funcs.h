@@ -11,6 +11,7 @@
 #include "helper_enums.h"
 
 bool valid_chksum(const char * cbuf, int start, int len);
+uint8_t calc_chksum_two(const char * cbuf, int start, int len); 
 bool valid_chksum_two(const char * cbuf, int start, int len);  //two's complement
 bool isInt(std::string s, int base);
 int toDec(int n);
