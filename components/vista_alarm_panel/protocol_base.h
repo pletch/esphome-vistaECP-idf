@@ -18,17 +18,23 @@ public:
         return static_cast<ProtocolType*>(this)->handle_UART_events_impl(pkt_to_send, buf);
     }
 
-    int monitor_task_sync(uint8_t * buf, uint32_t &val, ReceivedPacket &rcvd_extPkt)
+    int monitor_task_sync(uint8_t * buf, uint32_t &val)
     {
-        return static_cast<ProtocolType*>(this)->monitor_task_sync_impl(buf, val, rcvd_extPkt);
+        return static_cast<ProtocolType*>(this)->monitor_task_sync_impl(buf, val);
     }
 
-    void processFA(const char * cbuf)
+    void quick_decodeFA(const char * cbuf)
     {
-        static_cast<ProtocolType*>(this)->processFA_impl(cbuf);
+        static_cast<ProtocolType*>(this)->quick_decodeFA_impl(cbuf);
+    }
+
+    void dispatchFA()
+    {
+        static_cast<ProtocolType*>(this)->dispatchFA_impl();
     }
 
 private:
+
 
 };
 

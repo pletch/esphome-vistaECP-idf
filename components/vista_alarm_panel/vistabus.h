@@ -46,9 +46,9 @@ public:
     bool writedirect(const char * hex_data_to_write, int size, int keypadaddress, int sequence);
     bool connected();
     bool read_packet(char * data, int &len, int &type, int &src, bool with_delay = false);
-    void emulateLRR(bool enabled);
+    void emulateLRR(bool enabled);  //ToDo: verify setter is still needed.
     void add_emulated_expander(uint8_t zone);
-    void emulateRFR(uint8_t address);
+    void emulateRFR(uint8_t address);  //ToDo: verify setter is still needed.
     void setExpFaultBits(uint8_t zone, bool fault);
     void setExpTamper(uint8_t zone, bool tamper_active);
     void sendRFmsg(uint32_t serial, uint8_t msg);
@@ -61,6 +61,9 @@ public:
     uart_port_t uart_num;
     uart_port_t ext_uart_num;
     gpio_num_t rx_pin;
+    bool LRRemulation;
+    bool EXPemulation;
+    bool RFRemulation;
     
     struct EmulatedExpander  
     {   
@@ -70,7 +73,7 @@ public:
     };
     std::vector<EmulatedExpander> emulated_expanders{};
     EmulatedExpander *getExpander(uint8_t address);
-
+    EmulatedRFReceiver emulated_rf_receiver;
 
 private:
 #ifndef LEGACY_SE_PROTOCOL
@@ -83,24 +86,18 @@ private:
     gpio_num_t monitor_pin;
     bool panel_connected;
     bool stop_requested;
-    bool LRRemulation;
-    bool EXPemulation;
-    bool RFRemulation;
+
     static void rx_tx_task_start(void *args );
     static void monitor_rx_task_start(void *args);
     void rx_tx_task(void * args);
     void monitor_rx_task(void * args);
-    void processF9(const char * cbuf);
-    void processFB(const char * cbuf);
+
     void requestF1(uint8_t address);
 
     int64_t last_data_received = 0;
-    uint8_t ack_failures = 0;
     int64_t request_F1_time = 0;
 
     void capture_pulse_pattern(gpio_num_t rx_pin);
-
-    EmulatedRFReceiver emulated_rf_receiver;
 
     void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
 };

@@ -92,7 +92,7 @@ public:
         return bytes;
     }
 
-    int monitor_task_sync_impl(uint8_t * buf, uint32_t &val, ReceivedPacket &rcvd_extPkt)
+    int monitor_task_sync_impl(uint8_t * buf, uint32_t &val)
     {
         int bytes = uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1, portMAX_DELAY);
         if (val == 0)
@@ -101,7 +101,7 @@ public:
     }
     
 
-    void processFA_impl(const char * cbuf)
+    void quick_decodeFA_impl(const char * cbuf)
     {
         // For timing , must handle 0xFA packet here if emulating rather than through queues in vistaalarm process. 
         char type = cbuf[4];
@@ -149,6 +149,31 @@ public:
                 }
             }
         }
+    }
+
+    void dispatchFA_impl()
+    {
+        uint8_t data[kFAMessageLength+1];
+        ReceivedPacket received_packet;
+        received_packet.type = 0;
+        received_packet.payload[0] = 0xFA;
+        uint8_t length = kFAMessageLength;
+
+        int rxBytes = this->get_packet_event(&received_packet, data, 1, length-1, vistabus_.uart_num, 
+                pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
+        bool chk = valid_chksum(received_packet.payload,0,rxBytes+1);
+        if (chk)
+        {
+            uint32_t val = 0xFA << 16 | (received_packet.payload[2] << 8) | received_packet.payload[4];
+            if (vistabus_.monitor_rx_task_Handle != nullptr)
+                    xTaskNotify(vistabus_.monitor_rx_task_Handle,val, eSetValueWithOverwrite);
+            if (vistabus_.EXPemulation)
+                this->quick_decodeFA(received_packet.payload);
+            received_packet.source = 0xFA;
+        }
+        else
+            received_packet.source = 0xCF;
+        xQueueSend(vistabus_.receiveQueue, &received_packet, pdMS_TO_TICKS(0));
     }
 
 private:
