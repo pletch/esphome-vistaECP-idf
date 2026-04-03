@@ -83,60 +83,60 @@ namespace esphome
                 void stop();
 
             private:
-struct TextSensorPartition
-{
-    vistaECPTextSensor *system_status {nullptr};
-    vistaECPTextSensor *line1 {nullptr};
-    vistaECPTextSensor *line2 {nullptr};
-    vistaECPTextSensor *beeps {nullptr};
-};
+                struct TextSensorPartition
+                {
+                    vistaECPTextSensor *system_status {nullptr};
+                    vistaECPTextSensor *line1 {nullptr};
+                    vistaECPTextSensor *line2 {nullptr};
+                    vistaECPTextSensor *beeps {nullptr};
+                };
 
-struct TextSensorCommon
-{
-    vistaECPTextSensor *zone_status {nullptr};
-    vistaECPTextSensor *rf_messages {nullptr};
-    vistaECPTextSensor *lrr_messages {nullptr};
-};
+                struct TextSensorCommon
+                {
+                    vistaECPTextSensor *zone_status {nullptr};
+                    vistaECPTextSensor *rf_messages {nullptr};
+                    vistaECPTextSensor *lrr_messages {nullptr};
+                };
 
-struct StatusSensorPartition
-{
-    vistaECPBinarySensor *rdy {nullptr};
-    vistaECPBinarySensor *trbl {nullptr};
-    vistaECPBinarySensor *byp {nullptr};
-    vistaECPBinarySensor *arm {nullptr};
-    vistaECPBinarySensor *arma {nullptr};
-    vistaECPBinarySensor *arms {nullptr};
-    vistaECPBinarySensor *armi {nullptr};
-    vistaECPBinarySensor *armn {nullptr};
-    vistaECPBinarySensor *chm {nullptr};
-    vistaECPBinarySensor *alm {nullptr};
-    vistaECPBinarySensor *fire {nullptr};
-};
+                struct StatusSensorPartition
+                {
+                    vistaECPBinarySensor *rdy {nullptr};
+                    vistaECPBinarySensor *trbl {nullptr};
+                    vistaECPBinarySensor *byp {nullptr};
+                    vistaECPBinarySensor *arm {nullptr};
+                    vistaECPBinarySensor *arma {nullptr};
+                    vistaECPBinarySensor *arms {nullptr};
+                    vistaECPBinarySensor *armi {nullptr};
+                    vistaECPBinarySensor *armn {nullptr};
+                    vistaECPBinarySensor *chm {nullptr};
+                    vistaECPBinarySensor *alm {nullptr};
+                    vistaECPBinarySensor *fire {nullptr};
+                };
 
-struct Zone
-{
-    vistaECPBinarySensor *binary_sensor {nullptr};
-    vistaECPTextSensor *text_sensor {nullptr};
-    uint8_t zone {0};
-    int64_t time {0};
-    uint32_t rfserial {0};
-    uint8_t rfloop {0};
-    int64_t rfnext_hb {0};
-    uint8_t partition {0};
-    bool open {false};
-    bool bypass {false};
-    bool alarm {false};
-    bool check {false};
-    bool active {false};
-    bool rflowbat {false};
-};
+                struct Zone
+                {
+                    vistaECPBinarySensor *binary_sensor {nullptr};
+                    vistaECPTextSensor *text_sensor {nullptr};
+                    uint8_t zone {0};
+                    int64_t time {0};
+                    uint32_t rfserial {0};
+                    uint8_t rfloop {0};
+                    int64_t rfnext_hb {0};
+                    uint8_t partition {0};
+                    bool open {false};
+                    bool bypass {false};
+                    bool alarm {false};
+                    bool check {false};
+                    bool active {false};
+                    bool rflowbat {false};
+                };
 
-struct TextSensor
-{
-    vistaECPTextSensor *text_sensor {nullptr};
-    uint8_t partition {0};
-    const char * type {nullptr};
-};
+                struct TextSensor
+                {
+                    vistaECPTextSensor *text_sensor {nullptr};
+                    uint8_t partition {0};
+                    const char * type {nullptr};
+                };
                 VistaBus vistabus;
                 const char *const TAG = "vista-alarm";
                 esp_log_level_t log_level = ESP_LOG_DEBUG;

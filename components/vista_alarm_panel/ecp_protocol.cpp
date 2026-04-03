@@ -286,7 +286,7 @@ void VistaECP::dispatchF9()
     {
         received_packet.payload[1] = data[0];
         received_packet.payload[2] = data[1];  //Size of packet
-        rxBytes = this->get_packet_event(&received_packet, data, 3, static_cast<int> (data[0]),
+        rxBytes = this->get_packet_event(&received_packet, data, 3, static_cast<int> (data[1]),
                 vistabus_.uart_num,pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
         if (valid_chksum(received_packet.payload,0,rxBytes+3))
         {
@@ -343,7 +343,7 @@ void VistaECP::dispatchFB()
     ReceivedPacket received_packet;
     received_packet.type = 0;
     received_packet.payload[0] = 0xFB; 
-    int rxBytes = this->get_packet_event(&received_packet, data, 1, kFBMessageLength,
+    int rxBytes = this->get_packet_event(&received_packet, data, 1, kFBMessageLength-1,
             vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
     if (valid_chksum(received_packet.payload,0,rxBytes+1))
     {
