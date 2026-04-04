@@ -89,15 +89,11 @@ namespace esphome
                              "set_emulated_zone_tamper_state", {"zone", "tamper active"});
 
             // --- Publish initial sensor states ---
-            // The original published STATUS_ONLINE to partition 0's system_status
-            // and then STATUS_NOT_READY to every partition.  PartitionManager does
-            // not expose individual partition sensor pointers publicly, so we
-            // replicate only the partition-level initialisation here by requesting
-            // a forced refresh.  The STATUS_ONLINE publish is left to the first
-            // real F7 packet (the panel confirms the connection at that point).
-            //
-            // Initialise lrr/rf common sensors to a blank string so Home Assistant
-            // does not show "unavailable" before the first real event arrives.
+            // Force-publish false/unavailable to every registered binary and text
+            // sensor so Home Assistant shows a known state rather than "unknown"
+            // before the first F7 packet arrives from the panel.
+            partitions_.publish_initial_states();
+
             if (lrr_sensor_ != nullptr)
                 lrr_sensor_->process(" ");
             if (rf_sensor_ != nullptr)

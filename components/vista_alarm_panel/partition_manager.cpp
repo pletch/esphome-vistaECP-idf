@@ -101,6 +101,29 @@ namespace esphome
         }
 
         // ---------------------------------------------------------------------------
+        // Initial state broadcast
+        // ---------------------------------------------------------------------------
+
+        void PartitionManager::publish_initial_states()
+        {
+            // Publish the false initial state to every binary sensor so Home Assistant
+            // shows "off" rather than "unknown" before the first F7 packet arrives.
+            // Both cur and prev are all-false; force=true ensures PUBLISH_BIN fires
+            // even though cur == prev.
+            const LightStates zero{};
+            for (size_t kpi = 0; kpi < partitions_.size(); kpi++)
+            {
+                publish_system_state(kpi, kUnavailable);
+                publish_light_states(kpi, zero, zero, /*force=*/true, /*include_armed_states=*/true);
+                if (text_sensors_[kpi].beeps != nullptr)
+                    text_sensors_[kpi].beeps->process("0");
+            }
+
+            if (ac_sensor_  != nullptr) ac_sensor_->process(false);
+            if (bat_sensor_ != nullptr) bat_sensor_->process(false);
+        }
+
+        // ---------------------------------------------------------------------------
         // Sequence tracking
         // ---------------------------------------------------------------------------
 

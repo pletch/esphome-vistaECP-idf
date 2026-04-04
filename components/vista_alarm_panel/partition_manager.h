@@ -132,6 +132,12 @@ namespace esphome
             // vistaalarm.cpp where false was passed to aui_.tick().
             bool in_program_mode() const { return last_program_mode_; }
 
+            // Force-publish the initial false state to every binary sensor so that
+            // Home Assistant shows "off" rather than "unknown" before the first F7
+            // packet arrives.  Call once from VistaESPHome::setup() after all sensors
+            // have been registered.
+            void publish_initial_states();
+
         private:
 
             // -------------------------------------------------------------------
