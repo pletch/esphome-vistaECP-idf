@@ -61,9 +61,6 @@ namespace esphome
 
             // -------------------------------------------------------------------
             // Construction
-            //
-            // Parameters match the original constructor exactly so that generated
-            // ESPHome component code requires no changes.
             // -------------------------------------------------------------------
             VistaESPHome(char kpaddr,
                          int  receivePin,
@@ -121,8 +118,7 @@ namespace esphome
             // -------------------------------------------------------------------
             // Sensor registration
             //
-            // Forwarded to the appropriate collaborator.  Signatures are identical
-            // to the original so generated ESPHome code requires no changes.
+            // Forwarded to the appropriate collaborator. 
             // -------------------------------------------------------------------
 
             void register_zone(vistaECPBinarySensor *sensor,

@@ -18,7 +18,6 @@ namespace esphome
         void AUIManager::set_device_address(uint8_t addr)
         {
             // sequence1 encodes the address in the lower 5 bits with bit 5 set,
-            // matching the original set_auiaddr() logic.
             device_.address   = addr;
             device_.sequence1 = 0x20 | addr;
         }
@@ -32,8 +31,6 @@ namespace esphome
         // Internal sequence helper
         //
         // sequence2 cycles through 0x68–0x6F, wrapping from 0x6F back to 0x68.
-        // This pattern appears identically in all three AUI write methods in the
-        // original; centralising it here ensures it is never inconsistently applied.
         // ---------------------------------------------------------------------------
 
         void AUIManager::advance_sequence2()
@@ -45,8 +42,7 @@ namespace esphome
         // ---------------------------------------------------------------------------
         // Tick — called each iteration of the processReceiveQueue task loop
         //
-        // Handles two time-driven responsibilities that previously lived inline in
-        // the main loop of processReceiveQueue:
+        // Handles two time-driven responsibilities:
         //   1. Request timeout: if a zone-fault query has not been answered within
         //      6 seconds, mark it as no longer pending so a new one can be issued.
         //   2. Periodic clock sync: if auto_sync is enabled and the next-sync time
@@ -240,7 +236,6 @@ namespace esphome
 
             ESP_LOGD(TAG, "Requesting panel time...");
 
-            // Fixed AUI time-request command structure.
             char bytes[6] = {0, 0, 0x05, 0x02, 0x43, 0x43};
             advance_sequence2();
             bytes[1] = static_cast<char>(device_.sequence2);
@@ -291,7 +286,6 @@ namespace esphome
             if (device_.address == 0 || request_.pending)
                 return;
 
-            // Fixed AUI zone-fault query command.
             char bytes[22] = {0,    0,    0x62, 0x31, 0x45, 0x49, 0xF5, 0x31,
                                0xFB, 0x45, 0x4A, 0xF5, 0x32, 0xFB, 0x45, 0x43,
                                0xF5, 0x31, 0xFB, 0x43, 0x6C};
@@ -360,14 +354,6 @@ namespace esphome
         // Parses a space-separated string of zone numbers and optional ranges
         // (e.g. "3 7 12-15 22") into bitmasks covering zones 1–128, then updates
         // each registered zone's open state via ZoneManager.
-        //
-        // Fixes from original:
-        //   1. `1 << (zones[i]-1)` used signed int shift — zones[i]==32 produces UB.
-        //      Replaced with `1u <<` throughout.
-        //   2. The `zones` buffer was only 16 bytes; with ranges it could overflow.
-        //      Replaced with a 128-entry fixed array (worst case: all zones faulted).
-        //   3. The VLA `char F2data[data_len+1]` in the original caller has been
-        //      replaced with the fixed 41-byte buffer allocated in on_f2_packet().
         // ---------------------------------------------------------------------------
 
         void AUIManager::process_zone_faults(const char *list, ZoneManager &zones)

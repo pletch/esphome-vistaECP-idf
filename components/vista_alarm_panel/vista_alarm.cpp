@@ -63,8 +63,6 @@ namespace esphome
             set_update_interval(5000);
 
             // --- Register ESPHome API services ---
-            // Service names and parameter lists are identical to the originals so
-            // that existing Home Assistant automations require no changes.
             register_service(&VistaESPHome::svc_set_panel_time,
                              "set_panel_time", {});
             register_service(&VistaESPHome::svc_alarm_keypress,

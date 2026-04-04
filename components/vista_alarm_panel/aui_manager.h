@@ -58,10 +58,9 @@ namespace esphome
             // Configuration — call during VistaESPHome::setup()
             // -------------------------------------------------------------------
 
-            // Set the AUI device address.  Also initialises sequence1 to
-            // (0x20 | addr), matching the original set_auiaddr() behaviour.
-            // Call before any other method.  A zero address disables all AUI
-            // operations (every method guards on device_.address != 0).
+            // Set the AUI device address and initialize sequence1 to
+            // (0x20 | addr). Call before any other method.  A zero address 
+            // disables all AUIoperations (every method guards on device_.address != 0).
             void set_device_address(uint8_t addr);
 
             // Enable or disable automatic panel clock synchronisation.
@@ -164,10 +163,6 @@ namespace esphome
 
             // Parse a space-separated zone-number / range string into bitmasks
             // and update ZoneManager accordingly.
-            //
-            // Fixes from original AUIprocess_zone_faults():
-            //   - zones buffer increased from 16 to 128 to prevent overflow.
-            //   - Bitmask shifts use `1u <<` (unsigned) to avoid UB at bit 31.
             void process_zone_faults(const char *list, ZoneManager &zones);
 
             // Apply four 32-bit zone bitmasks (zones 1-32, 33-64, 65-96, 97-128)

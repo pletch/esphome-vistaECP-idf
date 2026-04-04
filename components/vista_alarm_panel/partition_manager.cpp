@@ -81,8 +81,6 @@ namespace esphome
 
             const size_t idx = partition_number - 1;
 
-            // Use strcmp throughout to avoid the partial-match bug in the original
-            // (strncmp with length 3 would match "TROUBLE", "TROPHY", and "TRO" equally).
             if      (strcmp(type, "READY")        == 0) status_sensors_[idx].rdy  = sensor;
             else if (strcmp(type, "TROUBLE")      == 0) status_sensors_[idx].trbl = sensor;
             else if (strcmp(type, "BYPASS")       == 0) status_sensors_[idx].byp  = sensor;

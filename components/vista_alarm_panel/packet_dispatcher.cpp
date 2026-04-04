@@ -1,9 +1,6 @@
 /*
  * PacketDispatcher — reads packets from VistaBus and routes them to collaborators.
  *
- * Ported from VistaESPHome::processReceiveQueue (vistaalarm.processQ.cpp).
- * All per-class logic (partition state, zone state, AUI, LRR) has been moved to
- * the respective collaborator.  This file handles only:
  *   - Packet framing and type dispatch.
  *   - StatusFlags decoding (F7 and assembled legacy-SE frames).
  *   - LRR Contact-ID string formatting (F9).
@@ -52,7 +49,7 @@ namespace esphome
             int  size = 0, type = 0, src = 0;
             memset(payload, '\0', sizeof(payload));
 
-            if (!bus_.read_packet(payload, size, type, src, /*with_delay=*/true))
+            if (!bus_.read_packet(payload, size, type, src, true))
                 return;
 
             print_packet(payload, type, src, size);
@@ -134,9 +131,6 @@ namespace esphome
 
         // ---------------------------------------------------------------------------
         // F7 / assembled legacy-SE status frame decode
-        //
-        // Mirrors the original VistaESPHome::refreshStatusFlags(cbuf) exactly,
-        // but returns a value rather than writing to a member variable.
         //
         // Byte layout (offsets into cbuf):
         //   [1..4]  — keypad address bits (4 bytes × 8 bits = 32 keypad addresses)

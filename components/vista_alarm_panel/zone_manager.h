@@ -210,11 +210,6 @@ namespace esphome
             // any whose timer has expired.  Reschedules the next heartbeat at
             // 70–90 minutes with random jitter.  Call each iteration of the
             // receive task loop.
-            //
-            // Fixes the operator-precedence bug in the original
-            // RF_handle_heartbeats(): `0x80 ^ mask & 0x04` was parsed as
-            // `0x80 ^ (mask & 0x04)`.  The corrected message is `0x80 ^ mask`
-            // (bit 7 set = supervision active, loop bit cleared = zone closed).
             void handle_rf_heartbeats(VistaBus &bus);
 
             // -------------------------------------------------------------------

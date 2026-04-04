@@ -128,8 +128,7 @@ namespace esphome
 
             // Returns true if the most recently decoded F7 packet had the
             // program-mode bit set.  Used by the receive task to suppress AUI
-            // writes during panel programming.  Closes the workaround noted in
-            // vistaalarm.cpp where false was passed to aui_.tick().
+            // writes during panel programming.  
             bool in_program_mode() const { return last_program_mode_; }
 
             void publish_initial_states();
@@ -180,8 +179,6 @@ namespace esphome
             void publish_system_state(size_t kpi, SysState state);
 
             // Publish all binary light-state sensors that have changed.
-            // include_armed_states gates the armed-subtype sensors (away/stay/etc.)
-            // behind the same system_flag / updateSystemState condition as the original.
             void publish_light_states(size_t kpi,
                                       const LightStates &current,
                                       const LightStates &previous,

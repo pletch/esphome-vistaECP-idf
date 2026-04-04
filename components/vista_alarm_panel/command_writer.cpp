@@ -20,9 +20,7 @@ namespace esphome
         // Returns true and populates resolved_out (exactly 4 chars, no null
         // terminator — callers are responsible for their own buffer sizing) when a
         // valid 4-digit numeric code is available.  Returns false otherwise.
-        //
-        // This replaces the scattered "if (code.length() != 4 || !isInt(...))"
-        // guards that appeared inline in every branch of the original set_alarm_state.
+
         bool CommandWriter::resolve_code(const std::string &supplied,
                                          char resolved_out[4]) const
         {
@@ -32,8 +30,7 @@ namespace esphome
                 effective = &supplied;
             else if (access_code_ != nullptr)
             {
-                // Wrap the stored C-string in a temporary for isInt.
-                static std::string stored_str; // reused across calls; safe, single-task context
+                static std::string stored_str; 
                 stored_str = access_code_;
                 if (stored_str.length() == 4 && isInt(stored_str, 10))
                     effective = &stored_str;
@@ -94,10 +91,7 @@ namespace esphome
             return ok;
         }
 
-        // Build and send a code + suffix sequence, using memcpy throughout so no
-        // null-terminator assumption is made (fixing the VistaBus::write / strncpy
-        // hazard identified in the original code review).
-        //
+        // Build and send a code + suffix sequence,
         // suffix     — the key(s) appended after the 4-digit code, e.g. "3" or "33"
         // suffix_len — byte count of suffix, not including any terminator
         bool CommandWriter::send_code_plus_keys(const char code[4],
@@ -252,8 +246,7 @@ namespace esphome
         {
             // Honeywell Vista fire alarm: hold A and # simultaneously.
             // On the ECP bus this is sent as the key sequence "AF" per the protocol.
-            // The original code had a // todo here; this implements the standard
-            // two-key simultaneous panic sequence.
+            // This implements the standard two-key simultaneous panic sequence.
             uint8_t addr, seq;
             if (!resolve_partition(partition_id, addr, seq))
                 return false;
@@ -287,8 +280,6 @@ namespace esphome
                                      const std::string &code)
         {
             // Intercept single-character command strings that map to named operations.
-            // This mirrors the original alarm_keypress_partition() dispatch table but
-            // routes through the proper methods rather than re-implementing the logic.
             if (keys == "A") return arm_away    (partition_id, code);
             if (keys == "S") return arm_stay    (partition_id, code);
             if (keys == "N") return arm_night   (partition_id, code);

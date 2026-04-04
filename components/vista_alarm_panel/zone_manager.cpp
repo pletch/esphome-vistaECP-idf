@@ -18,12 +18,6 @@ namespace esphome
         // ---------------------------------------------------------------------------
 
         // Translate an rfloop number (1–4) into the bit mask used in RF status bytes.
-        // This mapping appears in three places in the original codebase (set_zone_fault,
-        // RF_handle_heartbeats, FB packet decode); centralising it here eliminates the
-        // operator-precedence bug that existed in RF_handle_heartbeats, where the
-        // expression `0x80 ^ mask & 0x04` was parsed as `0x80 ^ (mask & 0x04)` rather
-        // than the presumably intended `(0x80 ^ mask) & 0x04`.  The corrected heartbeat
-        // message is computed in send_rf_heartbeat() below.
         static uint8_t rfloop_to_mask(uint8_t rfloop)
         {
             switch (rfloop)
@@ -147,10 +141,6 @@ namespace esphome
         {
             zone_status_sensor_ = sensor;
         }
-
-        // ---------------------------------------------------------------------------
-        // Lookup
-        // ---------------------------------------------------------------------------
 
         ZoneManager::Zone *ZoneManager::get_zone(uint16_t zone_number)
         {
@@ -381,8 +371,7 @@ namespace esphome
 
         // ---------------------------------------------------------------------------
         // Emulated zone fault / tamper — called from VistaESPHome service callbacks
-        // via VistaBus (unchanged path).  These are thin wrappers kept here so that
-        // the rfloop mask logic lives in one place.
+        // via VistaBus (unchanged path).  
         // ---------------------------------------------------------------------------
 
         void ZoneManager::send_emulated_fault(uint8_t zone_number,
@@ -427,10 +416,6 @@ namespace esphome
         // cycle after zone events have been applied.  Clears stale zone states that
         // are no longer consistent with the panel's current light-state, then
         // publishes the combined zone-status string if it has changed.
-        //
-        // This consolidates the logic previously spread across refreshSensors() in
-        // the original, except for the battery-decay path which belongs to
-        // PartitionManager (it is not zone-specific).
         // ---------------------------------------------------------------------------
 
         void ZoneManager::refresh(const LightStates &partition_lights, int64_t ttl)
@@ -481,8 +466,6 @@ namespace esphome
                 // --- Build combined zone status string ---
                 // Format: [OP|AL|BY|CK|LB]:<zone_number>, comma-separated.
                 // Only flags that are currently active contribute an entry.
-                // Using a helper lambda keeps the repeated pattern compact without
-                // reaching for a macro.
                 char seg[16];
                 auto append_seg = [&](const char *prefix)
                 {
@@ -513,14 +496,7 @@ namespace esphome
         // Initialises heartbeat timers for all RF zones immediately after the task
         // starts (staggered within the first 1–10 minutes so they do not all fire
         // simultaneously), then fires periodic supervision messages at 70–90 minute
-        // intervals with random jitter matching the original behaviour.
-        //
-        // Bug fix: the original expression `0x80 ^ mask & 0x04` was wrong due to
-        // C++ operator precedence (`&` binds tighter than `^`), producing
-        // `0x80 ^ (mask & 0x04)` rather than `(0x80 ^ mask) & 0x04`.  Because the
-        // correct heartbeat message is simply the "zone closed, supervision" byte —
-        // i.e. all loop bits cleared — the corrected message is `0x80 ^ mask`,
-        // meaning "bit 7 set, loop bit cleared" to indicate the zone is not faulted.
+        // intervals with random jitter.
         // ---------------------------------------------------------------------------
 
         void ZoneManager::init_rf_heartbeat_timers()

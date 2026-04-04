@@ -1,10 +1,8 @@
 #pragma once
 
 // EN
-// The six legacy zone-string externs (FAULT, BYPAS, ALARM, FIRE, CHECK, TRBL)
-// have been removed.  They were declared here but never defined anywhere, which
-// would produce a linker error if referenced.  Zone status is now communicated
-// via flag-based text in ZoneManager::publish_zone() rather than string lookups.
+// Zone status is now communicated via flag-based text in 
+// ZoneManager::publish_zone() rather than string lookups.
 
 // Looks for the <space>*<space> found in the "Hit * to view messages".
 extern const char *HITSTAR;
