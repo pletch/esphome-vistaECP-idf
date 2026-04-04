@@ -91,6 +91,10 @@ bool VistaBus::stop()
     if (this->monitor_pin != -1)
         uart_driver_delete(this->ext_uart_num);
 
+    ReceivedPacket sentinel{};
+    sentinel.type = -1;
+    xQueueSend(this->receiveQueue, &sentinel, pdMS_TO_TICKS(100));
+
     return true;
 }
 

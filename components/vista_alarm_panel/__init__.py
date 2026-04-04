@@ -62,6 +62,11 @@ def validate_auiaddr(config):
         raise cv.Invalid("Invalid value for aui_addr. Valid enabled values are 1,2,5,6 or 0 if disabled")
     return config
 
+def validate_clocksync(config):
+    if config.get(CONF_AUTOCLOCKSYNC) and config[CONF_AUIADDR] == 0:
+        raise cv.Invalid("aui_auto_clock_sync: true requires a non-zero aui_addr (1, 2, 5, or 6)")
+    return config
+
 CONFIG_SCHEMA = cv.All(
     cv.Schema(
         {
@@ -95,7 +100,8 @@ CONFIG_SCHEMA = cv.All(
     ).extend(cv.COMPONENT_SCHEMA),
     validate_keypads,
     validate_c6_uarts,
-    validate_auiaddr
+    validate_auiaddr,
+    validate_clocksync,
 )
 
 

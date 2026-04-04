@@ -564,6 +564,20 @@ namespace esphome
         }
 
         // ---------------------------------------------------------------------------
+        // Initial state broadcast
+        // ---------------------------------------------------------------------------
+
+        void ZoneManager::publish_initial_states()
+        {
+            for (auto &z : zones_)
+                publish_zone(&z);
+
+            if (zone_status_sensor_ != nullptr)
+                zone_status_sensor_->process("");
+            previous_zone_status_ = "";
+        }
+
+        // ---------------------------------------------------------------------------
         // Zone status string accessor (for use during initial sensor publish)
         // ---------------------------------------------------------------------------
 

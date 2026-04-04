@@ -89,10 +89,8 @@ namespace esphome
                              "set_emulated_zone_tamper_state", {"zone", "tamper active"});
 
             // --- Publish initial sensor states ---
-            // Force-publish false/unavailable to every registered binary and text
-            // sensor so Home Assistant shows a known state rather than "unknown"
-            // before the first F7 packet arrives from the panel.
             partitions_.publish_initial_states();
+            zones_.publish_initial_states();
 
             if (lrr_sensor_ != nullptr)
                 lrr_sensor_->process(" ");
@@ -146,14 +144,13 @@ namespace esphome
 
         void VistaESPHome::stop()
         {
-            // Stop the bus first; this signals the RX/TX task to exit.
+            stop_requested_ = true;
             vistabus_.stop();
 
-            // The receive task deletes itself at the end of processReceiveQueue().
-            // Wait briefly for it to do so before invalidating the handle.
             if (processReceiveQHandle != nullptr)
             {
-                vTaskDelete(processReceiveQHandle);
+                caller_task_ = xTaskGetCurrentTaskHandle();
+                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
                 processReceiveQHandle = nullptr;
             }
 
@@ -185,7 +182,7 @@ namespace esphome
             // Small delay to let VistaBus tasks settle before we start reading.
             vTaskDelay(pdMS_TO_TICKS(250));
 
-            while (true)
+            while (!stop_requested_)
             {
                 // Per-iteration housekeeping.
                 if (rfr_emulation_enabled_)
@@ -200,7 +197,9 @@ namespace esphome
                     dispatcher_->dispatch_one();
             }
 
-            // Unreachable; task is deleted externally via stop() or vTaskDelete().
+            if (caller_task_ != nullptr)
+                xTaskNotifyGive(caller_task_);
+
             vTaskDelete(nullptr);
         }
 

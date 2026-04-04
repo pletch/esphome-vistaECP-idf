@@ -106,10 +106,6 @@ namespace esphome
 
         void PartitionManager::publish_initial_states()
         {
-            // Publish the false initial state to every binary sensor so Home Assistant
-            // shows "off" rather than "unknown" before the first F7 packet arrives.
-            // Both cur and prev are all-false; force=true ensures PUBLISH_BIN fires
-            // even though cur == prev.
             const LightStates zero{};
             for (size_t kpi = 0; kpi < partitions_.size(); kpi++)
             {
@@ -446,20 +442,26 @@ namespace esphome
                 {
                     // Cursor is on line 2
                     const uint8_t line2_pos = pos - 16;
-                    sub1 = p2.substr(0, line2_pos);
-                    if (pos < 31 && line2_pos + 1 < p2.size())
-                        sub2 = p2.substr(line2_pos + 1);
-                    snprintf(buf, sizeof(buf), "[%c]", p2[line2_pos]);
-                    p2 = sub1 + std::string(buf) + sub2;
+                    if (line2_pos < p2.size())
+                    {
+                        sub1 = p2.substr(0, line2_pos);
+                        if (line2_pos + 1 < p2.size())
+                            sub2 = p2.substr(line2_pos + 1);
+                        snprintf(buf, sizeof(buf), "[%c]", p2[line2_pos]);
+                        p2 = sub1 + std::string(buf) + sub2;
+                    }
                 }
                 else
                 {
                     // Cursor is on line 1
-                    sub1 = p1.substr(0, pos);
-                    if (pos + 1 < p1.size())
-                        sub2 = p1.substr(pos + 1);
-                    snprintf(buf, sizeof(buf), "[%c]", p1[pos]);
-                    p1 = sub1 + std::string(buf) + sub2;
+                    if (pos < p1.size())
+                    {
+                        sub1 = p1.substr(0, pos);
+                        if (pos + 1 < p1.size())
+                            sub2 = p1.substr(pos + 1);
+                        snprintf(buf, sizeof(buf), "[%c]", p1[pos]);
+                        p1 = sub1 + std::string(buf) + sub2;
+                    }
                 }
             }
 

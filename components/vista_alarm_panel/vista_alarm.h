@@ -311,8 +311,10 @@ namespace esphome
             // Runtime state
             // -------------------------------------------------------------------
 
-            TaskHandle_t processReceiveQHandle {nullptr};
-            int64_t      last_connection_check {0};
+            TaskHandle_t     processReceiveQHandle {nullptr};
+            int64_t          last_connection_check {0};
+            volatile bool    stop_requested_       {false};
+            TaskHandle_t     caller_task_          {nullptr};
 
             static const char * const TAG;
         };

@@ -226,6 +226,8 @@ namespace esphome
             // at startup before the first refresh() call.
             std::string build_zone_status_string() const;
 
+            void publish_initial_states();
+
         private:
 
             // -------------------------------------------------------------------
