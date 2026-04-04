@@ -40,11 +40,11 @@ class VistaBus
 public:
     VistaBus();
     ~VistaBus();
-    void begin(int uartnum, int rxpin, int txpin, int extuartnum, int monitorpin);
+    void begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int monitorpin = -1);
     bool stop();
     bool write(const char * data_to_write, int size, int keypadaddress, int sequence);
     bool writedirect(const char * hex_data_to_write, int size, int keypadaddress, int sequence);
-    bool connected();
+    bool connected() const;
     bool read_packet(char * data, int &len, int &type, int &src, bool with_delay = false);
     void emulateLRR(bool enabled);  //ToDo: verify setter is still needed.
     void add_emulated_expander(uint8_t zone);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ecp_protocol.h"
-#include "vistabus.h"
+#include "vista_bus.h"
 
 template <typename ProtocolType>
 class ProtocolBase : public VistaECP

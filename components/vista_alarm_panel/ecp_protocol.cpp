@@ -1,5 +1,5 @@
 #include "ecp_protocol.h"
-#include "vistabus.h"
+#include "vista_bus.h"
 
 VistaECP::VistaECP(VistaBus& vistabus) : vistabus_(vistabus) {}
 

@@ -3,7 +3,7 @@
 #include "helper_structs.h"
 #include "helper_funcs.h"
 #include "constants.h"
-#include "vistabus.h"
+#include "vista_bus.h"
 
 class VistaECP 
 {

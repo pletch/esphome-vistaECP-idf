@@ -11,7 +11,7 @@ from esphome.const import (
 _LOGGER = logging.getLogger(__name__)
 
 alarm_panel_ns = cg.esphome_ns.namespace('alarm_panel')
-AlarmComponent = alarm_panel_ns.class_('vistaECPHome', cg.PollingComponent)
+AlarmComponent = alarm_panel_ns.class_('VistaESPHome', cg.PollingComponent)
 
 CONF_ACCESSCODE="access_code"
 CONF_DEFAULTPARTITION="default_partition"
