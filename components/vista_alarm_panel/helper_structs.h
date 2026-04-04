@@ -36,13 +36,6 @@ struct DeviceMsg
     int64_t time{0};
 };
 
-struct EmulatedExpander  
-{   
-    uint8_t address{0};
-    char fault_NO_Bits{0};
-    char fault_NC_Bits{0xFF};
-};
-
 struct StatusFlags
 {
     uint8_t beeps {0}; 

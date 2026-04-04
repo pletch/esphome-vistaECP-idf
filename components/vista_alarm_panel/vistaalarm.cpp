@@ -166,7 +166,8 @@ namespace esphome
 
         void vistaECPHome::register_text_sensor(vistaECPTextSensor *text_sensor, uint8_t partition_number, const char * type)
         {
-            if (partition_number == 0 || partition_number-1 < known_partitions.size())
+            //if (partition_number == 0 || partition_number-1 < known_partitions.size())  ToDo:  remove after verified
+            if (partition_number != 0 && partition_number-1 < known_partitions.size())
             {
                 if (strncmp(type,"SYSTEM_STATUS", 13) == 0)
                     text_sensors_partition[partition_number-1].system_status = text_sensor;

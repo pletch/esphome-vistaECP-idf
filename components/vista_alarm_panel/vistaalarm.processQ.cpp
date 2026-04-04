@@ -453,7 +453,9 @@ namespace esphome
         void vistaECPHome::refreshStatusFlags(char * cbuf) 
         {
             char prompt1[18];
+            memset(prompt1,'\0',sizeof(prompt1));
             char prompt2[18];
+            memset(prompt2,'\0',sizeof(prompt2));
             memcpy(prompt1,&cbuf[12], 16);
             memcpy(prompt2, &cbuf[28], 16);
 
@@ -513,10 +515,10 @@ namespace esphome
             // As an example, byte EF is given from panel when it should be F6
             // for small o with diaeresis. Byte E1 is given when it should be
             // byte E4.
-            char tempbuf[32];
-            memset(tempbuf,0,32);
+            char tempbuf[18];
+            memset(tempbuf,0,sizeof(tempbuf));
             memcpy(tempbuf,&cbuf[12],16);
-            for (int i=1; i<32; i++)
+            for (int i=1; i<18; i++)
             {
                 if (!tempbuf[i])
                     break;
@@ -531,10 +533,10 @@ namespace esphome
                     i++;
                 }
             }
-            memcpy(statusFlags.prompt1, tempbuf, 32);
-            memset(tempbuf,0,32);
+            memcpy(statusFlags.prompt1, tempbuf, 16);
+            memset(tempbuf,0,sizeof(tempbuf));
             memcpy(tempbuf,&cbuf[28],16);
-            for (int i=0; i<32; i++)
+            for (int i=0; i<18; i++)
             {
                 if (!tempbuf[i])
                     break;
@@ -549,7 +551,7 @@ namespace esphome
                     i++;
                 }
             }
-            memcpy(statusFlags.prompt2, tempbuf, 32);
+            memcpy(statusFlags.prompt2, tempbuf, 16);
         }
 
         void vistaECPHome::processStatus()
@@ -944,7 +946,7 @@ namespace esphome
                             mask = 0x80;
                             break;
                     }
-                uint8_t msg = 0x80 ^ mask & 0x04;
+                uint8_t msg = (0x80 ^ mask) & 0x04;
                 vistabus.sendRFmsg(it.rfserial,msg);
                 it.rfnext_hb = esp_timer_get_time() + 70ULL*60*1000*1000 + (esp_random() % 20) * 60 * 1000 * 1000;
                 }
@@ -1088,13 +1090,13 @@ namespace esphome
                 for (uint8_t i = 0; i < zone_ct; i++)
                 {
                     if (zones[i] <= 32)
-                        zonestatusmask1to32 = zonestatusmask1to32 | (1 << (zones[i]-1));
+                        zonestatusmask1to32 = zonestatusmask1to32 | (1UL << (zones[i]-1));
                     else if (zones[i] > 32 && zones[i] <= 64)
-                        zonestatusmask33to64 = zonestatusmask33to64 | (1 << (zones[i]-32-1));
+                        zonestatusmask33to64 = zonestatusmask33to64 | (1UL << (zones[i]-32-1));
                     else if (zones[i] > 64 && zones[i] <= 96)
-                        zonestatusmask65to96 = zonestatusmask65to96 | (1 << (zones[i]-64-1));
+                        zonestatusmask65to96 = zonestatusmask65to96 | (1UL << (zones[i]-64-1));
                     else if (zones[i] > 96 && zones[i] <= 128)
-                        zonestatusmask97to128 = zonestatusmask97to128 | (1 << (zones[i]-96-1));
+                        zonestatusmask97to128 = zonestatusmask97to128 | (1UL << (zones[i]-96-1));
                     else
                         return;
                 }

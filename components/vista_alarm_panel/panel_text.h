@@ -1,16 +1,6 @@
 #pragma once
 
  //EN
-    //lookups for determining zone status as strings.  Must include complete word before zone#. 
-    // No spaces. obsolete now. No longer needed. Using flags to identify type
-    
-    extern const char * FAULT;    
-    extern const char * BYPAS;
-    extern const char * ALARM;
-    extern const char * FIRE;
-    extern const char * CHECK;
-    extern const char * TRBL;    
-    
     //Looks for the <space>*<space> found in the "Hit * to view messages".
     extern const char * HITSTAR;      
     

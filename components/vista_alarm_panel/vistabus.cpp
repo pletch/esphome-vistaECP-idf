@@ -34,6 +34,8 @@ VistaBus::~VistaBus()
         stop();
     vQueueDelete(this->receiveQueue);
     vQueueDelete(this->sendQueue);
+    vQueueDelete(this->deviceMsgQueue);
+    delete vprotocol;
 }
 
 void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum = -1, int monitorpin = -1) 
@@ -346,7 +348,7 @@ void VistaBus::rx_tx_task(void * args)
             {   
                 vprotocol->dispatch_legacyStatusPacket(buf[0]);
             }
-            else if (buf == 0)
+            else if (buf[0] == 0)
             {
                 //send single zeros to void!
             }

@@ -38,7 +38,7 @@ class VistaECP
     protected:
         VistaBus &vistabus_;
         const char* const TAG = "ecp_proto";
-        bool mark_pulse(int uartNum, uint8_t address);
+        void mark_pulse(int uartNum, uint8_t address);
         static void gpio_isr_handler(void * args);
         static void timer_isr_handler(void * task_handle);
 

@@ -45,11 +45,10 @@ int VistaECP::uart_read_bytes_event(uart_port_t uart_num, uint8_t * rxbuf, int l
     return bytes;
 }
 
-bool VistaECP::mark_pulse(int uartNum, uint8_t address)
+void VistaECP::mark_pulse(int uartNum, uint8_t address)
 {
     uart_set_parity(static_cast<uart_port_t>(uartNum),UART_PARITY_DISABLE);
     char snd_data[3];
-    bool sent_request = false;
     if (address < 8)
     {
         snd_data[0] = ~(0x01 << (address & 0x07));
@@ -79,10 +78,8 @@ bool VistaECP::mark_pulse(int uartNum, uint8_t address)
     xTaskNotifyWait(0,0xFFFFFFFF,NULL,pdMS_TO_TICKS(4)); //third rising edge           
     if (snd_data[2] != 0)
         uart_write_bytes(static_cast<uart_port_t>(uartNum), &snd_data[2], 1);
-    sent_request = true;
 
     uart_set_parity(static_cast<uart_port_t>(uartNum),UART_PARITY_EVEN);
-    return sent_request;
 }
 
 int VistaECP::get_packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf, int start, 
@@ -527,7 +524,6 @@ void VistaECP::dispatch_extFA(uint32_t val, uint8_t header, bool legacy)
     ReceivedPacket rcvd_extPkt;
     rcvd_extPkt.type = 1;
     int rxBytes = 0;
-    uint8_t n = 0;
     data[0] = header;
     if (static_cast<uint8_t>(val) == 0xF1) //Incoming zone data from Expander
     {
