@@ -4,7 +4,6 @@ from esphome.components import binary_sensor
 from .. import (
     alarm_panel_ns,
     AlarmComponent,
-    CONF_LEGACYPROTOCOL
 )
 DEPENDENCIES = ["vista_alarm_panel"]
 VistaBinarySensor = alarm_panel_ns.class_("VistaBinarySensor", binary_sensor.BinarySensor)
@@ -52,8 +51,6 @@ def _validate(value):
         raise cv.Invalid(str(value[CONF_STATUS_SENSOR]) + " must be specified with partition value")
     if CONF_ZONE in value and CONF_EMULATED_ZONE in value and value[CONF_ZONE] < 8:
         raise cv.Invalid("zone: value must be greater than 8.  First 8 zones are used for panel hardwired zones")
-    if CONF_ZONE in value and CONF_EMULATED_ZONE in value and CONF_LEGACYPROTOCOL in value and (value[CONF_ZONE] < 10 or value[CONF_ZONE] > 17):
-        raise cv.Invalid("zone: valid zone range for emulated expander zone on legacy protocol is 10 - 17.")
     return value
 
 CONFIG_SCHEMA = cv.All(binary_sensor.binary_sensor_schema(VistaBinarySensor).extend(

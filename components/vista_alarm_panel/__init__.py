@@ -1,8 +1,6 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.core import CORE
 from esphome.components import esp32
-import os
 import logging
 from esphome.const import (
     CONF_ID
@@ -109,17 +107,15 @@ async def to_code(config):
 
     var = cg.new_Pvariable(config[CONF_ID],config[CONF_KEYPAD1],config[CONF_RXPIN],config[CONF_TXPIN],config[CONF_UART1],config[CONF_MONITORPIN],config[CONF_UART2])
     
-    if CONF_ACCESSCODE in config:
-        cg.add(var.set_accessCode(config[CONF_ACCESSCODE]))
-    if CONF_DEFAULTPARTITION in config:
-        cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]))
+    cg.add(var.set_accessCode(config[CONF_ACCESSCODE]))
+    cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]))
     if config[CONF_DEBUGLOG]:
         cg.add_define("DEBUG_LOG")
     if config[CONF_DEBUGPULSE]:
         cg.add_define("DEBUG_PULSE")
     if config[CONF_LEGACYPROTOCOL]:
         cg.add_define("LEGACY_SE_PROTOCOL")
-        print("Enabling Legacy Protocol Option")
+        _LOGGER.info("Enabling Legacy Protocol Option")
     if config[CONF_KEYPAD1] != 0:
         cg.add(var.set_partitionKeypad(1,config[CONF_KEYPAD1]))
     if config[CONF_KEYPAD2] != 0:

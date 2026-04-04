@@ -36,7 +36,7 @@ def _validate(value):
 CONFIG_SCHEMA = cv.All(text_sensor.text_sensor_schema(VistaTextSensor).extend(
         {
             cv.GenerateID(CONF_ALARM_ID): cv.use_id(AlarmComponent),
-            cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=4),
+            cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=8),
             cv.Optional(CONF_ZONE): cv.int_range(min=1, max=128),
             cv.Required(CONF_TYPE): cv.one_of(*TTYPES, upper=True),
         }
@@ -50,8 +50,7 @@ async def to_code(config):
     await cg.register_parented(var, hub)
 
     if CONF_ZONE in config:
-        cg.add(hub.register_zone_text(var,config[CONF_PARTITION], config[CONF_ZONE]))
+        cg.add(hub.register_zone_text(var, config[CONF_PARTITION], config[CONF_ZONE]))
     else:
-        if CONF_PARTITION not in config:
-            config[CONF_PARTITION] = 0
-        cg.add(hub.register_text_sensor(var,config[CONF_PARTITION],config[CONF_TYPE]))
+        partition = config[CONF_PARTITION] if CONF_PARTITION in config else 0
+        cg.add(hub.register_text_sensor(var, partition, config[CONF_TYPE]))
