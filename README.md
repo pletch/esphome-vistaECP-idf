@@ -20,7 +20,7 @@ Fork is shared here for the benefits of any others that might want to use it.
 - Arduino dependency removed and refactored for ESP-IDF v5.4+.
 - Relay board emulation has been removed. Expander emulation remains.
 - AUI handling has been refactored.
-- Config refactored with validation of parameters. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
+- Config refactored with validation of parameters. Carefully examine the example YAML file (https://github.com/Tim Pletcher/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
 - zone emulation specifier in yaml config allows emulation of either hardwired or rf virtual zones. Specifying for hardwired zone automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group of eight zone numbers for virtual hardwired zones. Specifier on zones with rf serial / loop definition allows for virtual rf zone emulation when rf receiver emulation is also enabled.
 - Targeted only towards ESPHome API.  Stand-alone MQTT is removed.
 - Will not work with older ESP8266.

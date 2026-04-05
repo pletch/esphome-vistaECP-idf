@@ -1,3 +1,12 @@
+// Copyright (C) 2020 Alain Turbide
+// Copyright (C) 2025-2026 Tim Pletcher
+//
+// This file is part of esphome-vistaECP-idf, derived from esphome-vistaECP
+// (https://github.com/Dilbert66/esphome-vistaECP).
+//
+// Licensed under the GNU Lesser General Public License v2.1.
+// See COPYING.LESSER in the project root for details.
+
 #pragma once
 
 /*
@@ -47,7 +56,8 @@ public:
     bool is_2400 = false;
 
     // legacy_programmode – true when the panel is currently in program mode (SE-series).
-    //                      Changes the F8 decode path to capture raw program data.
+    //                      Changes the F8 decode path to receive the single 33-byte status packet
+    //                      used in program mode instead of the normal 4-byte parts.
     bool legacy_programmode = false;
 
     // --- Frame assembly helpers ---
@@ -89,7 +99,8 @@ public:
     // 0xF7 — Long-Range Radio (LRR) packet.  Fixed-length frame; checksum validated.
     void dispatchF7();
 
-    // 0xF8 — Zone-expander poll (or raw program data in legacy program mode).
+    // 0xF8 — Unknown purpose in normal mode.  In legacy program mode, carries status
+    //        data as a single 33-byte packet rather than the 4-byte parts used otherwise.
     //        Reads the two-byte header (address + length), then the body, validates
     //        the checksum, and notifies the monitor task if active.
     void dispatchF8();
@@ -125,7 +136,7 @@ public:
     // 0xF6 extension: keypad-to-panel payload from an expander.
     void dispatch_extF6(uint32_t val, uint8_t header);
 
-    // 0xF8 extension: zone-expander response (debug log only).
+    // 0xF8 extension: unknown purpose (debug log only).
     void dispatch_extF8(uint32_t val, uint8_t header);
 
     // 0xF9 extension: RF receiver response read from the expansion bus.

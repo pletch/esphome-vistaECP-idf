@@ -1,3 +1,12 @@
+// Copyright (C) 2020 Alain Turbide
+// Copyright (C) 2025-2026 Tim Pletcher
+//
+// This file is part of esphome-vistaECP-idf, derived from esphome-vistaECP
+// (https://github.com/Dilbert66/esphome-vistaECP).
+//
+// Licensed under the GNU Lesser General Public License v2.1.
+// See COPYING.LESSER in the project root for details.
+
 #include "ecp_protocol.h"
 #include "vista_bus.h"
 
@@ -408,7 +417,8 @@ void VistaECP::dispatchF8()
     //ToDo: Consider if checksum is needed in following section
     if (this->legacy_programmode)
     {
-        // In program mode the panel sends raw data without the normal framing.
+        // In program mode the panel sends status as a single 33-byte packet rather
+        // than the normal 4-byte parts used outside of program mode.
         received_packet.source = 0xDD;
         rxBytes = this->get_packet_event(&received_packet, data, 1, 32,
                                           vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);

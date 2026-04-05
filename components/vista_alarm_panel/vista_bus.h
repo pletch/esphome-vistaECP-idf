@@ -1,3 +1,12 @@
+// Copyright (C) 2020 Alain Turbide
+// Copyright (C) 2025-2026 Tim Pletcher
+//
+// This file is part of esphome-vistaECP-idf, derived from esphome-vistaECP
+// (https://github.com/Dilbert66/esphome-vistaECP).
+//
+// Licensed under the GNU Lesser General Public License v2.1.
+// See COPYING.LESSER in the project root for details.
+
 #pragma once
 
 /*
@@ -10,7 +19,7 @@ Data from expander modules and relay mddules is not currently handled as I have 
 
 Data is exchanged / exposed with calling application via separate FreeRTOS Queues.
 
-Written by Tim Pletcher.
+Written by Tim Tim Pletcherer.
 Date: 2-Feb-2025
 
 */

@@ -1,3 +1,12 @@
+// Copyright (C) 2020 Alain Turbide
+// Copyright (C) 2025-2026 Tim Pletcher
+//
+// This file is part of esphome-vistaECP-idf, derived from esphome-vistaECP
+// (https://github.com/Dilbert66/esphome-vistaECP).
+//
+// Licensed under the GNU Lesser General Public License v2.1.
+// See COPYING.LESSER in the project root for details.
+
 /*
 Vista20P protocol implementation (Vista 15P / 20P panel family).
 
@@ -14,7 +23,7 @@ Key characteristics:
     checksum.  Responses must be generated in-line (quick_decodeFA_impl) because
     the panel's timing window is too tight to round-trip through the receive queue.
 
-Written by Tim Pletcher.
+Written by Tim Tim Pletcherer.
 */
 #pragma once
 

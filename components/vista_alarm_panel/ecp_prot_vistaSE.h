@@ -1,3 +1,12 @@
+// Copyright (C) 2020 Alain Turbide
+// Copyright (C) 2025-2026 Tim Pletcher
+//
+// This file is part of esphome-vistaECP-idf, derived from esphome-vistaECP
+// (https://github.com/Dilbert66/esphome-vistaECP).
+//
+// Licensed under the GNU Lesser General Public License v2.1.
+// See COPYING.LESSER in the project root for details.
+
 /*
 VistaSE protocol implementation (legacy Vista SE panel family).
 
@@ -13,7 +22,7 @@ Key differences from Vista20P:
   - 0xFA expander frames are 3 bytes (sequence, type, address) — shorter than the
     5-byte Vista20P format.
 
-Written by Tim Pletcher.
+Written by Tim Tim Pletcherer.
 */
 #pragma once
 
