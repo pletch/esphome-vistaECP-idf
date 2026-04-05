@@ -16,7 +16,7 @@ class AlarmKeypadCard extends LitElement {
           <div class='flex-container' @click="${this.stopPropagation}">
               <div class='keypad'>
 
-                ${this._title ? "" : html`<div class=separarator></div>`}
+                ${this._title ? "" : html`<div class=separator></div>`}
 
                 ${this._view_display ? html`
                   <div class="keypad_display">
@@ -275,6 +275,7 @@ class AlarmKeypadCard extends LitElement {
     return {
       _config: Object,
       _title: String,
+      _scheme: String,
       _kpdline1: {
         type: Object,
       },
@@ -470,6 +471,7 @@ class AlarmKeypadCard extends LitElement {
   }
 
   displayChanged() {
+    if (!this._kpdline1 || !this._kpdline2) return;
     let state1 = "";
     let state2 = "";
     for (let i = 0; i < this._kpdline1.state.length; i++) state1 += this._translateChar(this._kpdline1.state[i]);
@@ -479,16 +481,20 @@ class AlarmKeypadCard extends LitElement {
   }
 
   beepChanged() {
+    if (!this._kpdbeep) return;
     if (this._kpdbeep.state == "0" || this._kpdbeep.state == null) {
-      var promise = this.shadowRoot.getElementById("exitsound1").pause();
+      this.shadowRoot.getElementById("exitsound1").pause();
       this.shadowRoot.getElementById("exitsound2").pause();
       this.shadowRoot.getElementById("chime").pause();
-    } else if (this._kpdbeep.state == "1") {
-      var promise = this.shadowRoot.getElementById("exitsound1").play();
+      return;
+    }
+    let promise;
+    if (this._kpdbeep.state == "1") {
+      promise = this.shadowRoot.getElementById("exitsound1").play();
     } else if (this._kpdbeep.state == "2") {
-      var promise = this.shadowRoot.getElementById("exitsound2").play();
+      promise = this.shadowRoot.getElementById("exitsound2").play();
     } else if (this._kpdbeep.state > 2) {
-      var promise = this.shadowRoot.getElementById("chime").play();
+      promise = this.shadowRoot.getElementById("chime").play();
     }
 
     if (promise !== undefined) {
@@ -544,13 +550,13 @@ class AlarmKeypadCard extends LitElement {
     if ('vibrate' in navigator) {
       navigator.vibrate(this._vibrate);
     }
-    this._hass.callService(this._kpdservicetype, this._kpdservice, key);
+    this._hass.callService(this._kpdservicetype, this._kpdservice, { keys: key });
 
   }
 
   getCardSize() {
     let size = 2;
-    if (this._config.view_pad) size += 4;     // 550px - 190px / 50
+    if (this._view_pad) size += 4;     // 550px - 190px / 50
     return size;
   }
 

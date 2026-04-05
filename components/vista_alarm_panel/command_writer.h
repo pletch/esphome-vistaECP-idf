@@ -36,12 +36,6 @@ namespace esphome
         //   processReceiveQueue FreeRTOS task or from ESPHome service callbacks,
         //   both of which run on the same core.  If you introduce multi-core
         //   calling patterns, add a mutex around bus_.write().
-        //
-        // The "W" alias:
-        //   The original set_alarm_state() accepted both "A" and "W" as
-        //   away-arm commands.  This alias is intentionally not present in
-        //   keypress() — map it at the VistaESPHome service-registration layer
-        //   if your YAML configuration relies on it.
         // -----------------------------------------------------------------------
         class CommandWriter
         {
@@ -141,9 +135,14 @@ namespace esphome
             // keypad address.  Single-character command aliases are intercepted
             // and routed to the appropriate named method:
             //
-            //   "A" → arm_away      "S" → arm_stay     "N" → arm_night
+            //   "A" → arm_away      "S" → arm_stay      "N" → arm_night
             //   "I" → arm_instant   "D" → disarm        "B" → bypass_zone
             //   "Y" → quick_bypass
+            //
+            // NOTE: "F" (trigger_fire) and "P" (trigger_panic) aliases exist in
+            // the source but are disabled by default.  They immediately summon
+            // emergency services and must not fire accidentally.  To enable them,
+            // uncomment the corresponding lines in command_writer.cpp.
             //
             // All other strings are sent verbatim.  Maximum payload is 24 bytes
             // (the VistaBus send-packet limit).

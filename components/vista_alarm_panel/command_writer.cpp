@@ -278,10 +278,13 @@ namespace esphome
         // ---------------------------------------------------------------------------
         // Raw keypress — pass arbitrary key strings directly to a partition's keypad.
         //
-        // Single-letter convenience strings ("A", "S", "N", "I", "B", "Y", "D")
-        // are intercepted and routed to the appropriate arm/disarm/bypass method
-        // so that the armed-state guard and code logic apply consistently.
-        // Any other string is forwarded verbatim to the bus.
+        // Single-letter convenience strings are intercepted and routed to the
+        // appropriate named method so that the armed-state guard and code logic
+        // apply consistently.  Any other string is forwarded verbatim to the bus.
+        //
+        //   A = arm_away    S = arm_stay    N = arm_night   I = arm_instant
+        //   D = disarm      B = bypass_zone Y = quick_bypass
+        //   F = trigger_fire                P = trigger_panic
         // ---------------------------------------------------------------------------
 
         bool CommandWriter::keypress(const std::string &keys,
@@ -294,8 +297,14 @@ namespace esphome
             if (keys == "N") return arm_night   (partition_id, code);
             if (keys == "I") return arm_instant (partition_id, code);
             if (keys == "D") return disarm      (partition_id, code);
-            if (keys == "B") return bypass_zone (partition_id, code);
-            if (keys == "Y") return quick_bypass(partition_id, code);
+            if (keys == "B") return bypass_zone  (partition_id, code);
+            if (keys == "Y") return quick_bypass (partition_id, code);
+            // "F" (trigger_fire) and "P" (trigger_panic) are intentionally disabled.
+            // These aliases immediately summon emergency services and must not be
+            // triggered accidentally via a keypress service call.  To enable them,
+            // uncomment the two lines below.
+            // if (keys == "F") return trigger_fire (partition_id, code);
+            // if (keys == "P") return trigger_panic(partition_id, code);
 
             // Arbitrary key sequence — send verbatim.
             uint8_t addr, seq;
