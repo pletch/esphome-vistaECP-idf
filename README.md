@@ -1,100 +1,273 @@
-# Honeywell Resideo Vista ECP ESPHome IDF external component
- 
-## This version is a highly modified FORK of the vista-ecp project!!
+# Honeywell / Resideo Vista Alarm Panel — ESPHome IDF External Component
 
-Original project:  https://github.com/Dilbert66/esphome-vistaECP
+An [ESPHome](https://esphome.io) external component that interfaces directly with a Honeywell / Resideo / Ademco Vista alarm panel via the ECP keypad bus, enabling full monitoring and control through Home Assistant.
 
-Refer to original project page for background and details on installation and circuit design.
-  
-Why fork?
-1. Project presented an opportunity for me to learn about esp-idf and about coding an external esphome component.
-2. At the time of the fork, original project based on Arduino rather than native ESP-IDF which is the recommended framework. While original project now supports ESP-IDF through Arduino as a component, Arduino is an additional abstraction which introduces more opportunity for bugs etc.
-3. Original project based on bit-banging-based software serial which is fragile and represents an inefficient use of purpose built dedicated hardware on a device such as the ESP32 which has dedicated UART serial devices.
-4. In an effort to support many different use cases and legacy ESP8266 devices, original project contains functionality and code not needed for a device specifically targeting use of esphome for interfacing a Honeywell Vista alarm system to Home Assistant.
+## Supported Panels
 
-Fork is shared here for the benefits of any others that might want to use it.  
+| Panel | Protocol |
+|---|---|
+| Vista 15P / 20P / Ademco 4140XMPT2 | Standard (default) |
+| Vista 15SE / 20SE | Legacy (`legacy_protocol: true`) |
 
-### Key differences from original project:
-- Uses one or two (if monitoring TX wire for RF messages etc.) hardware UARTS on the ESP32 family rather than software GPIO bit-banging.
-- Efficient use of limited micro CPU cycles through use of hardware UART and FreeRTOS multitasking. This includes complete fidelity of packet response handling including 2400 baud preamble bytes. New vistabus class designed using FreeRTOS tasks for UART comm and intertask communication via FreeRTOS Queues.
-- Arduino dependency removed and refactored for ESP-IDF v5.4+.
-- Relay board emulation has been removed. Expander emulation remains.
-- AUI handling has been refactored.
-- Config refactored with validation of parameters. Carefully examine the example YAML file (https://github.com/pletch/esphome-vistaECP-idf/blob/idf/vista-ecp-idf.yaml) for specifying sensors and other details as these are different from original project.
-- zone emulation specifier in yaml config allows emulation of either hardwired or rf virtual zones. Specifying for hardwired zone automatically enables expander board emulation (e.g. Honeywell 4219) on appropriate address and corresponding group of eight zone numbers for virtual hardwired zones. Specifier on zones with rf serial / loop definition allows for virtual rf zone emulation when rf receiver emulation is also enabled.
-- Targeted only towards ESPHome API.  Stand-alone MQTT is removed.
-- Will not work with older ESP8266.
-- Unused residual code, bitwise operations, and variable handling cleaned up.
-- Capability to temporarily enable RMT module for outputting bus pulse pattern to log for debugging.
-- Unified code base supports both older Vista SE and newer Vista 20P protocol via configuration.
+> Other Vista-series panels that use the ECP keypad bus may work but have not been tested.
 
-### ⚠️Caution: There may be features / capabilities carried over from original project but unused by me that are minimally tested.  Will test these more thoroughly in the future when I get time but please let me know if you try and they do not work.
-Some specifics include: 
-- RF Receiver emulation and associated emulated RF zones.
-- Virtual zone emulation and other extended functionality on older SE panels not fully tested yet.  
+## Key Features
 
+- Monitor zone open/close status (hardwired and RF wireless zones)
+- Arm, disarm, and send keypad commands from Home Assistant
+- Virtual keypad LCD display (line1/line2 text sensors)
+- Zone expansion emulation (adds up to 40 extra zones via expander board emulation)
+- RF zone emulation (via RF receiver emulation, 5881ENH compatible)
+- Long Range Radio (LRR) monitoring emulation
+- AUI interface for faster hardwired zone closure reporting and automatic panel clock sync
+- Multi-partition support (up to 8 partitions)
+- System status: armed state, ready, trouble, alarm, fire, AC power, battery
 
-### YAML Configuration Options (See YAML in repo for more examples):
-```
+## Why This Fork?
+
+This is a highly modified fork of [Dilbert66/esphome-vistaECP](https://github.com/Dilbert66/esphome-vistaECP). Key differences:
+
+- Uses one or two hardware UARTs on the ESP32 instead of software GPIO bit-banging. This provides more reliable, timing-accurate communication with the panel.
+- Complete Arduino dependency removed — targets ESP-IDF v5.4+ natively, the recommended ESPHome framework.
+- FreeRTOS tasks and queues used for all UART communication and inter-task signalling, including complete fidelity of 2400 baud preamble byte response handling.
+- Relay board emulation removed; expander emulation retained.
+- Targeted exclusively at the ESPHome API — standalone MQTT removed.
+- Additional Config validation added.
+- Unified code base supports both Vista SE and Vista 20P protocol via configuration.
+- RMT-based pulse capture for hardware-level bus diagnostics.
+- ESP8266 not supported.
+
+> ⚠️ Some features carried over from the original project have had minimal testing in this fork, including RF receiver emulation and virtual zone emulation on older SE panels. Please open an issue if you encounter problems.
+
+---
+
+## Prerequisites
+
+- **Hardware**: ESP32 (any variant with at least 2 hardware UARTs). ESP8266 is not supported.
+- **ESPHome**: 2024.6 or later recommended.
+- **Home Assistant**: Any recent version with the ESPHome integration.
+- **Panel programming access**: You will need to enter your panel's installer programming mode to assign a virtual keypad address.
+
+---
+
+## Hardware Wiring
+
+The ESP32 connects to the alarm panel's ECP keypad bus (the four-wire bus that also runs to your physical keypads).
+
+### Bus Wiring Overview
+
+The ECP bus provides four connections:
+- **Red** — 12V power (can power the ESP32 via regulator, or use separate 5V supply)
+- **Black** — Ground
+- **Yellow** — Data from panel to keypad (RX)
+- **Green** — Data from keypad to panel (TX)
+
+### Interface Circuit Options
+
+You need a small interface circuit between the 12V ECP bus logic levels and the 3.3V ESP32 GPIOs. Several options are shown below.
+
+**Option 1 — Opto-isolated (recommended for electrical safety):**
+
+![Opto-isolated interface](readme_material/master_gnd_isolated.png)
+
+**Option 2 — Non-isolated simple circuit:**
+
+![Non-isolated simple interface](readme_material/master_non_is_simple.png)
+
+**Option 3 — Non-isolated without optocoupler:**
+
+![Non-isolated no opto](readme_material/master_noopto.png)
+
+**Breadboard example:**
+
+![Breadboard wiring](readme_material/esp_breadboard.png)
+
+**Fully assembled example:**
+
+![Everything connected](readme_material/everything_connected.png)
+
+**Panel door mounted ESP32:**
+
+![Panel door mounted](readme_material/vista_panel_door_3d.png)
+
+### Monitor Pin (Optional)
+
+A second UART input (`monitor_pin`) can be connected to passively monitor traffic from other bus devices such as an RF receiver or zone expanders. This improves zone closure detection accuracy and eliminates the need for the TTL timeout.
+
+---
+
+## Installation
+
+1. **Copy the example YAML** from this repo ([vista-ecp-idf.yaml](vista-ecp-idf.yaml)) into your ESPHome config directory and rename it as desired.
+
+2. **Add secrets** to your `secrets.yaml`:
+   ```yaml
+   access_code: "1234"
+   wifi_ssid: "YourNetwork"
+   wifi_password: "YourPassword"
+   ```
+
+3. **Program a virtual keypad address** into your alarm panel:
+   - Vista 15P/20P: Enter installer programming and use fields `*190`–`*197` to assign an unused keypad address (e.g. 20) to each partition you want to monitor.
+   - Vista 15SE/20SE: Use address 31.
+   - The chosen address must not conflict with any physical keypads already on the bus.
+
+4. **Set the external component source** in the YAML. The default points to this GitHub repo and branch:
+   ```yaml
+   external_components:
+     - source: github://pletch/esphome-vistaECP-idf@idf
+       components: [vista_alarm_panel]
+       refresh: 10min
+   ```
+   Alternatively, clone the repo and use a local path:
+   ```yaml
+   external_components:
+     - source: components
+       components: [vista_alarm_panel]
+   ```
+
+5. **Edit the `vista_alarm_panel:` section** of the YAML to match your panel, pin assignments, and desired partitions.
+
+6. **Flash the ESP32** using `esphome run your-config.yaml`.
+
+7. **Add to Home Assistant** via the ESPHome integration — it will auto-discover the device.
+
+---
+
+## Home Assistant Lovelace Card
+
+A custom alarm keypad card is included in the [`ha_cards/`](ha_cards/) folder:
+- `alarm-keypad-card.js` — custom card providing a keypad UI
+- `lovelace.yaml` — example dashboard configuration
+
+Install the JS file as a local resource in Home Assistant (Dashboards → Resources), then use the example YAML to add the card to your dashboard. Edit the device and sensor names to match those associated with the esphome device.
+
+![Alarm panel card](readme_material/virtual_panel.png)
+
+![Card configuration](readme_material/virtual_panel_configuration.png)
+
+---
+
+## YAML Configuration Reference
+
+### `vista_alarm_panel:` component
+
+```yaml
 vista_alarm_panel:
-    keypad_addr_1: ##
-    keypad_addr_2: 0
-    keypad_addr_3: 0
-    rx_pin: ##
-    tx_pin: ##
-    uart_1: #
+  keypad_addr_1: 20
+  rx_pin: 21
+  tx_pin: 23
+  uart_1: 1
 ```
-Configuration variables:
-- **keypad_addr_1, ... , keypad_addr_ 8 (Required)**:  Virtual keypad address for partitions 1 - 8. Enable address in alarm panel programming via program fields *190 - *196 if using Vista 20p. Setting value to zero disables. At least one of the partition keypad must be defined non-zero and any additional are optional. The defined address must not conflict with the address of any physical keypads already present in the system.
-- **rx_pin (Required, PIN)**: GPIO pin assigned to UART for data receive (yellow line)
-- **tx_pin (Required, PIN)**: GPIO pin assigned to UART for data transmit (green line)
-- **uart_1 (Required, UART)**: Hardware UART number associated with tx/rx 
-- **access_code** (*Optional*): Alarm code used for arming / disarming.  Typically defined in secrets file.
-- **aui_addr** (*Optional*, int): AUI address from program field *189 to use for faster zone closure status for zones directly hardwired to the panel and to allow time sync of panel via manual Home Assistant service. Ensure it is not assigned to a physical touchpad or to Total Connect 2.0 (assigned to address 2). Note: Older vista20 panel firmwares only have addresses 1 and 2 while newer will have 1,2,5 and 6. For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program #93, device programming. Omission of parameter or a value of zero disables AUI handling.
-- **aui_auto_clock_sync** (*Optional*, boolean): Set to true to automatically sync panel clock against esphome time using AUI command handling. Time offset is verified to be less than 60 seconds and if needed, initial sync occurs 2 minutes after boot and every 6 hrs thereafter. AUI address must be enabled in combination with this option. Defaults to false.
-- **default_partition** (*Optional*, int): Set to designate main partition number.  Defaults to 1 if not defined.
-- **debug_log** (*Optional*, boolean): Set to true to enable additional bus activity logging and print full ecp packet contents to the log.  Global esphome and vista-alarm component (if configured)
-logging level must be set to DEBUG or higher in logging component section to output all messages.
-- **debug_pulsing** (*Optional*, boolean): Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 60 seconds after startup and continues indefinitely.  **DO NOT** enable for routine use of component!
-- **legacy_protocol** (*Optional*, boolean): Enables older protocol handling for use with Vista 15SE / Vista20SE panels.
-- **lrr_supervisor** (*Optional*, boolean): Set to true to enable Long Range Radio emulation for monitoring and decoding status updates. Do not enable if the system is monitored and an actual long range radio is already present in the system. Defaults to false.
-- **rf_receiver_emulation** (*Optional*, boolean): Set to true to enable RF Receiver module (5881ENH) emulation for creating virtual RF zones. Do not enable if the system already includes a physical RF receiver as these Vista systems only support a single RF receiver device. Defaults to false.
-- **rf_receiver_addr** (*Optional*, int): Set to suitable address for RF Receiver per your panel installation instructions. Only permissible address on Vista 15/20 panels is 0. Defaults to 0.
-- **monitor_pin** (*Optional*, PIN): GPIO pin to use for monitoring module traffic such as RF or Expanders. Leave undefined or set to -1 to disable.
-- **uart_2** (*Optional*, UART): Hardware UART number to use for monitoring module traffic via monitorpin. Disabled if monitorpin undefined or monitorpin set to -1.
-- **ttl** (*Optional*, int): Time to live in seconds for expiring zone/fire status. Relevant for configurations not using monitor pin and for zones hardwired to the panel. Defaults to 30 if not defined.
 
+| Parameter | Required | Type | Default | Description |
+|---|---|---|---|---|
+| `keypad_addr_1` … `keypad_addr_8` | At least one required | int | 0 | Virtual keypad address for partitions 1–8. Must be assigned in panel programming (`*190`–`*197` on Vista 20P). Set to 0 or omit to disable. Must not conflict with physical keypads. |
+| `rx_pin` | Required | PIN | — | GPIO pin for UART data receive (yellow wire from panel) |
+| `tx_pin` | Required | PIN | — | GPIO pin for UART data transmit (green wire to panel) |
+| `uart_1` | Required | int | — | Hardware UART number (1 or 2) for main ECP bus TX/RX |
+| `access_code` | Optional | string | `""` | Alarm code for arming/disarming. Typically defined in `secrets.yaml`. |
+| `quickarm` | Optional | boolean | false | When true, arm commands are sent as `#N` (quick-arm) without an access code prefix. Disarm always requires a code regardless of this setting. |
+| `default_partition` | Optional | int | 1 | Main partition number. |
+| `aui_addr` | Optional | int | 0 | AUI address from panel field `*189`. Enables faster zone closure reporting for hardwired zones and panel clock sync. Valid values: 1, 2, 5, 6 (0 = disabled). Must not conflict with physical touchpads or Total Connect 2.0 (address 2). Older Vista 20 firmware only supports addresses 1 and 2; newer firmware supports 1, 2, 5, 6. |
+| `aui_auto_clock_sync` | Optional | boolean | false | Automatically sync panel clock from ESPHome time. Requires `aui_addr` to be set. Initial sync occurs 2 minutes after boot, then every 6 hours. |
+| `monitor_pin` | Optional | PIN | -1 | GPIO pin for passively monitoring bus traffic from RF receivers or expanders. Set to -1 or omit to disable. |
+| `uart_2` | Optional | int | -1 | Hardware UART number for monitor pin. Disabled if `monitor_pin` is -1. |
+| `ttl` | Optional | int | 30 | Time-to-live in seconds for hardwired zone and fire status before expiring. Used when `monitor_pin` is not configured. |
+| `lrr_supervisor` | Optional | boolean | false | Enable Long Range Radio emulation for decoding monitoring status updates. Do not enable if a physical LRR is present in the system. |
+| `rf_receiver_emulation` | Optional | boolean | false | Enable RF receiver (5881ENH) emulation to support virtual RF zones. Do not enable if a physical RF receiver is present — the panel only supports one RF receiver. |
+| `rf_receiver_addr` | Optional | int | 0 | Address for emulated RF receiver. Only valid address on Vista 15/20 is 0. |
+| `legacy_protocol` | Optional | boolean | false | Enable older protocol for Vista 15SE / 20SE panels. |
+| `debug_logging` | Optional | boolean | false | Enable verbose ECP packet logging. Requires ESPHome logger level `DEBUG` or higher. |
+| `debug_pulsing` | Optional | boolean | false | Use ESP32 RMT peripheral to capture raw bus pulse timings to the log. Output begins 60 seconds after startup. **Do not enable for normal use.** |
 
-```
+---
+
+### `binary_sensor:` — Zone Sensors
+
+Monitor open/closed state of hardwired and RF zones.
+
+```yaml
 binary_sensor:
-# example hard-wired zone
+  # Hardwired zone
   - platform: vista_alarm_panel
-    id: z8  
+    id: z8
     name: "Flood Sensor"
     partition: 1
     zone: 8
     device_class: moisture
 
-# example emulated hard-wired zone
-  - platform: vista_alarm_panel
-    id: z9  
-    name: "Office Window"
-    partition: 1
-    zone: 9
-    emulated: true
-    device_class: moisture
-
-# example rf wireless zone
+  # RF wireless zone
   - platform: vista_alarm_panel
     id: z10
     name: "Front Door"
-    partition: 1
-    zone: 10
-    rf_serial: 123456
     rf_loop: 2
     device_class: door
 
-# example non-zone status sensors
+  # Emulated hardwired zone (via expander emulation)
+  - platform: vista_alarm_panel
+    id: z33
+    name: "Garage Door"
+    partition: 1
+    zone: 33
+    emulated: true
+    device_class: garage_door
+
+  # Emulated RF zone (requires rf_receiver_emulation: true)
+  - platform: vista_alarm_panel
+    id: z34
+    name: "Office Motion"
+    partition: 1
+    zone: 34
+    rf_serial: 123456
+    rf_loop: 1
+    emulated: true
+    device_class: motion
+```
+
+| Parameter | Required | Description |
+|---|---|---|
+| `zone` | Required (for zone sensors) | Panel zone number (1–128). |
+| `partition` | Optional | Partition number the zone belongs to. |
+| `rf_serial` | Optional | RF device serial number (no leading zeros). Required with `rf_loop` for RF zones. |
+| `rf_loop` | Optional | RF device loop number (1–4). Required with `rf_serial`. Most devices use loop 1 (e.g. 5800PIR); 5816 uses loop 2. See the [5800 device list](https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf). |
+| `emulated` | Optional | Enable zone emulation. Without RF options: emulates a hardwired zone via automatic expander board emulation (zone must be > 8). With RF options and `rf_receiver_emulation: true`: emulates an RF zone. |
+
+**Emulated hardwired zone → expander address mapping:**
+
+| Zone range | Expander address (20P) | Expander address (SE legacy) |
+|---|---|---|
+| 9–16 | 7 | — |
+| 10–17 | — | 1 |
+| 17–24 | 8 | — |
+| 25–32 | 9 | — |
+| 33–40 | 10 | — |
+| 41–48 | 11 | — |
+
+Ensure emulated zone numbers do not conflict with zones already used by physical expander boards in your system.
+
+**Attaching a Home Assistant entity to an emulated zone:**
+
+```yaml
+  - platform: homeassistant
+    name: "HA Input Boolean"
+    entity_id: input_boolean.example
+    on_press:
+      - lambda: |-
+          id(VistaAlarm)->set_zone_fault(33, 1);
+    on_release:
+      - lambda: |-
+          id(VistaAlarm)->set_zone_fault(33, 0);
+```
+
+---
+
+### `binary_sensor:` — Status Indicators
+
+Monitor system and partition states using `status_indicator:` instead of `zone:`.
+
+```yaml
+binary_sensor:
   - platform: vista_alarm_panel
     id: rdy_1
     name: "Ready"
@@ -107,142 +280,99 @@ binary_sensor:
     status_indicator: "ac_power"
     device_class: plug
 ```
-Configuration variables:  
-  
-[zone binary status]
-- **emulated** (*Optional*, boolean) Enable virtual zone emulation.  If specified in zone with rf_serial / rf_loop options defined and rf_receiver_emulation is enabled, an RF zone is emulated. The required heartbeat/supervisory signals are handled internally.  If specified without rf options, hardwired zone is emulated through automatic expander board emulation (e.g. Honeywell 4129). Ensure that the zone number selected for emulated hardwired zone does not conflict with existing physical boards in your system.  This is useful for associating other gpio on ESP32 or other Home Assistant sensors with alarm panel zone. Defaults to **false** if not defined. 
- 
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 9-16 will enable expander emulation on address 7.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 17-24 will enable expander emulation on address 8.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 25-32 will enable expander emulation on address 9.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 33-40 will enable expander emulation on address 10.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwired zones 41-48 will enable expander emulation on address 11.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Emulated hardwared zones 10-17 will enable expander emulation on address 1 on legacy SE protocol.
 
-- **partition** (*Optional*, int) Partion number associated with zone.
-- **rf_loop** (*Optional*, int)  Loop number of RF device (see rf_serial info below)
-- **rf_serial** (*Optional*, int) Unique RF serial number of wireless device. Enroll your RF serial devices using the rf_serial and rf_loop parameters. For most devices loop1 is used such as 5800pir, other devices such as 5816 will use loop2. Please refer to your RF device programming (*56 program) to see what loop and zones are assigned to your RF devices.  
-&nbsp;&nbsp;&nbsp;!!Do not include leading zeros in rf_serial!!
-- **zone** (*Optional*, int):  Panel configured zone number.
-  
-[non-zone binary status]
-- **partition** (*Optional*, int) Partion number associated with status sensor.
-- **status_indicator** (*Optional*, string) Valid options are [ready, trouble, bypass, armed_away, armed_instant, armed_night, chime, alarm, fire, ac_power, and battery]. Partition specific indicators will require specifying partition.
-    
-```
+| `status_indicator` value | Partition required | Description |
+|---|---|---|
+| `ready` | Yes | Partition ready to arm |
+| `trouble` | Yes | Trouble condition on partition |
+| `bypass` | Yes | Zone bypass active on partition |
+| `armed` | Yes | Partition armed (any mode) |
+| `armed_away` | Yes | Armed away mode |
+| `armed_stay` | Yes | Armed stay mode |
+| `armed_instant` | Yes | Armed instant mode |
+| `armed_night` | Yes | Armed night mode |
+| `chime` | Yes | Chime mode active |
+| `alarm` | Yes | Alarm triggered |
+| `fire` | Yes | Fire alarm active |
+| `ac_power` | No | AC power present (panel-wide) |
+| `battery` | No | Battery status (panel-wide) |
+
+---
+
+### `text_sensor:` — Text Status
+
+```yaml
 text_sensor:
-# Example text sensors
-# RF zone messages 
-  - platform: vista_alarm_panel
-    id: rf  
-    name: "RF Msg"
-    type: "rf_messages"
-    icon: "mdi:alert-box"    
-
-# virtual lcd keypad line1 and line2 messages for each partition   
+  # Keypad LCD display lines
   - platform: vista_alarm_panel
     name: "Line1"
     id: ln1_1
     partition: 1
-    type: "line1"    
+    type: "line1"
+
   - platform: vista_alarm_panel
     name: "Line2"
     id: ln2_1
     partition: 1
     type: "line2"
+
+  # System status string for HA alarm panel card
+  - platform: vista_alarm_panel
+    id: ss_1
+    name: "System Status"
+    icon: "mdi:shield"
+    type: "system_status"
+    partition: 1
+
+  # Zone open/bypass/trouble/alarm status string
+  - platform: vista_alarm_panel
+    name: "Kitchen Motion Txt"
+    id: z13_txt
+    type: "zone"
+    zone: 13
+    partition: 1
 ```
-Configuration variables:  
-- **partition** (*Optional*, int) Partition number associated with text sensor.
-- **type** (*Optional*, string) Zone text sensors can be specified to include alternative zone status as a text sensor using type zone.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Output values: (O=open, B=bypass,T=trbl or check,A=alarm)  
-  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Other general text sensors are available.  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lrr_messages = long range radio messages  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rf_messages = rf messages  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line1 = keypad prompt line 1 displayed messages  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line2 = keypad prompt line 2 displayed messages  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;zone_status = combined status for zones with messages  
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;beeps = beeps output
 
+| `type` value | Partition required | Description |
+|---|---|---|
+| `line1` | Yes | Keypad LCD line 1 text |
+| `line2` | Yes | Keypad LCD line 2 text |
+| `system_status` | Yes | System status string (e.g. `disarmed`, `armed_away`, `not_ready`). Useful for the HA alarm panel card. |
+| `beeps` | Yes | Keypad beep count |
+| `zone` | Yes (+ `zone:`) | Per-zone status string. Values: `O`=open, `B`=bypass, `T`=trouble/check, `A`=alarm |
+| `zone_status` | No | Combined status string for all zones with active states |
+| `lrr_messages` | No | Long Range Radio status messages (requires `lrr_supervisor: true`) |
+| `rf_messages` | No | RF device messages (requires `rf_receiver_emulation: true` or physical RF receiver monitored via `monitor_pin`) |
 
-### Example log output for working Vista20P installation:
+> The `system_status` sensor can be filtered to rename values for the HA alarm panel card:
+> ```yaml
+>     filters:
+>       - lambda: |-
+>           if (x == "not_ready") x = "disarmed";
+>           return x;
+> ```
+
+---
+
+## Example Log Output
+
+### Working Vista 20P installation (standard protocol)
+
 ```
 [13:04:52.169][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:04:51.73] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
 [13:04:52.172][I][vista-alarm:063][pRQtask]: Partition: 1
 [13:04:52.174][I][vista-alarm:064][pRQtask]: Prompt: ****DISARMED****
 [13:04:52.177][I][vista-alarm:065][pRQtask]: Prompt:   Ready to Arm
 [13:04:52.179][I][vista-alarm:066][pRQtask]: Beeps: 0
-[13:05:02.042][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:05:01.60] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
-[13:05:02.044][I][vista-alarm:063][pRQtask]: Partition: 1
-[13:05:02.046][I][vista-alarm:064][pRQtask]: Prompt: ****DISARMED****
-[13:05:02.048][I][vista-alarm:065][pRQtask]: Prompt:   Ready to Arm
-[13:05:02.050][I][vista-alarm:066][pRQtask]: Beeps: 0
-[13:05:11.940][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:05:11.50] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
-[13:05:11.942][I][vista-alarm:063][pRQtask]: Partition: 1
-[13:05:11.944][I][vista-alarm:064][pRQtask]: Prompt: ****DISARMED****
-[13:05:11.947][I][vista-alarm:065][pRQtask]: Prompt:   Ready to Arm
-[13:05:11.949][I][vista-alarm:066][pRQtask]: Beeps: 0
 [13:05:13.196][D][vista-alarm:554][pRQtask]: (PANEL-->RFR) [13:05:12.75] FB 02 25 81 5D
 [13:05:13.215][D][vista-alarm:554][pRQtask]: (RFR-->PANEL) [13:05:12.77] 00 21 00 DF
-[13:05:14.196][D][vista-alarm:554][pRQtask]: (PANEL-->RFR) [13:05:13.75] FB 02 20 82 61
-[13:05:14.203][D][vista-alarm:554][pRQtask]: (RFR-->PANEL) [13:05:13.76] 00 24 03 D9
-[13:05:17.180][D][vista-alarm:554][pRQtask]: (PANEL-->LRR) [13:05:16.74] F9 03 02 53 AF
-[13:05:17.199][D][vista-alarm:554][pRQtask]: (LRR-->PANEL) [13:05:16.76] 43 04 00 60 00 59
-[13:05:21.839][D][vista-alarm:554][pRQtask]: (PANEL-->KPD) [13:05:21.40] F7 00 00 FB 10 08 00 1C 08 02 00 00 2A 2A ...
-[13:05:21.842][I][vista-alarm:063][pRQtask]: Partition: 1
-[13:05:21.844][I][vista-alarm:064][pRQtask]: Prompt: ****DISARMED****
-[13:05:21.846][I][vista-alarm:065][pRQtask]: Prompt:   Ready to Arm
-[13:05:21.848][I][vista-alarm:066][pRQtask]: Beeps: 0
 [13:05:22.196][D][vista-alarm:554][pRQtask]: (PANEL-->EXP) [13:05:21.75] FA 01 04 25 F7 E5
 [13:05:22.216][D][vista-alarm:554][pRQtask]: (EXP-->PANEL) [13:05:21.78] F0 31 00 00 DF
 ```
 
-### Example log output 1 minute after startup with debug_pulsing enabled on Vista-20p panel:
-```
-[10:06:37][E][vistabus:388][uart_rx_tx_task]: Collecting pulse pattern at 61412112
-[10:06:37][D][esp-idf:000][uart_rx_tx_task]: I (61691) gpio: GPIO[22]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0
-[10:06:37]
-[10:06:37][I][vistabus:161][uart_rx_tx_task]: Received 4 symbols
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 13037  High Duration(us) 02007
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01019  High Duration(us) 02007
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01019  High Duration(us) 02006
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01020  High Duration(us) 00000
-[10:06:37][D][esp-idf:000][uart_rx_tx_task]: I (62010) gpio: GPIO[22]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0
-[10:06:37]
-[10:06:37][E][vistabus:388][uart_rx_tx_task]: Collecting pulse pattern at 61742110
-[10:06:37][D][esp-idf:000][uart_rx_tx_task]: I (62021) gpio: GPIO[22]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0
-[10:06:37]
-[10:06:37][I][vistabus:161][uart_rx_tx_task]: Received 18 symbols
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 06051  High Duration(us) 06036
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01016  High Duration(us) 00847
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00433  High Duration(us) 00420
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 02139  High Duration(us) 00421
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00716  High Duration(us) 00201
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00215  High Duration(us) 01451
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00635  High Duration(us) 00618
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00215  High Duration(us) 01034
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00635  High Duration(us) 00201
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00215  High Duration(us) 00202
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00214  High Duration(us) 00410
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00215  High Duration(us) 00410
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00634  High Duration(us) 00202
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00631  High Duration(us) 00202
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01467  High Duration(us) 00202
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00215  High Duration(us) 00202
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 00214  High Duration(us) 00410
-[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01243  High Duration(us) 00000
-[10:06:37][D][esp-idf:000][uart_rx_tx_task]: I (62260) gpio: GPIO[22]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0
-```
+### Working Vista 20SE installation (legacy protocol)
 
-### Example log output for working Vista20SE installation on legacy protocol:
 ```
-[20:17:26.197][D][text_sensor:120][pRQtask]: 'Line1' >> '****DISARMED****'
-[20:17:26.197][D][text_sensor:120][pRQtask]: 'Line2' >> '  READY TO ARM  '
-[20:17:26.197][I][vista-alarm:113][pRQtask]: Partition: 1
-[20:17:26.201][I][vista-alarm:115][pRQtask]: Prompt: ****DISARMED****
-[20:17:26.201][I][vista-alarm:116][pRQtask]: Prompt:   READY TO ARM  
-[20:17:26.201][I][vista-alarm:117][pRQtask]: Beeps: 0
 [20:17:27.643][D][vista-alarm:386]: Writing keys: 12 to partition 1
 [20:17:27.994][D][vista-alarm:537][pRQtask]: (KPDL-->PANEL) [20:17:27.353] 01 01 01 
 [20:17:28.338][D][vista-alarm:537][pRQtask]: (PANEL-->KPDL) [20:17:27.701] 00 00 5C 08 00 
@@ -271,4 +401,23 @@ Configuration variables:
 [20:17:34.156][I][vista-alarm:115][pRQtask]: Prompt: ****DISARMED****
 [20:17:34.156][I][vista-alarm:116][pRQtask]: Prompt:   READY TO ARM  
 [20:17:34.160][I][vista-alarm:117][pRQtask]: Beeps: 0
+```
+
+### `debug_pulsing` output (1 minute after startup, Vista 20P)
+
+```
+[10:06:37][E][vistabus:388][uart_rx_tx_task]: Collecting pulse pattern at 61412112
+[10:06:37][I][vistabus:161][uart_rx_tx_task]: Received 4 symbols
+[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 13037  High Duration(us) 02007
+[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01019  High Duration(us) 02007
+[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01019  High Duration(us) 02006
+[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01020  High Duration(us) 00000
+[10:06:37][D][esp-idf:000][uart_rx_tx_task]: I (62010) gpio: GPIO[22]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0
+[10:06:37]
+[10:06:37][E][vistabus:388][uart_rx_tx_task]: Collecting pulse pattern at 61742110
+[10:06:37][D][esp-idf:000][uart_rx_tx_task]: I (62021) gpio: GPIO[22]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0
+[10:06:37]
+[10:06:37][I][vistabus:161][uart_rx_tx_task]: Received 18 symbols
+[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 06051  High Duration(us) 06036
+[10:06:37][I][vistabus:167][uart_rx_tx_task]: Low Duration(us): 01016  High Duration(us) 00847
 ```
