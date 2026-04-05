@@ -182,8 +182,9 @@ namespace esphome
             // -------------------------------------------------------------------
 
             float get_setup_priority() const override { return setup_priority::LATE; }
-            void  setup()  override;
-            void  update() override;
+            void  setup()       override;
+            void  update()      override;
+            void  dump_config() override;
             void  stop();
 
             // -------------------------------------------------------------------

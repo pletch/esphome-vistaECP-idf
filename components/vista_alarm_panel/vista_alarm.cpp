@@ -140,6 +140,40 @@ namespace esphome
             }
         }
 
+        void VistaESPHome::dump_config()
+        {
+            ESP_LOGCONFIG(TAG, "Vista Alarm Panel:");
+            ESP_LOGCONFIG(TAG, "  UART: %d  RX pin: %d  TX pin: %d",
+                          uart1_, rx_pin_, tx_pin_);
+            if (monitor_pin_ != -1)
+                ESP_LOGCONFIG(TAG, "  Monitor UART: %d  Monitor pin: %d",
+                              uart2_, monitor_pin_);
+            ESP_LOGCONFIG(TAG, "  Default partition: %d", default_partition_);
+            ESP_LOGCONFIG(TAG, "  Connection TTL: %lld s",
+                          ttl_ / (1000LL * 1000));
+            ESP_LOGCONFIG(TAG, "  LRR supervisor: %s",
+                          lrr_supervisor_ ? "enabled" : "disabled");
+            if (rfr_emulation_enabled_)
+                ESP_LOGCONFIG(TAG, "  RF receiver emulation: enabled  address: %d",
+                              rfr_emulation_addr_);
+            else
+                ESP_LOGCONFIG(TAG, "  RF receiver emulation: disabled");
+            if (aui_.device_address() != 0)
+            {
+                ESP_LOGCONFIG(TAG, "  AUI address: %d  Auto clock sync: %s",
+                              aui_.device_address(),
+                              aui_.auto_sync() ? "yes" : "no");
+            }
+            else
+            {
+                ESP_LOGCONFIG(TAG, "  AUI: disabled");
+            }
+            ESP_LOGCONFIG(TAG, "  Partitions:");
+            for (const auto &p : partitions_.partitions())
+                ESP_LOGCONFIG(TAG, "    Partition %d  keypad address: %d",
+                              p.partition, p.assigned_keypad);
+        }
+
         void VistaESPHome::stop()
         {
             stop_requested_ = true;

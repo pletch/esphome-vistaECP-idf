@@ -122,6 +122,10 @@ namespace esphome
             // arrived yet.  Checked by tick() for timeout handling.
             bool request_pending() const { return request_.pending; }
 
+            // Read back configuration for dump_config().
+            uint8_t device_address() const { return device_.address; }
+            bool    auto_sync()      const { return clock_.auto_sync; }
+
         private:
 
             // -------------------------------------------------------------------
