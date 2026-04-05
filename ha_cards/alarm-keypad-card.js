@@ -326,6 +326,7 @@ class AlarmKeypadCard extends LitElement {
     this._view_display = (config.view_display != null) ? config.view_display : true;
     this._kpdservice = config.service;
     this._kpdservicetype = config.service_type;
+    this._partition = (config.partition != null) ? parseInt(config.partition) : 1;
     this._view_pad = (config.view_pad != null) ? config.view_pad : true;
     this._button_left = (config.button_left != null) ? config.button_left : false;
     this._view_bottom = (config.view_bottom != null) ? config.view_bottom : false;
@@ -351,14 +352,15 @@ class AlarmKeypadCard extends LitElement {
     this._cmd_G = (config.cmd_G != null) ? config.cmd_G : "";
     this._cmd_H = (config.cmd_H != null) ? config.cmd_H : "";
 
-    this._button_disabled_A = (config.button_disabled_A) || this._cmd_A == "disabled" ? " disabled" : "";
-    this._button_disabled_B = (config.button_disabled_B) || this._cmd_B == "disabled" ? " disabled" : "";
-    this._button_disabled_C = (config.button_disabled_C) || this._cmd_C == "disabled" ? " disabled" : "";
-    this._button_disabled_D = (config.button_disabled_D) || this._cmd_D == "disabled" ? " disabled" : "";
-    this._button_disabled_E = (config.button_disabled_E) || this._cmd_E == "disabled" ? " disabled" : "";
-    this._button_disabled_F = (config.button_disabled_F) || this._cmd_F == "disabled" ? " disabled" : "";
-    this._button_disabled_G = (config.button_disabled_G) || this._cmd_G == "disabled" ? " disabled" : "";
-    this._button_disabled_H = (config.button_disabled_H) || this._cmd_H == "disabled" ? " disabled" : "";
+    const cmdKeys = v => (typeof v === 'object' && v !== null) ? (v.keys != null ? v.keys : '') : v;
+    this._button_disabled_A = (config.button_disabled_A) || cmdKeys(this._cmd_A) == "disabled" ? " disabled" : "";
+    this._button_disabled_B = (config.button_disabled_B) || cmdKeys(this._cmd_B) == "disabled" ? " disabled" : "";
+    this._button_disabled_C = (config.button_disabled_C) || cmdKeys(this._cmd_C) == "disabled" ? " disabled" : "";
+    this._button_disabled_D = (config.button_disabled_D) || cmdKeys(this._cmd_D) == "disabled" ? " disabled" : "";
+    this._button_disabled_E = (config.button_disabled_E) || cmdKeys(this._cmd_E) == "disabled" ? " disabled" : "";
+    this._button_disabled_F = (config.button_disabled_F) || cmdKeys(this._cmd_F) == "disabled" ? " disabled" : "";
+    this._button_disabled_G = (config.button_disabled_G) || cmdKeys(this._cmd_G) == "disabled" ? " disabled" : "";
+    this._button_disabled_H = (config.button_disabled_H) || cmdKeys(this._cmd_H) == "disabled" ? " disabled" : "";
 
     this._status_A = (config.status_A != null) ? config.status_A : "";
     this._status_B = (config.status_B != null) ? config.status_B : "";
@@ -546,11 +548,22 @@ class AlarmKeypadCard extends LitElement {
       case '#': key = this._key_pound; break;
       default: return;
     }
-    if (key == "" || key == "disabled") return;
+    // Config values may be plain strings or objects { keys: "...", partition: N }.
+    // The object form is passed directly as service data; the plain string form
+    // is wrapped with the card-level partition.
+    let serviceData;
+    if (typeof key === 'object' && key !== null) {
+      const keyValue = key.keys != null ? key.keys : '';
+      if (keyValue === '' || keyValue === 'disabled') return;
+      serviceData = { keys: String(keyValue), partition: parseInt(key.partition) || this._partition };
+    } else {
+      if (key === '' || key === 'disabled') return;
+      serviceData = { keys: String(key), partition: this._partition };
+    }
     if ('vibrate' in navigator) {
       navigator.vibrate(this._vibrate);
     }
-    this._hass.callService(this._kpdservicetype, this._kpdservice, { keys: key });
+    this._hass.callService(this._kpdservicetype, this._kpdservice, serviceData);
 
   }
 

@@ -91,12 +91,27 @@ namespace esphome
                                       int partition_id,
                                       uint8_t addr, uint8_t seq) const
         {
+            // Build a printable representation of the key bytes for the log.
+            // Each byte is shown as its ASCII character if printable, else as hex.
+            char keylog[72]; // worst case: 24 bytes × 3 chars ("XX ") + null
+            int  pos = 0;
+            for (int i = 0; i < size && pos < (int)sizeof(keylog) - 4; i++)
+            {
+                unsigned char c = static_cast<unsigned char>(data[i]);
+                if (c >= 0x20 && c < 0x7F)
+                    pos += snprintf(keylog + pos, sizeof(keylog) - pos, "%c ", c);
+                else
+                    pos += snprintf(keylog + pos, sizeof(keylog) - pos, "0x%02X ", c);
+            }
+            if (pos > 0) keylog[pos - 1] = '\0'; // trim trailing space
+
             const bool ok = bus_.write(data, size, addr, seq);
             if (ok)
-                ESP_LOGD(TAG, "Wrote %d byte(s) to partition %d (addr 0x%02X).",
-                         size, partition_id, addr);
+                ESP_LOGI(TAG, "Bus write partition %d (addr 0x%02X): [%s] (%d byte(s))",
+                         partition_id, addr, keylog, size);
             else
-                ESP_LOGE(TAG, "Failed to write to partition %d — send queue full.", partition_id);
+                ESP_LOGE(TAG, "Bus write failed partition %d — send queue full. Keys: [%s]",
+                         partition_id, keylog);
             return ok;
         }
 
@@ -291,6 +306,8 @@ namespace esphome
                                      int partition_id,
                                      const std::string &code)
         {
+            ESP_LOGI(TAG, "keypress: keys='%s' partition=%d", keys.c_str(), partition_id);
+
             // Intercept single-character command strings that map to named operations.
             if (keys == "A") return arm_away    (partition_id, code);
             if (keys == "S") return arm_stay    (partition_id, code);

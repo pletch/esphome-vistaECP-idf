@@ -27,6 +27,7 @@
 #include "constants.h"
 #include "sensor_interfaces.h"
 
+#include "esp_log.h"
 #include <string>
 #include <cstdint>
 
@@ -220,16 +221,20 @@ namespace esphome
 
             void svc_alarm_keypress(std::string keys)
             {
+                ESP_LOGI(TAG, "svc_alarm_keypress: keys='%s'", keys.c_str());
                 cmd_.keypress(keys, default_partition_);
             }
 
             void svc_alarm_keypress_partition(std::string keys, int32_t partition)
             {
+                ESP_LOGI(TAG, "svc_alarm_keypress_partition: keys='%s' partition=%d",
+                         keys.c_str(), static_cast<int>(partition));
                 cmd_.keypress(keys, static_cast<int>(partition));
             }
 
             void svc_alarm_disarm(std::string code, int32_t partition)
             {
+                ESP_LOGI(TAG, "svc_alarm_disarm: partition=%d", static_cast<int>(partition));
                 cmd_.disarm(static_cast<int>(partition), code);
             }
 
