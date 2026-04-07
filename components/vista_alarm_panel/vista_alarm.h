@@ -27,7 +27,6 @@
 #include "constants.h"
 #include "sensor_interfaces.h"
 
-#include "esp_log.h"
 #include <string>
 #include <cstdint>
 

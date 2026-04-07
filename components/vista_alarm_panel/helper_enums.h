@@ -32,19 +32,6 @@ enum SysState
     kArming
 };
 
-enum ReqStates  //ToDo:  verify if this is needed
-{
-    rsidle,
-    rsopenzones,
-    rsbypasszones,
-    rszonecount,
-    rspartitionlist,
-    rspartitionid,
-    rszoneinfo,
-    rsicode,
-    rsdate
-};
-
 enum PacketType
 {
     kUnspecified = 0,

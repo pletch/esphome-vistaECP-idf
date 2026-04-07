@@ -12,6 +12,7 @@
 #include "helper_structs.h"   // StatusFlags, LightStates, Partition, PartitionState
 #include "helper_enums.h"     // SysState
 #include "zone_manager.h"     // ZoneManager, ZoneManager::Zone
+#include "esphome/core/log.h"
 #include <vector>
 #include <cstdint>
 #include <cstddef>            // size_t

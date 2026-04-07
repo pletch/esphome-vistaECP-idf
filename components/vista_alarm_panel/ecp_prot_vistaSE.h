@@ -209,13 +209,10 @@ public:
                             else if (this->req_to_send && !this->pulse_marked
                                      && pkt_to_send.type == 2)
                             {
-                                // Expander pulse-mark window.
+                                // Expansion device pulse-mark window.
                                 mark_pulse(this->vistabus_.uart_num, pkt_to_send.keypadaddress);
                                 this->pulse_marked    = true;
                                 this->pulse_mark_time = esp_timer_get_time();
-                                bytes = uart_read_bytes_event(this->vistabus_.uart_num, buf, 1,
-                                                              pdMS_TO_TICKS(10),
-                                                              this->vistabus_.uartevtQueue);
                             }
                         }
                     }

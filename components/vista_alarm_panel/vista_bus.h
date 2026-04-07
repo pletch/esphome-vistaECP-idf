@@ -27,13 +27,13 @@ Date: 2-Feb-2025
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
-#include "esp_log.h"
 #include "driver/uart.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "hal/uart_ll.h"
 #include <vector>
 #include <memory>
+#include "esphome/core/log.h"
 #include "esphome/core/defines.h"
 #include "helper_structs.h"
 #include "helper_funcs.h"
@@ -78,14 +78,14 @@ public:
     bool read_packet(char * data, int &len, int &type, int &src, bool with_delay = false);
 
     // Enable / disable emulation of a Long-Range Radio (LRR) reporting module.
-    void emulateLRR(bool enabled);  //ToDo: verify setter is still needed.
+    void emulateLRR(bool enabled);
 
     // Register a zone number so the bus driver will emulate the zone-expander
     // module that owns that zone.
     void add_emulated_expander(uint8_t zone);
 
     // Enable emulation of an RF receiver at the given keybus address.
-    void emulateRFR(uint8_t address);  //ToDo: verify setter is still needed.
+    void emulateRFR(uint8_t address);
 
     // Set or clear the fault bit for a zone on its emulated expander and
     // notify the panel via the deviceMsgQueue.

@@ -7,6 +7,8 @@
 // Licensed under the GNU Lesser General Public License v2.1.
 // See COPYING.LESSER in the project root for details.
 
+#define ESPHOME_LOG_LEVEL ESPHOME_LOG_LEVEL_DEBUG
+#include "esphome/core/log.h"
 #include "zone_manager.h"
 #include "sensor_interfaces.h"
 #include "constants.h"
@@ -342,9 +344,10 @@ namespace esphome
                 return "";
             }
 
-            // Reconstruct 20-bit device serial from bytes 2–4.
+            // Reconstruct 23-bit device serial from bytes 2–4.
+            // Byte 2: bit 7 = valid-sensor flag (masked off), bits 6–0 = serial bits 22–16.
             const uint32_t serial =
-                (static_cast<uint32_t>(payload[2] & 0x0F) << 16)
+                (static_cast<uint32_t>(payload[2] & 0x7F) << 16)
                 + (static_cast<uint8_t>(payload[3]) << 8)
                 +  static_cast<uint8_t>(payload[4]);
 
@@ -398,10 +401,10 @@ namespace esphome
             {
                 const uint8_t mask = rfloop_to_mask(z->rfloop);
                 // fault=true:  set the loop bit  (0x80 | mask)
-                // fault=false: clear the loop bit (0x80 ^ mask)
-                const uint8_t msg = fault
+                // fault=false: clear the loop bit (0x80 & mask)
+                const uint8_t msg = fault 
                     ? static_cast<uint8_t>(0x80 | mask)
-                    : static_cast<uint8_t>(0x80 ^ mask);
+                    : static_cast<uint8_t>(0x80 & mask);
                 ESP_LOGI(TAG, "Emulated RF zone %d fault:%d  serial:%lu",
                          zone_number, fault, z->rfserial);
                 bus.sendRFmsg(z->rfserial, msg);
@@ -445,6 +448,7 @@ namespace esphome
                 // If the panel reports ready, any open (non-bypassed) zone is stale.
                 if (!z.bypass && z.open && partition_lights.ready)
                 {
+                    ESP_LOGE(TAG, "Zone %d: open but panel ready — clearing open state", z.zone);
                     z.open  = false;
                     z.check = false;
                     z.alarm = false;
@@ -538,7 +542,7 @@ namespace esphome
                 // Supervision heartbeat: bit 7 set (supervision active),
                 // loop bit cleared (zone is closed / not faulted).
                 // Corrected from original: was `0x80 ^ mask & 0x04` (wrong precedence).
-                const uint8_t msg = static_cast<uint8_t>(0x80 ^ mask);
+                const uint8_t msg = static_cast<uint8_t>((0x80 ^ mask) & 0x04);
                 bus.sendRFmsg(z.rfserial, msg);
 
                 // Schedule next heartbeat: 70–90 minutes with random jitter.

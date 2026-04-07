@@ -16,7 +16,8 @@ An [ESPHome](https://esphome.io) external component that interfaces directly wit
 - Monitor zone open/close status (hardwired and RF wireless zones)
 - Arm, disarm, and send keypad commands from Home Assistant
 - Virtual keypad LCD display (line1/line2 text sensors)
-- Zone expansion emulation (adds up to 40 extra zones via expander board emulation)
+- Zone expansion emulation via expander board emulation.
+- Zone expansion emulation via RF wireless receiver emulation (virtual wireless zones only not physical honewell devices)
 - RF zone emulation (via RF receiver emulation, 5881ENH compatible)
 - Long Range Radio (LRR) monitoring emulation
 - AUI interface for faster hardwired zone closure reporting and automatic panel clock sync
@@ -37,7 +38,7 @@ This is a highly modified fork of [Dilbert66/esphome-vistaECP](https://github.co
 - RMT-based pulse capture for hardware-level bus diagnostics.
 - ESP8266 not supported.
 
-> ⚠️ Some features carried over from the original project have had minimal testing in this fork, including RF receiver emulation and virtual zone emulation on older SE panels. Please open an issue if you encounter problems.
+> ⚠️ Minimal testing has been done on the hard-wired type virtual zone emulation on older SE panels. Please open an issue if you encounter problems.
 
 ---
 
@@ -165,7 +166,7 @@ vista_alarm_panel:
 | `uart_2` | Optional | int | -1 | Hardware UART number for monitor pin. Disabled if `monitor_pin` is -1. |
 | `ttl` | Optional | int | 30 | Time-to-live in seconds for hardwired zone and fire status before expiring. Used when `monitor_pin` is not configured. |
 | `lrr_supervisor` | Optional | boolean | false | Enable Long Range Radio emulation for decoding monitoring status updates. Do not enable if a physical LRR is present in the system. |
-| `rf_receiver_emulation` | Optional | boolean | false | Enable RF receiver (5881ENH) emulation to support virtual RF zones. Do not enable if a physical RF receiver is present — the panel only supports one RF receiver. |
+| `rf_receiver_emulation` | Optional | boolean | false | Enable RF receiver (5881ENH) emulation to support virtual RF zones. Do not enable if a physical RF receiver is present — the panel only supports one RF receiver. This approach provides more virtual zone capacity on older SE panel than expander board emulation via virtual hard-wired zones|
 | `rf_receiver_addr` | Optional | int | 0 | Address for emulated RF receiver. Only valid address on Vista 15/20 is 0. |
 | `legacy_protocol` | Optional | boolean | false | Enable older protocol for Vista 15SE / 20SE panels. |
 | `debug_logging` | Optional | boolean | false | Enable verbose ECP packet logging. Requires ESPHome logger level `DEBUG` or higher. |

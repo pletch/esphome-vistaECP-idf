@@ -729,7 +729,7 @@ void VistaECP::track_write_attempts()
 // Source is classified the same way as the primary dispatchF6.
 void VistaECP::dispatch_extF6(uint32_t val, uint8_t header)
 {
-    uint8_t data[48]; //ToDo verify what maximum size is in write service
+    uint8_t data[48];
     ReceivedPacket rcvd_extPkt;
     rcvd_extPkt.type = 1; // 1 = from monitor/expansion UART
     int rxBytes = 0;

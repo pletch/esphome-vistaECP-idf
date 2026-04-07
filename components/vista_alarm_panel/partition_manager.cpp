@@ -12,7 +12,6 @@
 #include "panel_text.h"
 #include "translation.h"
 #include "constants.h"
-#include "esp_log.h"
 #include <cstring>
 #include <string>
 
@@ -269,12 +268,12 @@ namespace esphome
                     zt->time = now;
             }
 
-            // Refresh zone sensors (clears stale open/bypass/alarm states)
-            zones.refresh(partitions_[kpi].partition_state.previous_light_states, ttl);
-
             // --- Derive current light and system states ---
             const LightStates current = decode_light_states(flags);
             const SysState    sys     = decode_system_state(flags, current);
+
+            // Refresh zone sensors (clears stale open/bypass/alarm states)
+            zones.refresh(current, ttl);
 
             // --- Battery / low-battery time tracking ---
             if (flags.low_battery && (flags.system_flag || flags.check))
