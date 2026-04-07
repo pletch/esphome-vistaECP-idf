@@ -78,17 +78,11 @@ You need a small interface circuit between the 12V ECP bus logic levels and the 
 
 ![Non-isolated no opto](readme_material/master_noopto.png)
 
-**Breadboard example:**
+**Connecting ESP32 to Panel example:**
 
-![Breadboard wiring](readme_material/esp_breadboard.png)
+Other items such as keypads or expansion devices (not depicted in illustration) will also be wired to the ECP bus terminals 4 - 7.
 
-**Fully assembled example:**
-
-![Everything connected](readme_material/everything_connected.png)
-
-**Panel door mounted ESP32:**
-
-![Panel door mounted](readme_material/vista_panel_door_3d.png)
+![Breadboard wiring](readme_material/panel_esp32_illustration.png)
 
 ### Monitor Pin (Optional)
 
