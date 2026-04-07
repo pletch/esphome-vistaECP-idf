@@ -64,25 +64,21 @@ The ECP bus provides four connections:
 
 ### Interface Circuit Options
 
-You need a small interface circuit between the 12V ECP bus logic levels and the 3.3V ESP32 GPIOs. Several options are shown below.
+You need a small interface circuit between the 12V ECP bus logic levels and the 3.3V ESP32 GPIOs. Two options are shown below.
 
-**Option 1 — Opto-isolated (recommended for electrical safety):**
+**Recommended — Non-isolated simple circuit:**
 
-![Opto-isolated interface](readme_material/master_gnd_isolated.png)
+<img src="readme_material/master_non_is_simple.png" width="40%">
 
-**Option 2 — Non-isolated simple circuit:**
+**Alternative — Non-isolated without optocoupler:**
 
-![Non-isolated simple interface](readme_material/master_non_is_simple.png)
-
-**Option 3 — Non-isolated without optocoupler:**
-
-![Non-isolated no opto](readme_material/master_noopto.png)
+<img src="readme_material/master_noopto.png" width="40%">
 
 **Connecting ESP32 to Panel example:**
 
-Other items such as keypads or expansion devices (not depicted in illustration) will also be wired to the ECP bus terminals 4 - 7.
+Other items such as keypads or expansion devices will also be wired to the ECP bus terminals 4 - 7.
 
-![Breadboard wiring](readme_material/panel_esp32_illustration.png)
+<img src="readme_material/panel_esp32_illustration.png" width="40%">
 
 ### Monitor Pin (Optional)
 
@@ -136,9 +132,9 @@ A custom alarm keypad card is included in the [`ha_cards/`](ha_cards/) folder:
 
 Install the JS file as a local resource in Home Assistant (Dashboards → Resources), then use the example YAML to add the card to your dashboard. Edit the device and sensor names to match those associated with the esphome device.
 
-![Alarm panel card](readme_material/virtual_panel.png)
+<img src="readme_material/virtual_panel.png" width="30%">
 
-![Card configuration](readme_material/virtual_panel_configuration.png)
+<img src="readme_material/virtual_panel_configuration.png" width="30%">
 
 ---
 
