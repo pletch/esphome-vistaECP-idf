@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "esphome/core/defines.h"
+
 // EN
 // Zone status is now communicated via flag-based text in 
 // ZoneManager::publish_zone() rather than string lookups.

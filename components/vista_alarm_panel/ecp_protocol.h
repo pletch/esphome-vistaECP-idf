@@ -162,11 +162,11 @@ protected:
     // GPIO ISR handler — fires on any edge of the RX pin.
     // Reads the current GPIO level and sends it to the waiting task via
     // xTaskNotifyFromISR() so mark_pulse() can gate each pulse byte precisely.
-    static void gpio_isr_handler(void * args);
+    static void IRAM_ATTR gpio_isr_handler(void * args);
 
     // ESP timer ISR handler — fires when the transmit-window timer expires.
     // Sends 0xFFFFFFFF to unblock a task parked in xTaskNotifyWait().
-    static void timer_isr_handler(void * task_handle);
+    static void IRAM_ATTR timer_isr_handler(void * task_handle);
 
 private:
     // Timing-sensitive inline response to an F9 poll when LRR emulation is active.

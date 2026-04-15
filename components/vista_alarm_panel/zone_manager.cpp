@@ -298,15 +298,15 @@ namespace esphome
         //
         // Called by PacketDispatcher when a green-wire (type==1) FB packet of
         // kRFZoneMessageLength bytes arrives from the monitor task.  Validates the
-        // two's-complement checksum, extracts the 20-bit device serial, and updates
+        // two's-complement checksum, extracts the 20-bit device serial (0–0xFFFFF), and updates
         // the matching zone's open/lowbat state.
         //
         // Packet layout:
         //   payload[0]     — RF receiver address byte
         //   payload[1]     — sequence byte
-        //   payload[2]     — upper nibble = serial high bits; lower nibble = flags
-        //   payload[3]     — serial mid byte
-        //   payload[4]     — serial low byte
+        //   payload[2]     — bit 7 = valid-sensor flag; bits 3:0 = serial bits 19:16
+        //   payload[3]     — serial bits 15:8
+        //   payload[4]     — serial bits 7:0
         //   payload[5]     — status byte (loop bits, low-bat, supervision flags)
         //   payload[6]     — two's-complement checksum over bytes 0–5
         //
@@ -344,12 +344,12 @@ namespace esphome
                 return "";
             }
 
-            // Reconstruct 23-bit device serial from bytes 2–4.
-            // Byte 2: bit 7 = valid-sensor flag (masked off), bits 6–0 = serial bits 22–16.
+            // Reconstruct 20-bit device serial from bytes 2–4.
+            // Byte 2: bit 7 = valid-sensor flag (always 1, masked off); bits 3:0 = serial bits 19:16.
             const uint32_t serial =
-                (static_cast<uint32_t>(payload[2] & 0x7F) << 16)
-                + (static_cast<uint8_t>(payload[3]) << 8)
-                +  static_cast<uint8_t>(payload[4]);
+                (static_cast<uint32_t>(payload[2] & 0x0F) << 16)
+                + (static_cast<uint32_t>(static_cast<uint8_t>(payload[3])) << 8)
+                +  static_cast<uint32_t>(static_cast<uint8_t>(payload[4]));
 
             // Format serial as the display string used by the rf_messages sensor.
             char serial_str[14];
@@ -537,12 +537,9 @@ namespace esphome
                 if (now <= z.rfnext_hb)
                     continue;
 
-                const uint8_t mask = rfloop_to_mask(z.rfloop);
-
-                // Supervision heartbeat: bit 7 set (supervision active),
-                // loop bit cleared (zone is closed / not faulted).
-                // Corrected from original: was `0x80 ^ mask & 0x04` (wrong precedence).
-                const uint8_t msg = static_cast<uint8_t>((0x80 ^ mask) & 0x04);
+                // Supervision heartbeat: only the supervision bit (0x04) is set.
+                // All loop-fault bits are clear — the zone is closed, not faulted.
+                static constexpr uint8_t msg = 0x04;
                 bus.sendRFmsg(z.rfserial, msg);
 
                 // Schedule next heartbeat: 70–90 minutes with random jitter.

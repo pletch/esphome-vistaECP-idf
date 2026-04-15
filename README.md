@@ -16,9 +16,8 @@ An [ESPHome](https://esphome.io) external component that interfaces directly wit
 - Monitor zone open/close status (hardwired and RF wireless zones)
 - Arm, disarm, and send keypad commands from Home Assistant
 - Virtual keypad LCD display (line1/line2 text sensors)
-- Zone expansion emulation via expander board emulation.
-- Zone expansion emulation via RF wireless receiver emulation (virtual wireless zones only not physical honewell devices)
-- RF zone emulation (via RF receiver emulation, 5881ENH compatible)
+- Zone expansion emulation via expander board emulation
+- RF receiver emulation (5881ENH compatible) supporting both virtual software-defined RF zones and physical Honeywell 5800-series 345 MHz wireless sensors when combined with inexpensive CC1101 sub-GHz transceiver support for real-time OOK reception from physical Honeywell wireless sensors
 - Long Range Radio (LRR) monitoring emulation
 - AUI interface for faster hardwired zone closure reporting and automatic panel clock sync
 - Multi-partition support (up to 8 partitions)
@@ -84,6 +83,31 @@ Other items such as keypads or expansion devices will also be wired to the ECP b
 ### Monitor Pin (Optional)
 
 A second UART input (`monitor_pin`) can be connected to passively monitor traffic from other bus devices such as an RF receiver or zone expanders. This improves zone closure detection accuracy and eliminates the need for the TTL timeout.
+
+### CC1101 Hardware RF Receiver (Optional)
+
+A CC1101 sub-GHz transceiver module can be wired to the ESP32 to receive OOK signals directly from physical Honeywell 5800-series 345 MHz wireless sensors. When enabled alongside `rf_receiver_emulation: true`, the ESP32 emulates the 5881ENH receiver on the ECP bus and delivers both hardware-received sensor events and virtual software-emulated RF zone events to the panel.
+
+Capabilities with the CC1101:
+- Real-time reception from physical Honeywell 5800-series devices (door/window contacts, PIR motion detectors, smoke detectors, etc.)
+- Virtual (software-emulated) RF zones continue to work alongside hardware-received zones
+- Sensor supervision heartbeats are forwarded to the panel to maintain enrollment status
+
+The CC1101 module connects to the ESP32 via SPI. All five pins must be configured together:
+
+| CC1101 Pin | Description |
+|---|---|
+| VCC | 3.3V supply only — do not connect to 5V |
+| GND | Ground |
+| MOSI (`cc1101_mosi_pin`) | SPI data: ESP32 → CC1101 |
+| MISO (`cc1101_miso_pin`) | SPI data: CC1101 → ESP32 |
+| SCK (`cc1101_sck_pin`) | SPI clock |
+| CSN (`cc1101_csn_pin`) | SPI chip select (active low) |
+| GDO0 (`cc1101_gdo0_pin`) | Raw demodulated OOK output — must be an RMT-capable GPIO |
+
+> **Note:** `debug_pulsing` and the CC1101 receiver both use the ESP32 RMT peripheral and cannot operate simultaneously. When `debug_pulsing: true` is set, CC1101 support is automatically suppressed at build time with a warning in the ESPHome build log.
+
+> **Note:** Do not enable `rf_receiver_emulation` (or attach a CC1101) if a physical RF receiver such as a 5881ENH is already enrolled in the panel — only one RF receiver is supported per system.
 
 ---
 
@@ -151,6 +175,23 @@ vista_alarm_panel:
   uart_1: 1
 ```
 
+To enable the CC1101 hardware receiver alongside virtual RF zones, add `rf_receiver_emulation: true` and the five SPI pin assignments:
+
+```yaml
+vista_alarm_panel:
+  keypad_addr_1: 20
+  rx_pin: 21
+  tx_pin: 23
+  uart_1: 1
+  rf_receiver_emulation: true
+  rf_receiver_addr: 0
+  cc1101_mosi_pin: 13
+  cc1101_miso_pin: 12
+  cc1101_sck_pin: 14
+  cc1101_csn_pin: 15
+  cc1101_gdo0_pin: 27
+```
+
 | Parameter | Required | Type | Default | Description |
 |---|---|---|---|---|
 | `keypad_addr_1` … `keypad_addr_8` | At least one required | int | 0 | Virtual keypad address for partitions 1–8. Must be assigned in panel programming (`*190`–`*197` on Vista 20P). Set to 0 or omit to disable. Must not conflict with physical keypads. |
@@ -166,11 +207,16 @@ vista_alarm_panel:
 | `uart_2` | Optional | int | -1 | Hardware UART number for monitor pin. Disabled if `monitor_pin` is -1. |
 | `ttl` | Optional | int | 30 | Time-to-live in seconds for hardwired zone and fire status before expiring. Used when `monitor_pin` is not configured. |
 | `lrr_supervisor` | Optional | boolean | false | Enable Long Range Radio emulation for decoding monitoring status updates. Do not enable if a physical LRR is present in the system. |
-| `rf_receiver_emulation` | Optional | boolean | false | Enable RF receiver (5881ENH) emulation to support virtual RF zones. Do not enable if a physical RF receiver is present — the panel only supports one RF receiver. This approach provides more virtual zone capacity on older SE panel than expander board emulation via virtual hard-wired zones|
+| `rf_receiver_emulation` | Optional | boolean | false | Enable RF receiver (5881ENH) emulation. Required for both virtual software-defined RF zones and for CC1101 hardware reception from physical Honeywell 5800-series sensors. Do not enable if a physical RF receiver is already present — the panel supports only one RF receiver. Provides more virtual zone capacity on older SE panels than expander board emulation. |
 | `rf_receiver_addr` | Optional | int | 0 | Address for emulated RF receiver. Only valid address on Vista 15/20 is 0. |
+| `cc1101_mosi_pin` | Optional | GPIO | — | SPI MOSI pin connected to the CC1101 module. All five `cc1101_*` pins must be specified together. Requires `rf_receiver_emulation: true`. Automatically disabled if `debug_pulsing: true`. |
+| `cc1101_miso_pin` | Optional | GPIO | — | SPI MISO pin connected to the CC1101 module. |
+| `cc1101_sck_pin` | Optional | GPIO | — | SPI clock pin connected to the CC1101 module. |
+| `cc1101_csn_pin` | Optional | GPIO | — | SPI chip select (CSN) pin connected to the CC1101 module. |
+| `cc1101_gdo0_pin` | Optional | GPIO | — | CC1101 GDO0 pin — raw demodulated OOK output, sampled by the ESP32 RMT peripheral. Must be an RMT-capable GPIO. |
 | `legacy_protocol` | Optional | boolean | false | Enable older protocol for Vista 15SE / 20SE panels. |
 | `debug_logging` | Optional | boolean | false | Enable verbose ECP packet logging. Requires ESPHome logger level `DEBUG` or higher. |
-| `debug_pulsing` | Optional | boolean | false | Use ESP32 RMT peripheral to capture raw bus pulse timings to the log. Output begins 60 seconds after startup. **Do not enable for normal use.** |
+| `debug_pulsing` | Optional | boolean | false | Use ESP32 RMT peripheral to capture raw bus pulse timings to the log. Output begins 60 seconds after startup. Automatically disables CC1101 support. **Do not enable for normal use.** |
 
 ---
 
@@ -188,10 +234,14 @@ binary_sensor:
     zone: 8
     device_class: moisture
 
-  # RF wireless zone
+  # Physical Honeywell 5800-series RF zone (received via CC1101 hardware, or via monitor_pin
+  # from a physical 5881ENH receiver). rf_serial matches the 20-bit serial printed on the device.
   - platform: vista_alarm_panel
-    id: z10
+    id: z9
     name: "Front Door"
+    partition: 1
+    zone: 9
+    rf_serial: 231357
     rf_loop: 2
     device_class: door
 
@@ -204,7 +254,8 @@ binary_sensor:
     emulated: true
     device_class: garage_door
 
-  # Emulated RF zone (requires rf_receiver_emulation: true)
+  # Emulated RF zone (requires rf_receiver_emulation: true; no physical sensor — state
+  # is driven by set_zone_fault() from HA automations or emulated HA inputs)
   - platform: vista_alarm_panel
     id: z34
     name: "Office Motion"
@@ -220,9 +271,9 @@ binary_sensor:
 |---|---|---|
 | `zone` | Required (for zone sensors) | Panel zone number (1–128). |
 | `partition` | Optional | Partition number the zone belongs to. |
-| `rf_serial` | Optional | RF device serial number (no leading zeros). Required with `rf_loop` for RF zones. |
+| `rf_serial` | Optional | 20-bit RF device serial number (1–1048575, no leading zeros). Printed on the sensor label. Required with `rf_loop` for both physical and emulated RF zones. |
 | `rf_loop` | Optional | RF device loop number (1–4). Required with `rf_serial`. Most devices use loop 1 (e.g. 5800PIR); 5816 uses loop 2. See the [5800 device list](https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf). |
-| `emulated` | Optional | Enable zone emulation. Without RF options: emulates a hardwired zone via automatic expander board emulation (zone must be > 8). With RF options and `rf_receiver_emulation: true`: emulates an RF zone. |
+| `emulated` | Optional | Enable zone emulation. Without RF options: emulates a hardwired zone via automatic expander board emulation (zone must be > 8). With RF options and `rf_receiver_emulation: true`: emulates a software-only RF zone driven by `set_zone_fault()`. Omit `emulated` for zones backed by a physical Honeywell sensor received via CC1101 or a monitored 5881ENH. |
 
 **Emulated hardwired zone → expander address mapping:**
 
@@ -333,7 +384,7 @@ text_sensor:
 | `zone` | Yes (+ `zone:`) | Per-zone status string. Values: `O`=open, `B`=bypass, `T`=trouble/check, `A`=alarm |
 | `zone_status` | No | Combined status string for all zones with active states |
 | `lrr_messages` | No | Long Range Radio status messages (requires `lrr_supervisor: true`) |
-| `rf_messages` | No | RF device messages (requires `rf_receiver_emulation: true` or physical RF receiver monitored via `monitor_pin`) |
+| `rf_messages` | No | RF device messages (requires `rf_receiver_emulation: true`, a CC1101 hardware receiver, or a physical RF receiver monitored via `monitor_pin`) |
 
 > The `system_status` sensor can be filtered to rename values for the HA alarm panel card:
 > ```yaml

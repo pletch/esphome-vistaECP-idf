@@ -27,6 +27,10 @@
 #include "constants.h"
 #include "sensor_interfaces.h"
 
+#ifdef CC1101_RECEIVER
+#include "cc1101_receiver.h"
+#endif
+
 #include <string>
 #include <cstdint>
 
@@ -105,6 +109,18 @@ namespace esphome
                 rfr_emulation_enabled_ = rfr_emul;
                 rfr_emulation_addr_    = rfr_addr;
             }
+
+#ifdef CC1101_RECEIVER
+            // Called from generated YAML code when cc1101_* pins are configured.
+            // Must be called before setup() — stores pin numbers for begin() call.
+            // rf_receiver_emulation must also be true in YAML; the CC1101 acts as
+            // the hardware source for the emulated RF receiver device.
+            void init_cc1101(int mosi, int miso, int sck, int csn, int gdo0)
+            {
+                cc1101_receiver_ = new CC1101Receiver(
+                    vistabus_, mosi, miso, sck, csn, gdo0);
+            }
+#endif
 
             // -------------------------------------------------------------------
             // Partition / keypad configuration
@@ -290,6 +306,15 @@ namespace esphome
             CommandWriter    cmd_;          // holds refs to vistabus_ and partitions_
             AUIManager       aui_;
             PacketDispatcher *dispatcher_ {nullptr}; // created in setup()
+
+#ifdef CC1101_RECEIVER
+            CC1101Receiver   *cc1101_receiver_ {nullptr};
+#endif
+
+            // OTA flash-safety guard — defined in vista_alarm.cpp to avoid
+            // pulling ota_backend.h into headers compiled from subdirectories.
+            struct OTAGuard;
+            OTAGuard *ota_guard_ {nullptr};
 
             // -------------------------------------------------------------------
             // Common (non-partition) sensor pointers

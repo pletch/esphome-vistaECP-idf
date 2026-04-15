@@ -60,6 +60,20 @@ public:
     // the UART drivers.  Returns true when the shutdown is complete.
     bool stop();
 
+    // Suspend / resume both UART tasks around flash-cache-disabling events
+    // (OTA writes).  Safe to call from any task context; no-ops if the task
+    // handles are null.
+    void suspend_tasks()
+    {
+        if (rx_tx_task_Handle)    vTaskSuspend(rx_tx_task_Handle);
+        if (monitor_rx_task_Handle) vTaskSuspend(monitor_rx_task_Handle);
+    }
+    void resume_tasks()
+    {
+        if (rx_tx_task_Handle)    vTaskResume(rx_tx_task_Handle);
+        if (monitor_rx_task_Handle) vTaskResume(monitor_rx_task_Handle);
+    }
+
     // Queue a keypad-command payload for transmission.  The payload is treated
     // as raw bytes (not a C-string) so the full 'size' bytes are copied via
     // memcpy.  type=1 indicates a normal keypad write.

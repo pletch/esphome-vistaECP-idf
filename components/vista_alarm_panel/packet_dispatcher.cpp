@@ -93,7 +93,7 @@ namespace esphome
                         if (cfg_.partitions != nullptr && cfg_.zones != nullptr)
                             cfg_.partitions->process_status_flags(flags, *cfg_.zones, cfg_.ttl);
                         // HITSTAR: panel requests acknowledgement via a "*" keypress.
-                        if (flags.system_flag && strstr(flags.prompt2, HITSTAR) && cfg_.cmd != nullptr)
+                        if (flags.system_flag && strstr(flags.prompt1, HITSTAR) && cfg_.cmd != nullptr)
                             cfg_.cmd->keypress("*", flags.partition);
                     }
                 }
@@ -233,6 +233,7 @@ namespace esphome
                     }
                 }
                 memcpy(flags.prompt1, tempbuf, 16);
+                flags.prompt1[16] = '\0';
             }
 
             // Prompt line 2 (bytes 28..43).
@@ -257,6 +258,7 @@ namespace esphome
                     }
                 }
                 memcpy(flags.prompt2, tempbuf, 16);
+                flags.prompt2[16] = '\0';
             }
 
             return flags;

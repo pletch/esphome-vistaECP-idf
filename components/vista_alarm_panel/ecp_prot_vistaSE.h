@@ -139,11 +139,12 @@ public:
                                 {
                                     .callback = &timer_isr_handler,
                                     .arg      = (void *)this->vistabus_.rx_tx_task_Handle,
+                                    .dispatch_method = ESP_TIMER_ISR,
                                     .name     = "one-shot"
                                 };
                                 esp_timer_handle_t oneshot_timer;
                                 esp_timer_create(&oneshot_timer_args, &oneshot_timer);
-                                esp_timer_start_once(oneshot_timer, 3000); // 3 ms pre-send delay
+                                esp_timer_start_once(oneshot_timer, 3500); // 3.5 ms pre-send delay
 
                                 xTaskNotifyWait(0, 0xFFFFFFFF, nullptr, pdMS_TO_TICKS(10));
                                 gpio_set_intr_type(this->vistabus_.rx_pin, GPIO_INTR_ANYEDGE);

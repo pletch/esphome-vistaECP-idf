@@ -52,8 +52,23 @@ vista_alarm_panel:
 
   lrr_supervisor: "false" # set to true if system doesn't have LRR monitoring supervisor to emulate one and retrieve monitoring status updates.
 
-  rf_receiver_emulation: "false" # set to true if using emulated RF sensors
-  rf_receiver_addr: "0"   
+  # RF Receiver Emulation - emulates a Honeywell 5881ENH RF receiver on the ECP bus.
+  # Required for both virtual software-defined RF zones AND for CC1101 hardware reception
+  # from physical Honeywell 5800-series 345 MHz wireless sensors.
+  # Do NOT enable if a physical RF receiver is already present -- Vista panels support only one.
+  rf_receiver_emulation: "false" # set to true to enable RF receiver emulation
+  rf_receiver_addr: "0"   # Only valid address on Vista 15/20 is 0
+
+  # CC1101 Hardware RF Receiver - enables real-time OOK reception from physical
+  # Honeywell 5800-series wireless sensors (door contacts, PIR motion, smoke, etc.)
+  # Requires rf_receiver_emulation: true and all five SPI pins specified together.
+  # GDO0 must be connected to an RMT-capable GPIO on the ESP32.
+  # Automatically disabled at build time when debug_pulsing is enabled (both use RMT).
+  #cc1101_mosi_pin: "13"
+  #cc1101_miso_pin: "12"
+  #cc1101_sck_pin:  "14"
+  #cc1101_csn_pin:  "15"
+  #cc1101_gdo0_pin: "27"
 
 # Location of alarm panel code.  You can use the github release version or 
 # copy the code to directory "components" in your main esphome directory
@@ -104,34 +119,37 @@ api:
 # 
 # Examples are provided for both hardwired and RF zones.
 #  
-# Enroll your RF serial devices using the rf_serial and rf_loop parameters.
-# For most devices loop1 is used such as 5800pir, other devices such as 5816 will use loop2.  
-# Please refer to your RF device programming (*56 program) to see what 
-# loop and zones are assigned to your RF devices.  
+# RF zone configuration uses the rf_serial and rf_loop parameters.
+# rf_serial is the 20-bit serial number printed on the sensor label (1-1048575, no leading zeros).
+# For most devices loop 1 is used (e.g. 5800PIR); other devices such as the 5816 use loop 2.
+# Please refer to your RF device programming (*56 program) to see what loop and zones are
+# assigned to your RF devices.
 #
-# !!Do not include leading zeros in rf_serial!!
-#
-# You can refer to the pdf link below for more details on loop numbers 
+# You can refer to the pdf link below for more details on loop numbers:
 # https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf
 #
-# Zone emulation for either hardwired or RF sensors is enabled   
-# with the use of the option emulation: true in binary zone configuration.
+# Two types of RF zones are supported:
 #
-# Hardwired zone emulation facilitated via automatic expander board emulation (e.g. Honeywell 4129).
-# Ensure that the zone number selected for emulated zone does not conflict with 
-# existing physical boards in your system. 
+#   Physical RF zones: backed by a real Honeywell 5800-series sensor. Received via:
+#     - CC1101 hardware receiver (cc1101_*_pin options above), OR
+#     - A physical 5881ENH monitored via monitor_pin.
+#   Specify rf_serial and rf_loop. Do NOT add emulated: true.
 #
-# Emulated zones 9-16 will enable expander emulation on address 7.
+#   Emulated RF zones: software-only zones driven by set_zone_fault() from HA automations
+#   or emulated HA inputs. Must set rf_receiver_emulation: true above.
+#   Specify rf_serial, rf_loop, AND emulated: true.
+#
+# Zone emulation for hardwired sensors is enabled with the emulated: true option.
+# Hardwired zone emulation is facilitated via automatic expander board emulation (e.g. Honeywell 4129).
+# Ensure that the zone number selected for an emulated zone does not conflict with
+# existing physical expander boards in your system.
+#
+# Emulated zones 9-16  will enable expander emulation on address 7.
 # Emulated zones 17-24 will enable expander emulation on address 8.
 # Emulated zones 25-32 will enable expander emulation on address 9.
 # Emulated zones 33-40 will enable expander emulation on address 10.
 # Emulated zones 41-48 will enable expander emulation on address 11.
 #
-# RF zone emulation faciliated via automatic Radio Frequency Receiver emulation (5881ENH).
-# Ensure a physical RF receiver is not already present as Vista systems only support a 
-# single RF receiver.  To use, must also set rf_receiver_emulation to 'true' above.
-# Refer to manual for possible addresses to assign to emulated receiver.
-# 
 #######################################################################
 
 binary_sensor:
@@ -144,6 +162,9 @@ binary_sensor:
 #    zone: 8
 #    device_class: moisture
 
+# Physical RF zone: backed by a real Honeywell 5800-series sensor.
+# Received via CC1101 hardware receiver or a monitored physical 5881ENH.
+# rf_serial matches the 20-bit serial printed on the sensor (no leading zeros).
 #  - platform: vista_alarm_panel
 #    id: z9
 #    name: "Front Door"
@@ -153,14 +174,18 @@ binary_sensor:
 #    rf_loop: 2
 #    device_class: door
 
+# Emulated hardwired zone via automatic expander board emulation.
+# Zone 33 enables emulated expander on address 10.
 #  - platform: vista_alarm_panel
 #    id: z33
 #    name: "Emulated hardwired zone"
 #    partition: 1
-#    zone: 33  # As explained above, specifying zone 33 will enable emulated expander on address 10.
+#    zone: 33
 #    emulated: true
 #    device_class: door
 
+# Emulated RF zone: software-only, no physical sensor.
+# Requires rf_receiver_emulation: true. State driven by set_zone_fault() or HA input.
 #  - platform: vista_alarm_panel
 #    id: z34
 #    name: "Emulated rf zone"
@@ -169,7 +194,7 @@ binary_sensor:
 #    rf_serial: 123456
 #    rf_loop: 1
 #    emulated: true
-#    device_class: motion 
+#    device_class: motion
 
 # Example showing attachment Home Assistant Input Boolean to emulated hardwired zone
 #  - platform: homeassistant

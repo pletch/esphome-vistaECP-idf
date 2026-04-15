@@ -67,7 +67,7 @@ CONFIG_SCHEMA = cv.All(binary_sensor.binary_sensor_schema(VistaBinarySensor).ext
             cv.GenerateID(CONF_ALARM_ID): cv.use_id(AlarmComponent),
             cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=8),
             cv.Optional(CONF_ZONE): cv.int_range(min=1, max=128),
-            cv.Optional(CONF_RFSERIAL): cv.int_range(min=1, max=8388607),
+            cv.Optional(CONF_RFSERIAL): cv.int_range(min=1, max=1048575),
             cv.Optional(CONF_EMULATED_ZONE): cv.boolean,
             cv.Optional(CONF_RFLOOP): cv.int_range(min=1, max=4),
             cv.Optional(CONF_STATUS_SENSOR): cv.one_of(*STATUS_SENSORS, upper=True),

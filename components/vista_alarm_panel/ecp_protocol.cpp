@@ -589,7 +589,8 @@ void VistaECP::dispatchFB()
 // type == 0xF1 (data request):
 //   Pull the next pending RF sensor message from deviceMsgQueue.
 //   Build a 7-byte response containing the RF receiver address, a sequence
-//   number, the 3-byte RF serial number (MSB set), the message byte, and
+//   number, the 20-bit RF serial packed into 3 bytes (high byte bit 7 set as
+//   valid-sensor flag, bits 3:0 = serial bits 19:16), the message byte, and
 //   a two's-complement checksum.  The sequence byte alternates: 0x20→0x54, else 0x51.
 //
 // type == 0x60 / 0x81 / 0x82 (supervision query):
@@ -610,9 +611,9 @@ void VistaECP::quick_decodeFB(const char * cbuf)
             uint8_t exp_seq = (seq == 0x20 ? 0x54 : 0x51); // alternate sequence numbers
             lcbuf[0] = vistabus_.emulated_rf_receiver.address;
             lcbuf[1] = exp_seq;
-            lcbuf[2] = rfMsg.source >> 16 | 0x80;   // RF serial number, high byte (MSB set = valid sensor)
-            lcbuf[3] = rfMsg.source >> 8 & 0xFF;    // RF serial number, mid byte
-            lcbuf[4] = rfMsg.source & 0xFF;         // RF serial number, low byte
+            lcbuf[2] = rfMsg.source >> 16 | 0x80;   // serial bits 19:16 in low nibble; bit 7 = valid-sensor flag
+            lcbuf[3] = rfMsg.source >> 8 & 0xFF;    // serial bits 15:8
+            lcbuf[4] = rfMsg.source & 0xFF;         // serial bits 7:0
             lcbuf[5] = rfMsg.msg;                   // fault/loop status byte
             lcbuf[6] = calc_chksum_two(lcbuf, 0, 6);
             uart_write_bytes(vistabus_.uart_num, lcbuf, 7);

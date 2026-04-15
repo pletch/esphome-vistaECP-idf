@@ -8,7 +8,6 @@
 // See COPYING.LESSER in the project root for details.
 
 #include "aui_manager.h"
-#include "esp_log.h"
 #include "esp_timer.h"
 #include <cstring>
 #include <cstdio>
@@ -148,8 +147,6 @@ namespace esphome
             else
                 data_len = payload[1] - sum - 7;
 
-            // Guard against a malformed packet driving data_len out of bounds.
-            // The payload buffer is 48 bytes; size-data_len-1 must be non-negative.
             if (data_len == 0 || data_len > 40 || (size - static_cast<int>(data_len) - 1) < 0)
             {
                 ESP_LOGW(TAG, "F2 packet has invalid data_len=%d (size=%d); ignoring.", data_len, size);
@@ -217,11 +214,6 @@ namespace esphome
 
             if (device_.address == 0 || request_.pending)
                 return;
-
-            // We cannot call get_zone_faults() here without a VistaBus reference.
-            // The caller (PacketDispatcher) must call the overload that takes a bus.
-            // This overload exists only to satisfy the interface declared in the
-            // architecture sketch; real dispatch goes through on_f2_packet().
         }
 
         // ---------------------------------------------------------------------------

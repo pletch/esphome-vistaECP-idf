@@ -204,10 +204,6 @@ namespace esphome
             PanelClock clock_;    // next_sync timestamp, auto_sync flag
             AUIRequest request_;  // pending flag, issue timestamp
 
-            // Temporary bus pointer valid only during on_f2_packet_with_bus().
-            // Allows handle_panel_time_response() to call set_panel_time() without
-            // requiring a permanent stored bus reference.  Always nullptr outside
-            // of a call to on_f2_packet_with_bus().
             VistaBus *pending_bus_ {nullptr};
         };
 

@@ -11,7 +11,11 @@
 #include "panel_text.h"
 
 // Looks for the <space>*<space> found in the "Hit * to view messages".
-const char *HITSTAR = " * ";
+#ifndef LEGACY_SE_PROTOCOL
+    const char *HITSTAR = " * ";
+#else
+    const char *HITSTAR = "Press *";
+#endif
 
 // messages to display to home assistant
 

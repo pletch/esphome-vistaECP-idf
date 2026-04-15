@@ -10,10 +10,17 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import esp32
+from esphome.components.ota import request_ota_state_listeners
 import logging
 from esphome.const import (
     CONF_ID
 )
+
+# Declare dependency on the OTA component so that ESPHome ensures it is
+# initialised before this component and get_global_ota_callback() is valid.
+# request_ota_state_listeners() enables USE_OTA_STATE_LISTENER so that
+# OTAGlobalStateListener and get_global_ota_callback() are compiled in.
+DEPENDENCIES = ["ota"]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +52,14 @@ CONF_LRR="lrr_supervisor"
 CONF_RFR="rf_receiver_emulation"
 CONF_RFRADDR="rf_receiver_addr"
 CONF_LEGACYPROTOCOL="legacy_protocol"
+CONF_CC1101_MOSI="cc1101_mosi_pin"
+CONF_CC1101_MISO="cc1101_miso_pin"
+CONF_CC1101_SCK="cc1101_sck_pin"
+CONF_CC1101_CSN="cc1101_csn_pin"
+CONF_CC1101_GDO0="cc1101_gdo0_pin"
+
+CC1101_PINS = [CONF_CC1101_MOSI, CONF_CC1101_MISO, CONF_CC1101_SCK,
+               CONF_CC1101_CSN, CONF_CC1101_GDO0]
 
 def validate_keypads(config):
     if (config[CONF_KEYPAD1] == 0 
@@ -68,12 +83,32 @@ def validate_c6_uarts(config):
 def validate_auiaddr(config):
     valid_values = [0,1,2,5,6]
     if (config[CONF_AUIADDR] not in valid_values):
-        raise cv.Invalid("Invalid value for aui_addr. Valid enabled values are 1,2,5,6 or 0 if disabled")
+        raise cv.Invalid("Invalid value for aui_addr. Valid enabled values are 1,2,5,6 or 0 if explicitly disabled")
+    if config.get(CONF_LEGACYPROTOCOL, False) and config[CONF_AUIADDR] != 0:
+        raise cv.Invalid("aui_addr is not supported on legacy SE-series panels. Set aui_addr to 0 or remove it when legacy_protocol is enabled.")
     return config
 
 def validate_clocksync(config):
     if config.get(CONF_AUTOCLOCKSYNC) and config[CONF_AUIADDR] == 0:
         raise cv.Invalid("aui_auto_clock_sync: true requires a non-zero aui_addr (1, 2, 5, or 6)")
+    if config.get(CONF_AUTOCLOCKSYNC) and config.get(CONF_LEGACYPROTOCOL, False):
+        raise cv.Invalid("aui_auto_clock_sync is not supported on legacy SE-series panels.")
+    return config
+
+def validate_cc1101(config):
+    present = [p for p in CC1101_PINS if p in config]
+    if present and len(present) != len(CC1101_PINS):
+        missing = [p for p in CC1101_PINS if p not in config]
+        raise cv.Invalid(
+            f"CC1101: all five SPI pins must be specified together. Missing: {missing}"
+        )
+    # Skip rf_receiver_emulation check when debug_pulsing is active — CC1101 will
+    # be disabled at code-generation time because both features share the RMT peripheral.
+    if present and not config.get(CONF_DEBUGPULSE, False) and not config.get(CONF_RFR, False):
+        raise cv.Invalid(
+            "CC1101 pins are configured but rf_receiver_emulation is not set to true. "
+            "The CC1101 requires an emulated RF receiver device on the ECP bus."
+        )
     return config
 
 CONFIG_SCHEMA = cv.All(
@@ -104,18 +139,28 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_LRR): cv.boolean, 
             cv.Optional(CONF_RFR): cv.boolean,
             cv.Optional(CONF_RFRADDR, default=0): cv.int_,
-            cv.Optional(CONF_LEGACYPROTOCOL,default=False): cv.boolean  
+            cv.Optional(CONF_LEGACYPROTOCOL,default=False): cv.boolean,
+            cv.Optional(CONF_CC1101_MOSI): cv.int_range(min=0, max=39),
+            cv.Optional(CONF_CC1101_MISO): cv.int_range(min=0, max=39),
+            cv.Optional(CONF_CC1101_SCK):  cv.int_range(min=0, max=39),
+            cv.Optional(CONF_CC1101_CSN):  cv.int_range(min=0, max=39),
+            cv.Optional(CONF_CC1101_GDO0): cv.int_range(min=0, max=39),
         }
     ).extend(cv.COMPONENT_SCHEMA),
     validate_keypads,
     validate_c6_uarts,
     validate_auiaddr,
     validate_clocksync,
+    validate_cc1101,
 )
 
 
 
 async def to_code(config):
+
+    # Enable USE_OTA_STATE_LISTENER so OTAGlobalStateListener and
+    # get_global_ota_callback() are compiled into the firmware.
+    request_ota_state_listeners()
 
     esp32.add_idf_sdkconfig_option("CONFIG_FREERTOS_HZ", 1000)
     esp32.add_idf_sdkconfig_option("CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD", True)
@@ -154,7 +199,25 @@ async def to_code(config):
     if CONF_LRR in config:
         cg.add(var.set_lrrSupervisor(config[CONF_LRR]))
     if CONF_RFR in config:
-        cg.add(var.set_rfrEmulation(config[CONF_RFR], config[CONF_RFRADDR]))        
+        cg.add(var.set_rfrEmulation(config[CONF_RFR], config[CONF_RFRADDR]))
+    if CONF_CC1101_MOSI in config:
+        if config[CONF_DEBUGPULSE]:
+            # debug_pulsing uses the RMT peripheral — CC1101 reception is incompatible.
+            # Skip CC1101_RECEIVER define and hardware init so both can coexist in YAML.
+            _LOGGER.warning(
+                "CC1101 hardware receiver disabled because debug_pulsing is enabled "
+                "(both use the RMT peripheral and cannot run simultaneously)."
+            )
+        else:
+            cg.add_define("CC1101_RECEIVER")
+            cg.add(var.init_cc1101(
+                config[CONF_CC1101_MOSI],
+                config[CONF_CC1101_MISO],
+                config[CONF_CC1101_SCK],
+                config[CONF_CC1101_CSN],
+                config[CONF_CC1101_GDO0],
+            ))
+            _LOGGER.info("CC1101 hardware receiver enabled")
     if CONF_AUIADDR in config:
         cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
     if CONF_AUTOCLOCKSYNC in config:

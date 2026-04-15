@@ -23,11 +23,56 @@
 
 #include "vista_alarm.h"
 #include "panel_text.h"
-#include "esp_log.h"
+//#include "esp_log.h"
 #include "esp_timer.h"
+#include "esphome/components/ota/ota_backend.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstring>
+
+namespace esphome
+{
+namespace alarm_panel
+{
+
+// ---------------------------------------------------------------------------
+// OTAGuard — suspends flash-touching tasks during OTA cache-off windows.
+// Defined here (not in the header) so ota_backend.h is only included in
+// this translation unit, not in every file that includes vista_alarm.h.
+// ---------------------------------------------------------------------------
+struct VistaESPHome::OTAGuard : public ota::OTAGlobalStateListener {
+    VistaESPHome *owner {nullptr};
+
+    void on_ota_global_state(ota::OTAState state, float, uint8_t,
+                             ota::OTAComponent *) override
+    {
+        if (!owner) return;
+        if (state == ota::OTA_STARTED) {
+            ESP_LOGI("vista", "OTA start — suspending tasks");
+            owner->vistabus_.suspend_tasks();
+            if (owner->processReceiveQHandle)
+                vTaskSuspend(owner->processReceiveQHandle);
+#ifdef CC1101_RECEIVER
+            if (owner->cc1101_receiver_)
+                owner->cc1101_receiver_->suspend();
+#endif
+        } else if (state == ota::OTA_COMPLETED
+                || state == ota::OTA_ABORT
+                || state == ota::OTA_ERROR) {
+            ESP_LOGI("vista", "OTA end — resuming tasks");
+            owner->vistabus_.resume_tasks();
+            if (owner->processReceiveQHandle)
+                vTaskResume(owner->processReceiveQHandle);
+#ifdef CC1101_RECEIVER
+            if (owner->cc1101_receiver_)
+                owner->cc1101_receiver_->resume();
+#endif
+        }
+    }
+};
+
+} // namespace alarm_panel
+} // namespace esphome
 
 namespace esphome
 {
@@ -109,6 +154,23 @@ namespace esphome
             if (rfr_emulation_enabled_)
                 vistabus_.emulateRFR(rfr_emulation_addr_);
 
+#ifdef CC1101_RECEIVER
+            // Start the CC1101 hardware receiver after emulateRFR().
+            if (cc1101_receiver_ != nullptr)
+                cc1101_receiver_->begin();
+#endif
+
+            // --- OTA flash-safety: suspend tasks during cache-off windows ---
+            // During OTA the IDF disables the flash instruction cache while each
+            // 4 KB page is written.  Any task executing flash-resident code at
+            // that moment faults (corrupted backtrace / cache error).
+            // ESPHome's OTAGlobalCallback fires on_ota_global_state() at key
+            // lifecycle points.  We suspend all flash-touching tasks on
+            // OTA_STARTED and resume on OTA_COMPLETED / OTA_ABORT / OTA_ERROR.
+            ota_guard_ = new OTAGuard();
+            ota_guard_->owner = this;
+            ota::get_global_ota_callback()->add_global_state_listener(ota_guard_);
+
             // --- Build PacketDispatcher ---
             // Deferred until here so all collaborators are fully configured.
             PacketDispatcher::Config cfg;
@@ -162,11 +224,20 @@ namespace esphome
                           ttl_ / (1000LL * 1000));
             ESP_LOGCONFIG(TAG, "  LRR supervisor: %s",
                           lrr_supervisor_ ? "enabled" : "disabled");
-            if (rfr_emulation_enabled_)
+            if (rfr_emulation_enabled_) {
                 ESP_LOGCONFIG(TAG, "  RF receiver emulation: enabled  address: %d",
                               rfr_emulation_addr_);
-            else
+#ifdef CC1101_RECEIVER
+                if (cc1101_receiver_ != nullptr) {
+                    ESP_LOGCONFIG(TAG, "  CC1101 hardware receiver: enabled (~344.975 MHz, OOK, async serial)");
+                    cc1101_receiver_->log_config();
+                } else {
+                    ESP_LOGCONFIG(TAG, "  CC1101 hardware receiver: disabled (software emulation only)");
+                }
+#endif
+            } else {
                 ESP_LOGCONFIG(TAG, "  RF receiver emulation: disabled");
+            }
             if (aui_.device_address() != 0)
             {
                 ESP_LOGCONFIG(TAG, "  AUI address: %d  Auto clock sync: %s",
