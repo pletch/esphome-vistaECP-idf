@@ -139,7 +139,7 @@ void CC1101Receiver::rx_task(void *param)
         }
         if (num_symbols >= 40) 
         {
-            ESP_LOGD(TAG, "RMT RX: %u symbols, RSSI: %d dBm", (unsigned int)num_symbols, rssi);
+            ESP_LOGV(TAG, "RMT RX: %u symbols, RSSI: %d dBm", (unsigned int)num_symbols, rssi);
         }
 
         // Parse the pulse durations
@@ -164,12 +164,12 @@ void CC1101Receiver::rx_task(void *param)
 
             if (is_duplicate)
             {
-                ESP_LOGD(TAG, "RF sensor: Ignoring duplicate repetition from 0x%05lX", (unsigned long)pkt.serial);
+                ESP_LOGV(TAG, "RF sensor: Ignoring duplicate repetition from 0x%05lX", (unsigned long)pkt.serial);
                 continue;
             }
             else
-                ESP_LOGI(TAG, "RF sensor: serial=0x%05lX  ecp_status=0x%02X  hb=%d  rssi=%d dBm",
-                     (unsigned long)pkt.serial, pkt.ecp_status, pkt.heartbeat, rssi);
+                ESP_LOGI(TAG, "RF sensor: serial=0x%05lX (%lu)  ecp_status=0x%02X  hb=%d  rssi=%d dBm",
+                     (unsigned long)pkt.serial, (unsigned long)pkt.serial, pkt.ecp_status, pkt.heartbeat, rssi);
 
             // Add to circular history buffer
             self->dedupe_history_[self->dedupe_idx_] = {pkt.serial, pkt.ecp_status, now};
