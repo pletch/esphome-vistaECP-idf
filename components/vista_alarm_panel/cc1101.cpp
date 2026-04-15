@@ -31,8 +31,8 @@ const char * const CC1101::TAG = "cc1101";
 // in async mode.
 //
 // Key parameters:
-//   Frequency:    ~344.975 MHz  (FREQ2/1/0 = 0x0D/0x44/0xAD = 869549)
-//                 f = 869549 × 26e6 / 2^16 ≈ 344,975 kHz
+//   Frequency:    ~344.985 MHz  (FREQ2/1/0 = 0x0D/0x44/0xC6 = 869574)
+//                 f = 869574 × 26e6 / 2^16 ≈ 344,985 kHz
 //   Modulation:   OOK  (MDMCFG2[6:4] = 011)
 //   Mode:         Asynchronous Serial (PKTCTRL0[5:4] = 11); FIFO bypassed
 //   GDO0:         Raw demodulated OOK output (IOCFG0=0x0D)
@@ -76,12 +76,12 @@ static const RegVal kConfig[] = {
     // The carrier frequency is tuned directly via FREQ registers below.
     { CC1101Reg::FSCTRL0,  0x00 },
 
-    // Carrier frequency: ~344.975 MHz (26 MHz XTAL).
-    // FREQ_word = 0x0D44AD = 869549
-    // f = 869549 × 26e6 / 2^16 ≈ 344,975 kHz (~25 kHz below nominal 345 MHz)
+    // Carrier frequency: ~344.985 MHz (26 MHz XTAL).
+    // FREQ_word = 0x0D44C6 = 869574
+    // f = 869574 × 26e6 / 2^16 ≈ 344,985 kHz (~15 kHz below nominal 345 MHz)
     { CC1101Reg::FREQ2,    0x0D },
     { CC1101Reg::FREQ1,    0x44 },
-    { CC1101Reg::FREQ0,    0xAD },
+    { CC1101Reg::FREQ0,    0xC6 },
 
     // Modem config
     // MDMCFG4=0x87: CHANBW_E=2, CHANBW_M=0 → BW = 26e6/(8×4×4) ≈ 203 kHz
@@ -216,7 +216,7 @@ bool CC1101::begin()
     ESP_LOGD(TAG, "MDMCFG4=0x%02X (want 0x87)  MDMCFG3=0x%02X (want 0x83)  MDMCFG2=0x%02X (want 0x30)  BSCFG=0x%02X (want 0x00)  AGCCTRL0=0x%02X (want 0x91)  AGCCTRL2=0x%02X (want 0x07)  FSCTRL0=0x%02X (want 0x00)",
              mdmcfg4, mdmcfg3, mdmcfg2, bscfg, agcctrl0, agcctrl2, fsctrl0);
     enter_rx();
-    ESP_LOGI(TAG, "CC1101 RX started at ~344.975 MHz (203 kHz BW, async OOK)");
+    ESP_LOGI(TAG, "CC1101 RX started at ~344.985 MHz (203 kHz BW, async OOK)");
     return true;
 }
 

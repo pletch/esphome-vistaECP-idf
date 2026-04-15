@@ -44,6 +44,9 @@ VistaBus::VistaBus()
     this->sendQueue      = xQueueCreate(8,  sizeof(SendPacket));     // app posts commands here
     this->deviceMsgQueue = xQueueCreate(4,  sizeof(DeviceMsg));      // expander/RF notifications
 
+    this->rx_tx_task_Handle      = nullptr;
+    this->monitor_rx_task_Handle = nullptr;
+    this->uartevtQueue           = nullptr;
     this->panel_connected  = false;
     this->stop_requested   = false;
     this->LRRemulation     = false;

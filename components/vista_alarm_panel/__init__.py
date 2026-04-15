@@ -146,7 +146,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CC1101_CSN):  cv.int_range(min=0, max=39),
             cv.Optional(CONF_CC1101_GDO0): cv.int_range(min=0, max=39),
         }
-    ).extend(cv.COMPONENT_SCHEMA),
+    )
+    .extend(cv.COMPONENT_SCHEMA)
+    .extend(cv.polling_component_schema("5000ms")),
     validate_keypads,
     validate_c6_uarts,
     validate_auiaddr,

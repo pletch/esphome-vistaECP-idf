@@ -35,8 +35,8 @@
 // Noise is rejected by RSSI gating in the receive task (rssi_now()).
 //
 // Key parameters:
-//   Frequency:  ~344.975 MHz  (FREQ2/1/0 = 0x0D/0x44/0xAD = 869549)
-//               FREQ_word × 26e6 / 2^16 ≈ 344,975 kHz
+//   Frequency:  ~344.985 MHz  (FREQ2/1/0 = 0x0D/0x44/0xC6 = 869574)
+//               FREQ_word × 26e6 / 2^16 ≈ 344,985 kHz
 //   Modulation: OOK  (MDMCFG2[6:4] = 011), Manchester OFF, no sync word
 //   Mode:       Asynchronous Serial (PKTCTRL0[5:4] = 11); FIFO bypassed
 //   GDO0:       Raw demodulated OOK output (IOCFG0=0x0D)

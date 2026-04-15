@@ -103,14 +103,14 @@ HoneywellPacket honeywell345_parse(const rmt_symbol_word_t *symbols, size_t num_
         ESP_LOGV(TAG, "Insufficient chips (%zu), ignoring burst", chips.size());
         return pkt;
     }
-    ESP_LOGV(TAG, "Processing %zu chips...", chips.size());
+    ESP_LOGD(TAG, "Processing %zu chips...", chips.size());
 
     // Log raw chip bitstream for debugging (up to 256 chips)
     size_t to_print = chips.size() > 256 ? 256 : chips.size();
     char raw_str[257];
     for (size_t k = 0; k < to_print; k++) raw_str[k] = chips[k] ? '1' : '0';
     raw_str[to_print] = '\0';
-    ESP_LOGV(TAG, "Raw chip bitstream: %s", raw_str);
+    ESP_LOGD(TAG, "Raw chip bitstream: %s", raw_str);
 
     // Sliding window: try to decode Manchester from every possible chip offset.
     // We scan for the 'E' nibble (01010110) then validate the 96-chip payload following it.

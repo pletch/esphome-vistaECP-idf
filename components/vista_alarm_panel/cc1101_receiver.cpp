@@ -139,7 +139,7 @@ void CC1101Receiver::rx_task(void *param)
         }
         if (num_symbols >= 40) 
         {
-            ESP_LOGV(TAG, "RMT RX: %u symbols, RSSI: %d dBm", (unsigned int)num_symbols, rssi);
+            ESP_LOGD(TAG, "RMT RX: %u symbols, RSSI: %d dBm", (unsigned int)num_symbols, rssi);
         }
 
         // Parse the pulse durations
@@ -164,7 +164,7 @@ void CC1101Receiver::rx_task(void *param)
 
             if (is_duplicate)
             {
-                ESP_LOGV(TAG, "RF sensor: Ignoring duplicate repetition from 0x%05lX", (unsigned long)pkt.serial);
+                ESP_LOGD(TAG, "RF sensor: Ignoring duplicate repetition from 0x%05lX", (unsigned long)pkt.serial);
                 continue;
             }
             else

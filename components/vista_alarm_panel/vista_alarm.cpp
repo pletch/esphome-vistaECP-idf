@@ -229,7 +229,7 @@ namespace esphome
                               rfr_emulation_addr_);
 #ifdef CC1101_RECEIVER
                 if (cc1101_receiver_ != nullptr) {
-                    ESP_LOGCONFIG(TAG, "  CC1101 hardware receiver: enabled (~344.975 MHz, OOK, async serial)");
+                    ESP_LOGCONFIG(TAG, "  CC1101 hardware receiver: enabled (~344.985 MHz, OOK, async serial)");
                     cc1101_receiver_->log_config();
                 } else {
                     ESP_LOGCONFIG(TAG, "  CC1101 hardware receiver: disabled (software emulation only)");
