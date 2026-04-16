@@ -280,6 +280,10 @@ namespace esphome
 
             void svc_set_zone_fault(int32_t zone, bool fault)
             {
+                // Direct fast-path: publish to HA immediately without waiting for
+                // the panel's ECP echo (FA expander or FB RF receiver packet).
+                zones_.on_zone_direct(static_cast<uint8_t>(zone), fault);
+                // ECP path: forward the fault to the panel so its alarm logic fires.
                 zones_.send_emulated_fault(static_cast<uint8_t>(zone), fault, vistabus_);
             }
 
@@ -295,6 +299,14 @@ namespace esphome
 
             void processReceiveQueue(void *args);
             static void processReceiveQueue_task_start(void *args);
+
+#ifdef CC1101_RECEIVER
+            // Dedicated task that drains rf_direct_queue and calls
+            // ZoneManager::on_rf_direct() for an immediate HA publish that
+            // bypasses the panel ECP round-trip.
+            void rf_direct_task(void *args);
+            static void rf_direct_task_start(void *args);
+#endif
 
             // -------------------------------------------------------------------
             // Collaborators (owned by value except dispatcher_)
@@ -346,10 +358,13 @@ namespace esphome
             // Runtime state
             // -------------------------------------------------------------------
 
-            TaskHandle_t     processReceiveQHandle {nullptr};
-            int64_t          last_connection_check {0};
-            volatile bool    stop_requested_       {false};
-            TaskHandle_t     caller_task_          {nullptr};
+            TaskHandle_t     processReceiveQHandle  {nullptr};
+            int64_t          last_connection_check  {0};
+            volatile bool    stop_requested_        {false};
+            TaskHandle_t     caller_task_           {nullptr};
+#ifdef CC1101_RECEIVER
+            TaskHandle_t     rf_direct_task_handle_ {nullptr};
+#endif
 
             static const char * const TAG;
         };

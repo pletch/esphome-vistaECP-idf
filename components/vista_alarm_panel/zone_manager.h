@@ -13,6 +13,8 @@
                                 //           handle_rf_heartbeats)
 #include "helper_structs.h"     // LightStates (needed by refresh())
 #include "constants.h"          // kRFZoneMessageLength
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -61,12 +63,16 @@ namespace esphome
         //      per F7 cycle, after individual set_zone_*() calls have been made.
         //
         // Thread safety:
-        //   All methods are intended to be called from the processReceiveQueue
-        //   FreeRTOS task only.  No internal locking is provided.
+        //   on_rf_direct() is called from VistaESPHome::rf_direct_task().
+        //   All other methods are called from the processReceiveQueue task.
+        //   zone_mutex_ serialises access between the two tasks.
         // -----------------------------------------------------------------------
         class ZoneManager
         {
         public:
+
+            ZoneManager();
+            ~ZoneManager();
 
             // -------------------------------------------------------------------
             // Zone data
@@ -87,9 +93,12 @@ namespace esphome
                 uint8_t  partition {0};       // owning partition id
                 uint32_t rfserial  {0};       // RF device serial; 0 = hardwired
                 uint8_t  rfloop    {0};       // RF loop number (1–4)
-                int64_t  rfnext_hb {0};       // next heartbeat time (µs); 0 = RF disabled;
+                int64_t  rfnext_hb    {0};    // next heartbeat time (µs); 0 = RF disabled;
                                               // non-zero sentinel on new registration
-                int64_t  time      {0};       // timestamp of last state change (µs)
+                int64_t  time         {0};    // timestamp of last state change (µs)
+                int64_t  last_direct_time {0}; // µs timestamp of last on_rf_direct() update;
+                                              // used by on_rf_zone_packet() to suppress
+                                              // redundant ECP-path publishes
 
                 bool active   {false};        // zone is registered and participating
                 bool open     {false};        // zone is faulted / open
@@ -172,7 +181,29 @@ namespace esphome
             // PacketDispatcher can forward it to the rf_messages text sensor, or an
             // empty string if the checksum failed or the packet was a heartbeat with
             // no zone-state component.
+            //
+            // If on_rf_direct() updated this zone within the last kDirectSuppressUs,
+            // the state is still updated for consistency but the sensor publish is
+            // skipped to prevent duplicate / flapping HA state changes.
             std::string on_rf_zone_packet(const char *payload, int size);
+
+            // Direct fast-path update called by VistaESPHome::rf_direct_task()
+            // immediately after CC1101Receiver decodes a valid, non-heartbeat packet.
+            // Uses the raw ecp_status byte (same bit layout as the FB status byte)
+            // to update zone open/lowbat and publish to Home Assistant without
+            // waiting for the panel's F1 poll → FA/FB round-trip.
+            // Heartbeat packets (ecp_status & 0x05) are silently ignored.
+            // Must only be called from rf_direct_task; protected by zone_mutex_.
+            void on_rf_direct(uint32_t serial, uint8_t ecp_status);
+
+            // Direct fast-path update called by VistaESPHome::svc_set_zone_fault()
+            // when an emulated zone's fault state is changed via the Home Assistant
+            // service.  Publishes the new open state immediately without waiting for
+            // the panel's ECP echo (FA expander packet or FB RF receiver packet).
+            // The ECP-path publish is suppressed for kDirectSuppressUs afterwards to
+            // prevent duplicate / flapping HA state changes.
+            // Protected by zone_mutex_; safe to call from the ESPHome main loop task.
+            void on_zone_direct(uint8_t zone_number, bool fault);
 
             // -------------------------------------------------------------------
             // Emulated zone control — called from VistaESPHome service callbacks
@@ -246,6 +277,11 @@ namespace esphome
             // -------------------------------------------------------------------
             // Member data
             // -------------------------------------------------------------------
+
+            // Mutex serialising access to zones_ between rf_direct_task and
+            // processReceiveQueue.  Created in the constructor; must be taken
+            // before any read or write of zones_ from either task.
+            SemaphoreHandle_t zone_mutex_ {nullptr};
 
             std::vector<Zone> zones_;
 

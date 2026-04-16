@@ -118,10 +118,13 @@ public:
     // sendQueue     – commands queued by the application for transmission.
     // receiveQueue  – decoded packets delivered to the application via read_packet().
     // deviceMsgQueue– pending expander / RF device notifications waiting for an F1 poll slot.
+    // rf_direct_queue – RfDirectMsg items posted by CC1101Receiver for the fast
+    //                   direct-to-HA path; consumed by VistaESPHome::rf_direct_task().
     QueueHandle_t uartevtQueue;
     QueueHandle_t sendQueue;
     QueueHandle_t receiveQueue;
     QueueHandle_t deviceMsgQueue;
+    QueueHandle_t rf_direct_queue;
 
     // Task handles used to track task lifecycle; set to nullptr on exit so
     // stop() can detect when each task has finished.

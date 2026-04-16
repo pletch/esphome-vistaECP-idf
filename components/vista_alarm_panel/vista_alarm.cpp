@@ -55,6 +55,8 @@ struct VistaESPHome::OTAGuard : public ota::OTAGlobalStateListener {
 #ifdef CC1101_RECEIVER
             if (owner->cc1101_receiver_)
                 owner->cc1101_receiver_->suspend();
+            if (owner->rf_direct_task_handle_)
+                vTaskSuspend(owner->rf_direct_task_handle_);
 #endif
         } else if (state == ota::OTA_COMPLETED
                 || state == ota::OTA_ABORT
@@ -66,6 +68,8 @@ struct VistaESPHome::OTAGuard : public ota::OTAGlobalStateListener {
 #ifdef CC1101_RECEIVER
             if (owner->cc1101_receiver_)
                 owner->cc1101_receiver_->resume();
+            if (owner->rf_direct_task_handle_)
+                vTaskResume(owner->rf_direct_task_handle_);
 #endif
         }
     }
@@ -157,7 +161,19 @@ namespace esphome
 #ifdef CC1101_RECEIVER
             // Start the CC1101 hardware receiver after emulateRFR().
             if (cc1101_receiver_ != nullptr)
+            {
                 cc1101_receiver_->begin();
+
+                // Start the direct RF→HA task.  It blocks on rf_direct_queue and
+                // calls ZoneManager::on_rf_direct() as soon as CC1101Receiver posts
+                // a valid packet, bypassing the panel ECP round-trip.
+                xTaskCreate(rf_direct_task_start,
+                            "rf_direct",
+                            2048,
+                            static_cast<void *>(this),
+                            8,       // priority 8: above cc1101_rx (5), below processReceiveQueue (10)
+                            &rf_direct_task_handle_);
+            }
 #endif
 
             // --- OTA flash-safety: suspend tasks during cache-off windows ---
@@ -257,6 +273,16 @@ namespace esphome
         void VistaESPHome::stop()
         {
             stop_requested_ = true;
+
+#ifdef CC1101_RECEIVER
+            // Unblock rf_direct_task if it is waiting on an empty rf_direct_queue.
+            if (rf_direct_task_handle_ != nullptr)
+            {
+                RfDirectMsg sentinel{};
+                xQueueSend(vistabus_.rf_direct_queue, &sentinel, 0);
+            }
+#endif
+
             vistabus_.stop();
 
             if (processReceiveQHandle != nullptr)
@@ -314,6 +340,43 @@ namespace esphome
 
             vTaskDelete(nullptr);
         }
+
+#ifdef CC1101_RECEIVER
+        // ---------------------------------------------------------------------------
+        // RF direct-to-HA task
+        //
+        // Dedicated FreeRTOS task (priority 8) that drains rf_direct_queue and
+        // calls ZoneManager::on_rf_direct() immediately when CC1101Receiver posts
+        // a valid, non-heartbeat RF packet.  This publishes zone state to Home
+        // Assistant without waiting for the panel's F1 poll → FA/FB round-trip,
+        // reducing sensor event latency from 50–500 ms to < 5 ms.
+        //
+        // Zone state is still updated via the ECP path (on_rf_zone_packet) for
+        // panel consistency; the timestamp guard inside ZoneManager suppresses the
+        // redundant publish on the ECP path to prevent HA state flapping.
+        // ---------------------------------------------------------------------------
+
+        void VistaESPHome::rf_direct_task_start(void *args)
+        {
+            static_cast<VistaESPHome *>(args)->rf_direct_task(args);
+        }
+
+        void VistaESPHome::rf_direct_task(void * /*args*/)
+        {
+            while (!stop_requested_)
+            {
+                RfDirectMsg msg;
+                if (xQueueReceive(vistabus_.rf_direct_queue, &msg,
+                                  pdMS_TO_TICKS(500)) == pdPASS)
+                {
+                    if (!stop_requested_)
+                        zones_.on_rf_direct(msg.serial, msg.ecp_status);
+                }
+            }
+            rf_direct_task_handle_ = nullptr;
+            vTaskDelete(nullptr);
+        }
+#endif // CC1101_RECEIVER
 
     } // namespace alarm_panel
 } // namespace esphome

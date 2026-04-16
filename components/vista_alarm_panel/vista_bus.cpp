@@ -40,9 +40,10 @@ VistaBus::VistaBus()
     // Pre-allocate the inter-task queues so they are ready before begin() is
     // called.  Queue depths are chosen to hold a small burst without blocking
     // the real-time UART task.
-    this->receiveQueue   = xQueueCreate(15, sizeof(ReceivedPacket)); // app reads decoded frames here
-    this->sendQueue      = xQueueCreate(8,  sizeof(SendPacket));     // app posts commands here
-    this->deviceMsgQueue = xQueueCreate(4,  sizeof(DeviceMsg));      // expander/RF notifications
+    this->receiveQueue    = xQueueCreate(15, sizeof(ReceivedPacket)); // app reads decoded frames here
+    this->sendQueue       = xQueueCreate(8,  sizeof(SendPacket));     // app posts commands here
+    this->deviceMsgQueue  = xQueueCreate(4,  sizeof(DeviceMsg));      // expander/RF notifications
+    this->rf_direct_queue = xQueueCreate(8,  sizeof(RfDirectMsg));    // fast direct-to-HA RF path
 
     this->rx_tx_task_Handle      = nullptr;
     this->monitor_rx_task_Handle = nullptr;
@@ -63,9 +64,9 @@ VistaBus::~VistaBus()
 
     vQueueDelete(this->receiveQueue);
     vQueueDelete(this->sendQueue);
-
-    // Fix: deviceMsgQueue was not deleted in the original destructor.
     vQueueDelete(this->deviceMsgQueue);
+    if (this->rf_direct_queue != nullptr)
+        vQueueDelete(this->rf_direct_queue);
 
     // Fix: vprotocol was new-allocated in the constructor but never deleted.
     delete vprotocol;
@@ -87,7 +88,7 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum, int moni
 
     // Abort early if queue memory was not allocated (e.g. heap exhaustion).
     if (this->receiveQueue == nullptr || this->sendQueue == nullptr
-            || this->deviceMsgQueue == nullptr)
+            || this->deviceMsgQueue == nullptr || this->rf_direct_queue == nullptr)
     {
         ESP_LOGE(TAG, "Memory for task queues was not allocated. Aborting!");
         return;

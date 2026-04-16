@@ -45,6 +45,16 @@ struct DeviceMsg
     int64_t  time    {0};
 };
 
+// Payload posted to rf_direct_queue by CC1101Receiver when a valid, non-duplicate,
+// non-heartbeat RF packet is decoded.  Consumed by VistaESPHome::rf_direct_task()
+// to publish zone state directly to Home Assistant without waiting for the ECP
+// panel round-trip (F1 poll → FA/FB exchange → packet dispatcher).
+struct RfDirectMsg
+{
+    uint32_t serial;      // 20-bit Honeywell sensor serial number
+    uint8_t  ecp_status;  // status byte: loop bits [7,6,5,4], lowbat [1]
+};
+
 // Note: EmulatedExpander is defined as a nested struct inside VistaBus
 // (vistabus.h) — the top-level definition that previously appeared here
 // was a duplicate and has been removed.  All code should use

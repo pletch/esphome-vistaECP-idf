@@ -17,7 +17,7 @@ An [ESPHome](https://esphome.io) external component that interfaces directly wit
 - Arm, disarm, and send keypad commands from Home Assistant
 - Virtual keypad LCD display (line1/line2 text sensors)
 - Zone expansion emulation via expander board emulation
-- RF receiver emulation (5881ENH compatible) supporting both virtual software-defined RF zones and physical Honeywell 5800-series 345 MHz wireless sensors when combined with inexpensive CC1101 sub-GHz transceiver support for real-time OOK reception from physical Honeywell wireless sensors
+- RF receiver emulation (5881ENH compatible) supporting both virtual software-defined RF zones and physical Honeywell 5800-series 345 MHz wireless sensors when combined with an inexpensive CC1101 sub-GHz transceiver; includes a direct fast-path that publishes RF sensor state to Home Assistant immediately on packet receipt, eliminating the 50–500 ms delay introduced by the panel's ECP polling cycle
 - Long Range Radio (LRR) monitoring emulation
 - AUI interface for faster hardwired zone closure reporting and automatic panel clock sync
 - Multi-partition support (up to 8 partitions)
@@ -92,6 +92,21 @@ Capabilities with the CC1101:
 - Real-time reception from physical Honeywell 5800-series devices (door/window contacts, PIR motion detectors, smoke detectors, etc.)
 - Virtual (software-emulated) RF zones continue to work alongside hardware-received zones
 - Sensor supervision heartbeats are forwarded to the panel to maintain enrollment status
+- **Direct fast-path to Home Assistant** (see below)
+
+#### Dual-path RF event delivery
+
+When the CC1101 receives a valid sensor packet, it is delivered over two independent paths simultaneously:
+
+**ECP path** (always active): The packet is forwarded to the Vista panel via the emulated RF receiver. The panel processes the F1 poll → FA/FB exchange on its own polling schedule (typically every 100–500 ms). The panel's FB response is decoded by the monitor task and routed through the packet dispatcher to update zone state. This path keeps the panel's zone state authoritative and ensures the panel's own alarm logic operates correctly.
+
+**Direct path** (CC1101 only): Simultaneously, a dedicated FreeRTOS task (`rf_direct`) decodes the zone state directly from the raw packet and publishes it to Home Assistant without waiting for the panel's polling cycle. This reduces the HA sensor update latency from 50–500 ms down to under 5 ms, making door/window/motion sensor events appear in Home Assistant nearly instantaneously.
+
+To prevent the ECP path's later publish from causing spurious state flapping in HA (e.g. open → closed → open → closed on a fast door), the ECP path checks a per-zone timestamp: if the direct path published within the last 3 seconds, the ECP-path publish is suppressed. The zone state in the ESP32 is still updated by the ECP path for consistency with the panel's view, but the redundant HA notification is discarded.
+
+#### Direct path for emulated zones
+
+The same direct-publish behaviour applies to **emulated zones** (both hardwired expander zones and virtual RF zones) driven by the `set_zone_fault` Home Assistant service. When `set_zone_fault` is called, the zone state is published to Home Assistant immediately — before the fault is forwarded to the panel over the ECP bus. The ECP echo that arrives later (FA expander packet for hardwired zones, FB RF packet for virtual RF zones) is suppressed by the same 3-second timestamp guard, preventing duplicate transitions in HA.
 
 The CC1101 module connects to the ESP32 via SPI. All five pins must be configured together:
 
@@ -384,7 +399,7 @@ text_sensor:
 | `zone` | Yes (+ `zone:`) | Per-zone status string. Values: `O`=open, `B`=bypass, `T`=trouble/check, `A`=alarm |
 | `zone_status` | No | Combined status string for all zones with active states |
 | `lrr_messages` | No | Long Range Radio status messages (requires `lrr_supervisor: true`) |
-| `rf_messages` | No | RF device messages (requires `rf_receiver_emulation: true`, a CC1101 hardware receiver, or a physical RF receiver monitored via `monitor_pin`) |
+| `rf_messages` | No | RF device messages (requires `rf_receiver_emulation: true`, a CC1101 hardware receiver, or a physical RF receiver monitored via `monitor_pin`). Format: `<serial>:0x<status>` — e.g. `"231357:0x80"` where the status byte encodes loop bits [7,6,5,4], low battery [1], and heartbeat [2,0]. |
 
 > The `system_status` sensor can be filtered to rename values for the HA alarm panel card:
 > ```yaml

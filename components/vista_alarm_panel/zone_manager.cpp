@@ -24,6 +24,40 @@ namespace esphome
     {
         static const char * const TAG = "zone_mgr";
 
+        // Suppress ECP-path publish when the direct path updated within this window.
+        static constexpr int64_t kDirectSuppressUs = 3'000'000LL;  // 3 seconds
+
+        // RAII mutex guard — takes the semaphore on construction, gives on destruction.
+        // Handles all early-return paths in methods that access zones_.
+        struct ZoneMutexGuard
+        {
+            SemaphoreHandle_t sem;
+            explicit ZoneMutexGuard(SemaphoreHandle_t s) : sem(s)
+            {
+                xSemaphoreTake(sem, portMAX_DELAY);
+            }
+            ~ZoneMutexGuard() { xSemaphoreGive(sem); }
+        };
+
+        // ---------------------------------------------------------------------------
+        // Construction / destruction
+        // ---------------------------------------------------------------------------
+
+        ZoneManager::ZoneManager()
+        {
+            zone_mutex_ = xSemaphoreCreateMutex();
+            ESP_ERROR_CHECK(zone_mutex_ == nullptr ? ESP_ERR_NO_MEM : ESP_OK);
+        }
+
+        ZoneManager::~ZoneManager()
+        {
+            if (zone_mutex_ != nullptr)
+            {
+                vSemaphoreDelete(zone_mutex_);
+                zone_mutex_ = nullptr;
+            }
+        }
+
         // ---------------------------------------------------------------------------
         // Internal helpers
         // ---------------------------------------------------------------------------
@@ -182,6 +216,7 @@ namespace esphome
 
         void ZoneManager::set_zone_open(uint8_t zone_number, bool open)
         {
+            ZoneMutexGuard guard(zone_mutex_);
             Zone *z = get_zone(zone_number);
             if (z == nullptr || !z->active)
                 return;
@@ -196,6 +231,7 @@ namespace esphome
 
         void ZoneManager::set_zone_bypass(uint8_t zone_number, bool bypass)
         {
+            ZoneMutexGuard guard(zone_mutex_);
             Zone *z = get_zone(zone_number);
             if (z == nullptr || !z->active)
                 return;
@@ -208,6 +244,7 @@ namespace esphome
 
         void ZoneManager::set_zone_alarm(uint8_t zone_number, bool alarm)
         {
+            ZoneMutexGuard guard(zone_mutex_);
             Zone *z = get_zone(zone_number);
             if (z == nullptr || !z->active)
                 return;
@@ -220,6 +257,7 @@ namespace esphome
 
         void ZoneManager::set_zone_check(uint8_t zone_number, bool check)
         {
+            ZoneMutexGuard guard(zone_mutex_);
             Zone *z = get_zone(zone_number);
             if (z == nullptr || !z->active)
                 return;
@@ -238,6 +276,7 @@ namespace esphome
 
         void ZoneManager::set_zone_lowbat(uint8_t zone_number, bool low)
         {
+            ZoneMutexGuard guard(zone_mutex_);
             Zone *z = get_zone(zone_number);
             if (z == nullptr || !z->active)
                 return;
@@ -265,6 +304,8 @@ namespace esphome
             if (size != 4)
                 return;
 
+            ZoneMutexGuard guard(zone_mutex_);
+
             const uint8_t addr = static_cast<uint8_t>(payload[0]);
             int z = payload[3] >> 5;
 
@@ -284,9 +325,20 @@ namespace esphome
             Zone *zt = get_zone(static_cast<uint16_t>(z));
             if (zt != nullptr && zt->active)
             {
+                const int64_t now = esp_timer_get_time();
                 zt->open = open;
-                zt->time = esp_timer_get_time();
-                publish_zone(zt);
+                zt->time = now;
+
+                // If on_zone_direct() already published this event, suppress the
+                // redundant ECP-path publish to prevent HA state flapping.
+                if ((now - zt->last_direct_time) < kDirectSuppressUs)
+                {
+                    ESP_LOGD(TAG, "ECP-path publish suppressed for zone %d (direct path active)", z);
+                }
+                else
+                {
+                    publish_zone(zt);
+                }
 #ifdef DEBUG_LOG
                 ESP_LOGD(TAG, "FA expander zone %d: %s", z, open ? "open" : "closed");
 #endif
@@ -351,34 +403,123 @@ namespace esphome
                 + (static_cast<uint32_t>(static_cast<uint8_t>(payload[3])) << 8)
                 +  static_cast<uint32_t>(static_cast<uint8_t>(payload[4]));
 
-            // Format serial as the display string used by the rf_messages sensor.
-            char serial_str[14];
-            snprintf(serial_str, sizeof(serial_str), "%lu%04lu",
-                     serial / 10000, serial % 10000);
+            // Format the display string for the rf_messages sensor.
+            // Format: "<serial>:0x<status>"  e.g. "231357:0x80"
+            // The status byte encodes loop bits [7,6,5,4], lowbat [1], heartbeat [2,0].
+            const uint8_t status_byte = static_cast<uint8_t>(payload[5]);
+            char serial_str[20];
+            snprintf(serial_str, sizeof(serial_str), "%lu%04lu:0x%02X",
+                     serial / 10000, serial % 10000, status_byte);
 
 #ifdef DEBUG_LOG
-            ESP_LOGI(TAG, "RFX: %s  status:0x%02X", serial_str,
-                     static_cast<uint8_t>(payload[5]));
+            ESP_LOGI(TAG, "RFX: %s", serial_str);
 #endif
 
             // Supervision / heartbeat packets: skip zone state update, still report serial.
-            if ((payload[5] & 0x04) || (payload[5] & 0x01))
+            if ((status_byte & 0x04) || (status_byte & 0x01))
                 return std::string(serial_str);
+
+            ZoneMutexGuard guard(zone_mutex_);
 
             Zone *zt = get_zone_by_rf_serial(serial);
             if (zt != nullptr && zt->active)
             {
                 const uint8_t mask = rfloop_to_mask(zt->rfloop);
-                const bool open    = (static_cast<uint8_t>(payload[5]) & mask) != 0;
-                const bool lowbat  = (payload[5] & 0x02) != 0;
+                const bool open    = (status_byte & mask) != 0;
+                const bool lowbat  = (status_byte & 0x02) != 0;
 
-                zt->time     = esp_timer_get_time();
+                const int64_t now = esp_timer_get_time();
+                zt->time     = now;
                 zt->open     = open;
                 zt->rflowbat = lowbat;
-                publish_zone(zt);
+
+                // If the direct fast-path already published this event, skip the
+                // redundant publish to prevent flapping / duplicate HA transitions.
+                if ((now - zt->last_direct_time) < kDirectSuppressUs)
+                {
+                    ESP_LOGD(TAG, "ECP-path publish suppressed for serial %lu (direct path active)",
+                             (unsigned long)serial);
+                }
+                else
+                {
+                    publish_zone(zt);
+                }
             }
 
             return std::string(serial_str);
+        }
+
+        // ---------------------------------------------------------------------------
+        // Direct fast-path RF update
+        //
+        // Called by VistaESPHome::rf_direct_task() immediately after CC1101Receiver
+        // decodes a valid, non-duplicate, non-heartbeat packet.  Uses the raw
+        // ecp_status byte (same bit layout as the FB status byte from the panel)
+        // to update zone state and publish to Home Assistant without waiting for the
+        // panel's F1 poll → FA/FB round-trip.
+        //
+        // Records last_direct_time so that on_rf_zone_packet() can recognise and
+        // suppress the later ECP-path echo for the same event.
+        // ---------------------------------------------------------------------------
+
+        void ZoneManager::on_rf_direct(uint32_t serial, uint8_t ecp_status)
+        {
+            // Heartbeat packets carry no zone-state information.  The ECP path
+            // still needs them for panel supervision, so they are not filtered
+            // in CC1101Receiver; guard here as a safety net.
+            if ((ecp_status & 0x04) || (ecp_status & 0x01))
+                return;
+
+            ZoneMutexGuard guard(zone_mutex_);
+
+            Zone *zt = get_zone_by_rf_serial(serial);
+            if (zt == nullptr || !zt->active)
+                return;
+
+            const uint8_t mask = rfloop_to_mask(zt->rfloop);
+            const bool open    = (ecp_status & mask) != 0;
+            const bool lowbat  = (ecp_status & 0x02) != 0;
+
+            const int64_t now    = esp_timer_get_time();
+            zt->last_direct_time = now;
+            zt->time             = now;
+            zt->open             = open;
+            zt->rflowbat         = lowbat;
+
+            ESP_LOGD(TAG, "RF direct: serial=%lu  open=%d  lowbat=%d",
+                     (unsigned long)serial, open, lowbat);
+
+            publish_zone(zt);
+        }
+
+        // ---------------------------------------------------------------------------
+        // Direct fast-path for emulated zone fault changes
+        //
+        // Called by VistaESPHome::svc_set_zone_fault() immediately before it sends
+        // the fault state to the panel via send_emulated_fault().  Publishes the new
+        // open state to Home Assistant without waiting for the panel's ECP echo
+        // (FA expander packet for hardwired zones, FB RF packet for RF zones).
+        //
+        // Records last_direct_time so that both on_expander_zone_packet() and
+        // on_rf_zone_packet() will suppress the later ECP-path echo.
+        // ---------------------------------------------------------------------------
+
+        void ZoneManager::on_zone_direct(uint8_t zone_number, bool fault)
+        {
+            ZoneMutexGuard guard(zone_mutex_);
+
+            Zone *z = get_zone(zone_number);
+            if (z == nullptr || !z->active)
+                return;
+
+            const int64_t now   = esp_timer_get_time();
+            z->last_direct_time = now;
+            z->time             = now;
+            z->open             = fault;
+
+            ESP_LOGD(TAG, "Zone direct: zone=%d  fault=%d", zone_number, fault);
+
+            publish_zone(z);
         }
 
         // ---------------------------------------------------------------------------
@@ -432,6 +573,7 @@ namespace esphome
 
         void ZoneManager::refresh(const LightStates &partition_lights, int64_t ttl)
         {
+            ZoneMutexGuard guard(zone_mutex_);
             const int64_t now = esp_timer_get_time();
             std::string status_msg;
             // Pre-reserve enough space to avoid repeated small allocations for a
@@ -514,6 +656,7 @@ namespace esphome
 
         void ZoneManager::init_rf_heartbeat_timers()
         {
+            ZoneMutexGuard guard(zone_mutex_);
             for (auto &z : zones_)
             {
                 if (z.rfnext_hb != 0)
@@ -528,6 +671,7 @@ namespace esphome
 
         void ZoneManager::handle_rf_heartbeats(VistaBus &bus)
         {
+            ZoneMutexGuard guard(zone_mutex_);
             const int64_t now = esp_timer_get_time();
             for (auto &z : zones_)
             {
