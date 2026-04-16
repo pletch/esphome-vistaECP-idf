@@ -63,10 +63,13 @@ public:
     // Suspend / resume both UART tasks around flash-cache-disabling events
     // (OTA writes).  Safe to call from any task context; no-ops if the task
     // handles are null.
-    void suspend_tasks()
+    void suspend_monitor()
     {
-        if (rx_tx_task_Handle)    vTaskSuspend(rx_tx_task_Handle);
-        if (monitor_rx_task_Handle) vTaskSuspend(monitor_rx_task_Handle);
+        if (monitor_rx_task_Handle) { vTaskSuspend(monitor_rx_task_Handle); taskYIELD(); }
+    }
+    void suspend_rx_tx()
+    {
+        if (rx_tx_task_Handle) { vTaskSuspend(rx_tx_task_Handle); taskYIELD(); }
     }
     void resume_tasks()
     {
@@ -105,10 +108,6 @@ public:
     // notify the panel via the deviceMsgQueue.
     void setExpFaultBits(uint8_t zone, bool fault);
 
-    // Set or clear the tamper bit for a zone on its emulated expander.
-    // Tamper also asserts the fault (NO) bit for the same zone.
-    void setExpTamper(uint8_t zone, bool tamper_active);
-
     // Forward an RF sensor message (identified by serial number and message
     // byte) to the panel through the emulated RF receiver.
     void sendRFmsg(uint32_t serial, uint8_t msg);
@@ -141,7 +140,8 @@ public:
 
     // Represents a single emulated zone-expander module.
     // fault_NO_Bits  – normally-open fault bits (one bit per zone within the expander).
-    // fault_NC_Bits  – normally-closed (tamper) fault bits; initialised to 0xFF (all clear).
+    // fault_NC_Bits  – normally-closed fault bits; bit is cleared to 0 per zone during
+    //                  enrollment via add_emulated_expander(); sent in the F7 poll response.
     struct EmulatedExpander
     {
         uint8_t address{0};

@@ -49,15 +49,24 @@ struct VistaESPHome::OTAGuard : public ota::OTAGlobalStateListener {
         if (!owner) return;
         if (state == ota::OTA_STARTED) {
             ESP_LOGI("vista", "OTA start — suspending tasks");
-            owner->vistabus_.suspend_tasks();
-            if (owner->processReceiveQHandle)
+            // Stop consumers first, then feeders, so no task is mid-call into
+            // bus code when flash cache is disabled by the OTA writer.
+            // taskYIELD() after each suspend lets the target task actually reach
+            // its next scheduling point on the other core before we proceed.
+            if (owner->processReceiveQHandle) {
                 vTaskSuspend(owner->processReceiveQHandle);
+                taskYIELD();
+            }
 #ifdef CC1101_RECEIVER
+            if (owner->rf_direct_task_handle_) {
+                vTaskSuspend(owner->rf_direct_task_handle_);
+                taskYIELD();
+            }
             if (owner->cc1101_receiver_)
                 owner->cc1101_receiver_->suspend();
-            if (owner->rf_direct_task_handle_)
-                vTaskSuspend(owner->rf_direct_task_handle_);
 #endif
+            owner->vistabus_.suspend_monitor();
+            owner->vistabus_.suspend_rx_tx();
         } else if (state == ota::OTA_COMPLETED
                 || state == ota::OTA_ABORT
                 || state == ota::OTA_ERROR) {
@@ -141,8 +150,8 @@ namespace esphome
                              "alarm_trigger_fire", {"code", "partition"});
             register_service(&VistaESPHome::svc_set_zone_fault,
                              "set_zone_fault", {"zone", "fault"});
-            register_service(&VistaESPHome::svc_set_emulated_zone_tamper,
-                             "set_emulated_zone_tamper_state", {"zone", "tamper active"});
+            register_service(&VistaESPHome::svc_set_rf_zone_heartbeat,
+                             "set_rf_zone_heartbeat", {"zone", "fault"});
 
             // --- Publish initial sensor states ---
             partitions_.publish_initial_states();

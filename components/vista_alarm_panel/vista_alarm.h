@@ -110,6 +110,11 @@ namespace esphome
                 rfr_emulation_addr_    = rfr_addr;
             }
 
+            void set_rf_heartbeat_external(bool external)
+            {
+                zones_.set_external_heartbeat_mode(external);
+            }
+
 #ifdef CC1101_RECEIVER
             // Called from generated YAML code when cc1101_* pins are configured.
             // Must be called before setup() — stores pin numbers for begin() call.
@@ -218,6 +223,24 @@ namespace esphome
 
             bool connected() const { return vistabus_.connected(); }
 
+            // -------------------------------------------------------------------
+            // Direct zone control — callable from ESPHome YAML lambdas
+            //
+            // These mirror the corresponding HA service callbacks so that imported
+            // homeassistant binary_sensor on_press/on_release handlers can drive
+            // emulated zones without going through the HA service round-trip.
+            // -------------------------------------------------------------------
+
+            void set_zone_fault(int32_t zone, bool fault)
+            {
+                svc_set_zone_fault(zone, fault);
+            }
+
+            void set_rf_zone_heartbeat(int32_t zone, bool fault)
+            {
+                svc_set_rf_zone_heartbeat(zone, fault);
+            }
+
         private:
 
             // -------------------------------------------------------------------
@@ -287,10 +310,15 @@ namespace esphome
                 zones_.send_emulated_fault(static_cast<uint8_t>(zone), fault, vistabus_);
             }
 
-            void svc_set_emulated_zone_tamper(int32_t zone, bool tamper_active)
+            // Sends an RF supervision heartbeat for the given virtual RF zone,
+            // encoding the current fault state in the status byte alongside the
+            // supervision bit.  Resets the internal heartbeat timer regardless of
+            // whether external_heartbeat_mode is active.
+            void svc_set_rf_zone_heartbeat(int32_t zone, bool fault)
             {
-                zones_.send_emulated_tamper(static_cast<uint8_t>(zone),
-                                            tamper_active, vistabus_);
+                ESP_LOGI(TAG, "svc_set_rf_zone_heartbeat: zone=%d fault=%d",
+                         static_cast<int>(zone), fault);
+                zones_.send_rf_heartbeat(static_cast<uint8_t>(zone), fault, vistabus_);
             }
 
             // -------------------------------------------------------------------

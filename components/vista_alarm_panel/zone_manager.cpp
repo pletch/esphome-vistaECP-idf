@@ -523,8 +523,8 @@ namespace esphome
         }
 
         // ---------------------------------------------------------------------------
-        // Emulated zone fault / tamper — called from VistaESPHome service callbacks
-        // via VistaBus (unchanged path).  
+        // Emulated zone fault — called from VistaESPHome service callbacks
+        // via VistaBus.
         // ---------------------------------------------------------------------------
 
         void ZoneManager::send_emulated_fault(uint8_t zone_number,
@@ -555,13 +555,6 @@ namespace esphome
                 ESP_LOGI(TAG, "Emulated hardwired zone %d fault:%d", zone_number, fault);
                 bus.setExpFaultBits(zone_number, fault);
             }
-        }
-
-        void ZoneManager::send_emulated_tamper(uint8_t zone_number,
-                                               bool tamper_active,
-                                               VistaBus &bus)
-        {
-            bus.setExpTamper(zone_number, tamper_active);
         }
 
         // ---------------------------------------------------------------------------
@@ -671,6 +664,9 @@ namespace esphome
 
         void ZoneManager::handle_rf_heartbeats(VistaBus &bus)
         {
+            if (external_heartbeat_mode_)
+                return;
+
             ZoneMutexGuard guard(zone_mutex_);
             const int64_t now = esp_timer_get_time();
             for (auto &z : zones_)
@@ -691,6 +687,31 @@ namespace esphome
                               + 70ULL * 60 * 1000 * 1000
                               + static_cast<int64_t>(esp_random() % 20) * 60 * 1000 * 1000;
             }
+        }
+
+        void ZoneManager::send_rf_heartbeat(uint8_t zone_number, bool fault, VistaBus &bus)
+        {
+            ZoneMutexGuard guard(zone_mutex_);
+            Zone *z = get_zone(zone_number);
+            if (z == nullptr || z->rfserial == 0 || z->rfnext_hb == 0)
+            {
+                ESP_LOGW(TAG, "send_rf_heartbeat: zone %d is not a registered RF zone", zone_number);
+                return;
+            }
+
+            // Encode supervision bit (0x04) plus the loop-fault bit for the current
+            // open state so the panel receives a fully-formed status byte.
+            const uint8_t loop_bit = fault ? rfloop_to_mask(z->rfloop) : 0;
+            const uint8_t msg = static_cast<uint8_t>(0x04 | loop_bit);
+            ESP_LOGI(TAG, "send_rf_heartbeat: zone %d fault:%d serial:%lu msg:0x%02X",
+                     zone_number, fault, z->rfserial, msg);
+            bus.sendRFmsg(z->rfserial, msg);
+
+            // Reset the internal timer so it won't fire spuriously if mode is ever
+            // switched back to internal.
+            z->rfnext_hb = esp_timer_get_time()
+                           + 70ULL * 60 * 1000 * 1000
+                           + static_cast<int64_t>(esp_random() % 20) * 60 * 1000 * 1000;
         }
 
         // ---------------------------------------------------------------------------

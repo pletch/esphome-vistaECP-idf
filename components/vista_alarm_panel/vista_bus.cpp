@@ -653,29 +653,6 @@ void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
     }
 }
 
-// Update the tamper (normally-closed) bits for a zone.
-// Tamper also asserts the NO (fault) bit so the panel sees a full fault.
-void VistaBus::setExpTamper(uint8_t zone, bool tamper_active)
-{
-    const uint8_t address  = getExpanderAddress(zone);
-    EmulatedExpander *expander = getExpander(address);
-    if (expander != nullptr)
-    {
-        // Fix: same unsigned-shift correction as setExpFaultBits.
-        const uint8_t z   = zone & 0x07;
-        const uint8_t bit = static_cast<uint8_t>(1u << (8u - z));
-
-        expander->fault_NC_Bits = static_cast<char>(
-            tamper_active ? (static_cast<uint8_t>(expander->fault_NC_Bits) |  bit)
-                          : (static_cast<uint8_t>(expander->fault_NC_Bits) & ~bit));
-
-        // Mirror tamper state in the fault bits so the panel reports both.
-        expander->fault_NO_Bits = static_cast<char>(
-            tamper_active ? (static_cast<uint8_t>(expander->fault_NO_Bits) |  bit)
-                          : (static_cast<uint8_t>(expander->fault_NO_Bits) & ~bit));
-    }
-}
-
 // Forward an RF sensor event to the panel.  Packages the sensor serial number
 // and message byte into a DeviceMsg addressed to the emulated RF receiver so
 // the rx_tx_task can deliver it on the next F1 poll cycle.

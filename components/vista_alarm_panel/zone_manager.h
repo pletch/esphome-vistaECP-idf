@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "vista_bus.h"           // VistaBus (needed for send_emulated_fault/tamper,
+#include "vista_bus.h"           // VistaBus (needed for send_emulated_fault,
                                 //           handle_rf_heartbeats)
 #include "helper_structs.h"     // LightStates (needed by refresh())
 #include "constants.h"          // kRFZoneMessageLength
@@ -43,7 +43,7 @@ namespace esphome
         //   - FB RF receiver packet decode: on_rf_zone_packet().
         //   - Periodic state reconciliation against partition light flags: refresh().
         //   - RF supervision heartbeat emission: handle_rf_heartbeats().
-        //   - Emulated zone fault/tamper forwarding to VistaBus.
+        //   - Emulated zone fault forwarding to VistaBus.
         //
         // Does NOT own:
         //   - The rf_messages text sensor (held by PacketDispatcher::Config and
@@ -216,13 +216,6 @@ namespace esphome
                                      bool fault,
                                      VistaBus &bus);
 
-            // Delegates directly to VistaBus::setExpTamper().  Provided here so
-            // VistaESPHome has a single delegation target for all emulated zone
-            // operations regardless of type.
-            void send_emulated_tamper(uint8_t zone_number,
-                                      bool tamper_active,
-                                      VistaBus &bus);
-
             // -------------------------------------------------------------------
             // Refresh — called by PartitionManager::process_status_flags()
             // -------------------------------------------------------------------
@@ -242,15 +235,36 @@ namespace esphome
             // -------------------------------------------------------------------
 
             // Stagger initial heartbeat timestamps across 1–10 minutes for all
-            // registered RF zones.  Must be called once at the start of the
-            // processReceiveQueue task, after all zones are registered.
+            // registered RF zones whose heartbeats are managed internally.
+            // Must be called once at the start of the processReceiveQueue task,
+            // after all zones are registered.
             void init_rf_heartbeat_timers();
 
             // Check all RF zones and send a supervision (heartbeat) message to
-            // any whose timer has expired.  Reschedules the next heartbeat at
-            // 70–90 minutes with random jitter.  Call each iteration of the
-            // receive task loop.
+            // any whose internal timer has expired.  Reschedules the next heartbeat
+            // at 70–90 minutes with random jitter.  No-op for zones whose heartbeats
+            // are managed externally (external_heartbeat_mode_ == true).
+            // Call each iteration of the receive task loop.
             void handle_rf_heartbeats(VistaBus &bus);
+
+            // Send an immediate supervision heartbeat for the specified zone and
+            // reset its internal timer (extending it by 70–90 minutes from now).
+            // Called by the set_rf_zone_heartbeat HA service.  Safe to call
+            // regardless of external_heartbeat_mode_.
+            //
+            // fault — current open/fault state of the zone; encodes the zone's
+            //         loop-fault bit alongside the supervision bit (0x04) so the
+            //         panel receives a fully-formed status byte rather than just
+            //         the supervision bit with all loops cleared.
+            void send_rf_heartbeat(uint8_t zone_number, bool fault, VistaBus &bus);
+
+            // Select heartbeat management mode for virtual RF zones.
+            // When true, internal timer-based emission is suppressed and heartbeats
+            // must be driven externally via the set_rf_zone_heartbeat service.
+            void set_external_heartbeat_mode(bool external)
+            {
+                external_heartbeat_mode_ = external;
+            }
 
             // -------------------------------------------------------------------
             // Snapshot accessor
@@ -277,6 +291,11 @@ namespace esphome
             // -------------------------------------------------------------------
             // Member data
             // -------------------------------------------------------------------
+
+            // When true, handle_rf_heartbeats() skips all zones so that the caller
+            // (Home Assistant automation) drives heartbeat timing via
+            // send_rf_heartbeat().  Defaults to false (internal timer mode).
+            bool external_heartbeat_mode_ {false};
 
             // Mutex serialising access to zones_ between rf_direct_task and
             // processReceiveQueue.  Created in the constructor; must be taken

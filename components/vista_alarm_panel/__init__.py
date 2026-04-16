@@ -57,6 +57,7 @@ CONF_CC1101_MISO="cc1101_miso_pin"
 CONF_CC1101_SCK="cc1101_sck_pin"
 CONF_CC1101_CSN="cc1101_csn_pin"
 CONF_CC1101_GDO0="cc1101_gdo0_pin"
+CONF_RF_HEARTBEAT_EXTERNAL="rf_heartbeat_external"
 
 CC1101_PINS = [CONF_CC1101_MOSI, CONF_CC1101_MISO, CONF_CC1101_SCK,
                CONF_CC1101_CSN, CONF_CC1101_GDO0]
@@ -145,6 +146,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CC1101_SCK):  cv.int_range(min=0, max=39),
             cv.Optional(CONF_CC1101_CSN):  cv.int_range(min=0, max=39),
             cv.Optional(CONF_CC1101_GDO0): cv.int_range(min=0, max=39),
+            cv.Optional(CONF_RF_HEARTBEAT_EXTERNAL, default=False): cv.boolean,
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -224,6 +226,9 @@ async def to_code(config):
         cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
     if CONF_AUTOCLOCKSYNC in config:
         cg.add(var.set_clocksync(config[CONF_AUTOCLOCKSYNC]))
+    if config[CONF_RF_HEARTBEAT_EXTERNAL]:
+        cg.add(var.set_rf_heartbeat_external(True))
+        _LOGGER.info("RF virtual zone heartbeats set to external mode — use set_rf_zone_heartbeat service")
     await cg.register_component(var, config)
         
             

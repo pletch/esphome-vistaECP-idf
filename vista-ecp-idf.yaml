@@ -196,10 +196,10 @@ binary_sensor:
 #    emulated: true
 #    device_class: motion
 
-# Example showing attachment Home Assistant Input Boolean to emulated hardwired zone
+# Example showing attachment of a Home Assistant binary sensor to an emulated hardwired zone
 #  - platform: homeassistant
-#    name: "Input Boolean From Home Assistant"
-#    entity_id: input_boolean.example
+#    name: "Binary Sensor From Home Assistant"
+#    entity_id: binary_sensor.example
 #    on_press:       #zone,on/off
 #      - lambda: |-
 #          $panelId->set_zone_fault(33,1);

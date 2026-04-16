@@ -229,6 +229,7 @@ vista_alarm_panel:
 | `cc1101_sck_pin` | Optional | GPIO | — | SPI clock pin connected to the CC1101 module. |
 | `cc1101_csn_pin` | Optional | GPIO | — | SPI chip select (CSN) pin connected to the CC1101 module. |
 | `cc1101_gdo0_pin` | Optional | GPIO | — | CC1101 GDO0 pin — raw demodulated OOK output, sampled by the ESP32 RMT peripheral. Must be an RMT-capable GPIO. |
+| `rf_heartbeat_external` | Optional | boolean | false | Controls how supervision heartbeats are sent for virtual (emulated) RF zones. When `false` (default), the component automatically emits a heartbeat for each virtual RF zone every 70–90 minutes so the panel retains the zone's enrollment. When `true`, internal heartbeat emission is suppressed and heartbeats must be driven externally by calling the `set_rf_zone_heartbeat` Home Assistant service from an automation. Use external mode when you want an HA automation to control exactly when heartbeats fire — for example, to integrate with a watchdog or to couple heartbeat timing to real-world sensor liveness. The `set_rf_zone_heartbeat` service is available regardless of this setting. |
 | `legacy_protocol` | Optional | boolean | false | Enable older protocol for Vista 15SE / 20SE panels. |
 | `debug_logging` | Optional | boolean | false | Enable verbose ECP packet logging. Requires ESPHome logger level `DEBUG` or higher. |
 | `debug_pulsing` | Optional | boolean | false | Use ESP32 RMT peripheral to capture raw bus pulse timings to the log. Output begins 60 seconds after startup. Automatically disables CC1101 support. **Do not enable for normal use.** |
@@ -307,14 +308,29 @@ Ensure emulated zone numbers do not conflict with zones already used by physical
 
 ```yaml
   - platform: homeassistant
-    name: "HA Input Boolean"
-    entity_id: input_boolean.example
+    name: "HA Binary Sensor"
+    entity_id: binary_sensor.example
     on_press:
-      - lambda: |-
-          id(VistaAlarm)->set_zone_fault(33, 1);
+      - lambda: id(VistaAlarm).set_zone_fault(33, true);
     on_release:
-      - lambda: |-
-          id(VistaAlarm)->set_zone_fault(33, 0);
+      - lambda: id(VistaAlarm).set_zone_fault(33, false);
+```
+
+For an emulated RF zone with an `interval:` heartbeat (useful when `rf_heartbeat_external: true`):
+
+```yaml
+  - platform: homeassistant
+    id: ha_motion
+    entity_id: binary_sensor.office_motion
+    on_press:
+      - lambda: id(VistaAlarm).set_zone_fault(34, true);
+    on_release:
+      - lambda: id(VistaAlarm).set_zone_fault(34, false);
+
+interval:
+  - interval: 60min
+    then:
+      - lambda: id(VistaAlarm).set_rf_zone_heartbeat(34, id(ha_motion).state);
 ```
 
 ---
@@ -408,6 +424,57 @@ text_sensor:
 >           if (x == "not_ready") x = "disarmed";
 >           return x;
 > ```
+
+---
+
+## Home Assistant Services
+
+The component registers the following services in Home Assistant under the ESPHome device. Service names are prefixed with the device name (e.g. `esphome.vista_alarm_<service_name>`).
+
+| Service | Parameters | Description |
+|---|---|---|
+| `alarm_keypress` | `keys` (string) | Send keypad key presses to the default partition. |
+| `alarm_keypress_partition` | `keys` (string), `partition` (int) | Send keypad key presses to a specific partition. |
+| `alarm_disarm` | `code` (string), `partition` (int) | Disarm the specified partition using the given access code. |
+| `alarm_arm_home` | `partition` (int) | Arm the partition in Stay mode. |
+| `alarm_arm_night` | `partition` (int) | Arm the partition in Night mode. |
+| `alarm_arm_away` | `partition` (int) | Arm the partition in Away mode. |
+| `alarm_trigger_panic` | `code` (string), `partition` (int) | Trigger a panic alarm. |
+| `alarm_trigger_fire` | `code` (string), `partition` (int) | Trigger a fire alarm. |
+| `set_panel_time` | _(none)_ | Sync the panel clock from ESPHome time (requires `aui_addr`). |
+| `set_zone_fault` | `zone` (int), `fault` (bool) | Set or clear the fault state for an emulated zone. Publishes to HA immediately via the direct fast-path and forwards the fault to the panel over the ECP bus. |
+| `set_rf_zone_heartbeat` | `zone` (int), `fault` (bool) | Send an RF supervision heartbeat for a virtual RF zone. See below. |
+
+### `set_rf_zone_heartbeat`
+
+Virtual (emulated) RF zones must send periodic supervision heartbeats to the panel to maintain their enrollment. By default the component handles this automatically, emitting a heartbeat for each virtual RF zone every 70–90 minutes.
+
+`set_rf_zone_heartbeat` lets you send a heartbeat on demand from an HA automation. It sends a fully-formed Honeywell 345 MHz status byte to the panel that combines the supervision flag (`0x04`) with the zone's current loop-fault bit, so the panel simultaneously confirms the sensor is alive and updates its view of the zone's open/closed state.
+
+**Parameters:**
+- `zone` — zone number matching the emulated RF zone's `zone:` in the YAML
+- `fault` — current open/fault state of the zone (`true` = open/faulted, `false` = closed/secure)
+
+**`rf_heartbeat_external: true` mode:**
+
+When `rf_heartbeat_external: true` is set in the component config, internal automatic heartbeat emission is suppressed entirely. All heartbeats must be driven by HA automations calling `set_rf_zone_heartbeat`. This is useful when you want to couple heartbeat delivery to real-world sensor liveness — for example, calling the service only when the upstream sensor reports in, so a missed heartbeat causes the panel to generate a supervision failure trouble just as it would with a real wireless sensor that stopped transmitting.
+
+Example automation sending a heartbeat every 60 minutes for zone 34:
+
+```yaml
+automation:
+  - alias: "Virtual RF Zone 34 Heartbeat"
+    trigger:
+      - platform: time_pattern
+        minutes: "/60"
+    action:
+      - service: esphome.vista_alarm_set_rf_zone_heartbeat
+        data:
+          zone: 34
+          fault: false
+```
+
+> **Note:** `set_rf_zone_heartbeat` also resets the internal timer regardless of `rf_heartbeat_external` mode, so switching back to internal mode will not cause an immediate spurious heartbeat fire.
 
 ---
 
