@@ -95,7 +95,6 @@ namespace CC1101Status {
     inline constexpr uint8_t VERSION   = 0x31;
     inline constexpr uint8_t RSSI      = 0x34;
     inline constexpr uint8_t MARCSTATE = 0x35;
-    inline constexpr uint8_t RXBYTES   = 0x3B;  // [7]=RXFIFO_OVERFLOW, [6:0]=bytes
 }
 
 // CC1101 command strobes
@@ -107,7 +106,6 @@ namespace CC1101Strobe {
     inline constexpr uint8_t SNOP  = 0x3D;  // No-op / read status
 }
 
-inline constexpr uint8_t CC1101_RXFIFO     = 0xFF;  // burst read RX FIFO
 inline constexpr uint8_t CC1101_READ_BURST = 0xC0;  // status register read flag
 inline constexpr uint8_t CC1101_READ_BIT   = 0x80;  // single-byte read flag
 inline constexpr uint8_t CC1101_WRITE_BIT  = 0x00;
@@ -138,7 +136,6 @@ private:
     void    write_reg(uint8_t addr, uint8_t val);
     uint8_t read_reg(uint8_t addr);
     uint8_t read_status_reg(uint8_t addr);
-    void    read_burst(uint8_t addr, uint8_t *data, int len);
     void    strobe(uint8_t cmd);
     void    load_config();
     void    enter_rx();

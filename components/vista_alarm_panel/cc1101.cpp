@@ -9,7 +9,6 @@
 
 #include "cc1101.h"
 #include "esp_attr.h"
-#include <cstring>
 
 const char * const CC1101::TAG = "cc1101";
 
@@ -280,28 +279,6 @@ uint8_t CC1101::read_status_reg(uint8_t addr)
     t.rx_buffer = rx;
     spi_device_transmit(spi_, &t);
     return rx[1];
-}
-
-void CC1101::read_burst(uint8_t addr, uint8_t *data, int len)
-{
-    // Burst read: first byte is address with read+burst bits.
-    // Fixed stack buffers — avoid heap allocation, which is unsafe when the
-    // flash cache may be suspended during OTA writes.
-    // Max len is 64 (full CC1101 FIFO); +1 for the command byte = 65 bytes.
-    static constexpr int kMaxBurst = 65;
-    if (len + 1 > kMaxBurst) len = kMaxBurst - 1;
-
-    uint8_t tx[kMaxBurst] = {};
-    uint8_t rx[kMaxBurst] = {};
-    tx[0] = addr | CC1101_READ_BURST;  // 0xFF for RX FIFO burst read
-
-    spi_transaction_t t = {};
-    t.length    = static_cast<size_t>(len + 1) * 8;
-    t.tx_buffer = tx;
-    t.rx_buffer = rx;
-    spi_device_transmit(spi_, &t);
-
-    memcpy(data, rx + 1, static_cast<size_t>(len));
 }
 
 void CC1101::strobe(uint8_t cmd)
