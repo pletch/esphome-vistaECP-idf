@@ -178,7 +178,7 @@ namespace esphome
                 // a valid packet, bypassing the panel ECP round-trip.
                 xTaskCreate(rf_direct_task_start,
                             "rf_direct",
-                            2048,
+                            4096,
                             static_cast<void *>(this),
                             8,       // priority 8: above cc1101_rx (5), below processReceiveQueue (10)
                             &rf_direct_task_handle_);

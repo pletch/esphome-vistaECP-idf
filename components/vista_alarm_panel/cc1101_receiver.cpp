@@ -150,16 +150,18 @@ void CC1101Receiver::rx_task(void *param)
             int64_t now = esp_timer_get_time();
             bool is_duplicate = false;
 
-            // Search history for a matching serial and status within the 2s window
+            // Two-tier dedup:
+            //   Burst tier  (serial only, 300 ms): collapses all retransmissions
+            //     within a single RF burst, including interleaved fault/clear status
+            //     bytes that some sensors emit during state transitions.
+            //   Long-range  (serial+status, 2.5 s): suppresses exact repeats that
+            //     slip through after the burst window.
             for (const auto& entry : self->dedupe_history_)
             {
-                if (entry.serial == pkt.serial && 
-                    entry.status == pkt.ecp_status && 
-                    (now - entry.timestamp) < 2500000) 
-                {
-                    is_duplicate = true;
-                    break;
-                }
+                if (entry.serial != pkt.serial) continue;
+                int64_t age = now - entry.timestamp;
+                if (age < 300000)                                    { is_duplicate = true; break; }
+                if (entry.status == pkt.ecp_status && age < 2500000) { is_duplicate = true; break; }
             }
 
             if (is_duplicate)

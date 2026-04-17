@@ -429,19 +429,20 @@ namespace esphome
                 const bool lowbat  = (status_byte & 0x02) != 0;
 
                 const int64_t now = esp_timer_get_time();
-                zt->time     = now;
-                zt->open     = open;
-                zt->rflowbat = lowbat;
+                zt->time = now;
 
-                // If the direct fast-path already published this event, skip the
-                // redundant publish to prevent flapping / duplicate HA transitions.
                 if ((now - zt->last_direct_time) < kDirectSuppressUs)
                 {
-                    ESP_LOGD(TAG, "ECP-path publish suppressed for serial %lu (direct path active)",
+                    // Direct path has authoritative state; reject the ECP update entirely
+                    // so stale pre-event panel state cannot overwrite what was already
+                    // sent to Home Assistant.
+                    ESP_LOGD(TAG, "ECP-path update suppressed for serial %lu (direct path active)",
                              (unsigned long)serial);
                 }
                 else
                 {
+                    zt->open     = open;
+                    zt->rflowbat = lowbat;
                     publish_zone(zt);
                 }
             }
@@ -578,38 +579,50 @@ namespace esphome
                 if (!z.active || !z.partition)
                     continue;
 
-                // --- State reconciliation against panel light flags ---
-
-                // If the panel reports ready, any open (non-bypassed) zone is stale.
-                if (!z.bypass && z.open && partition_lights.ready)
+                // RF zones within the direct-path suppress window: the direct path
+                // has already sent authoritative state to HA.  Skip reconciliation
+                // and publish to prevent a stale panel F7 cycle from overwriting it.
+                const bool direct_fresh = (z.rfserial != 0) &&
+                                          ((now - z.last_direct_time) < kDirectSuppressUs);
+                if (direct_fresh)
                 {
-                    ESP_LOGE(TAG, "Zone %d: open but panel ready — clearing open state", z.zone);
-                    z.open  = false;
-                    z.check = false;
-                    z.alarm = false;
+                    // Still build the status string from current zone flags below,
+                    // but do not mutate state or publish sensors.
                 }
+                else
+                {
+                    // --- State reconciliation against panel light flags ---
 
-                // If the bypass light is off, clear any lingering bypass flag.
-                if (z.bypass && !partition_lights.bypass)
-                    z.bypass = false;
+                    // If the panel reports ready, any open (non-bypassed) zone is stale.
+                    if (!z.bypass && z.open && partition_lights.ready)
+                    {
+                        ESP_LOGE(TAG, "Zone %d: open but panel ready — clearing open state", z.zone);
+                        z.open  = false;
+                        z.check = false;
+                        z.alarm = false;
+                    }
 
-                // If the alarm light is off, clear any lingering alarm flag.
-                if (z.alarm && !partition_lights.alarm)
-                    z.alarm = false;
+                    // If the bypass light is off, clear any lingering bypass flag.
+                    if (z.bypass && !partition_lights.bypass)
+                        z.bypass = false;
 
-                // --- TTL-based expiry ---
+                    // If the alarm light is off, clear any lingering alarm flag.
+                    if (z.alarm && !partition_lights.alarm)
+                        z.alarm = false;
 
-                // Open and check states expire after TTL microseconds if the panel
-                // has not re-reported them.  Bypassed zones are exempt — they persist
-                // until the panel clears the bypass flag.
-                if (!z.bypass && z.open && (now - z.time) > ttl)
-                    z.open = false;
+                    // --- TTL-based expiry ---
 
-                if (!z.bypass && z.check && (now - z.time) > ttl)
-                    z.check = false;
+                    // Open and check states expire after TTL microseconds if the panel
+                    // has not re-reported them.  Bypassed zones are exempt.
+                    if (!z.bypass && z.open && (now - z.time) > ttl)
+                        z.open = false;
 
-                // Publish the potentially-changed zone state.
-                publish_zone(&z);
+                    if (!z.bypass && z.check && (now - z.time) > ttl)
+                        z.check = false;
+
+                    // Publish the potentially-changed zone state.
+                    publish_zone(&z);
+                }
 
                 // --- Build combined zone status string ---
                 // Format: [OP|AL|BY|CK|LB]:<zone_number>, comma-separated.
