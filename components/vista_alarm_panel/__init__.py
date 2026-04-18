@@ -9,12 +9,16 @@
 
 import esphome.codegen as cg
 import esphome.config_validation as cv
-from esphome.components import esp32
+from esphome.components import esp32, text_sensor as ts_mod
 from esphome.components.ota import request_ota_state_listeners
 import logging
 from esphome.const import (
-    CONF_ID
+    CONF_ID,
+    CONF_NAME,
+    CONF_ENTITY_CATEGORY,
+    CONF_DISABLED_BY_DEFAULT,
 )
+from esphome.core import ID, CORE
 
 # Declare dependency on the OTA component so that ESPHome ensures it is
 # initialised before this component and get_global_ota_callback() is valid.
@@ -229,7 +233,77 @@ async def to_code(config):
     if config[CONF_RF_HEARTBEAT_EXTERNAL]:
         cg.add(var.set_rf_heartbeat_external(True))
         _LOGGER.info("RF virtual zone heartbeats set to external mode — use set_rf_zone_heartbeat service")
+
     await cg.register_component(var, config)
+
+    # --- Diagnostic text sensors for configuration info ---
+    # Create one text_sensor::TextSensor per config property.  These are
+    # registered via the standard ESPHome codegen path so entity metadata
+    # (name, entity_category) is emitted into the generated ::setup() where
+    # the protected configure_entity_() call is accessible.  Each sensor
+    # publishes its value immediately in setup() and then never changes,
+    # giving the user a permanent at-a-glance view of the component config
+    # in HA under the device's Diagnostic section.
+
+    text_sensor_cls = cg.esphome_ns.namespace("text_sensor").class_("TextSensor")
+
+    async def add_diag(name: str, value: str) -> None:
+        slug = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_")
+        sensor_id = ID(f"vista_diag_{slug}", is_declaration=True, type=text_sensor_cls)
+        sensor_config = {
+            CONF_ID: sensor_id,
+            CONF_NAME: name,
+            CONF_ENTITY_CATEGORY: "diagnostic",
+            CONF_DISABLED_BY_DEFAULT: False,
+        }
+        sensor_var = await ts_mod.new_text_sensor(sensor_config)
+        cg.add(sensor_var.publish_state(value))
+
+    protocol = "Vista SE (Legacy)" if config.get(CONF_LEGACYPROTOCOL, False) else "Vista 20P"
+    await add_diag("Panel Protocol", protocol)
+
+    keypad_map = [
+        (1, CONF_KEYPAD1), (2, CONF_KEYPAD2), (3, CONF_KEYPAD3), (4, CONF_KEYPAD4),
+        (5, CONF_KEYPAD5), (6, CONF_KEYPAD6), (7, CONF_KEYPAD7), (8, CONF_KEYPAD8),
+    ]
+    active_parts = [(p, config[c]) for p, c in keypad_map if config[c] != 0]
+    kp_str = ", ".join(f"P{p}: {addr}" for p, addr in active_parts)
+    await add_diag("Active Partitions (keypad addr)", kp_str)
+
+    cc1101_active = CONF_CC1101_MOSI in config and not config.get(CONF_DEBUGPULSE, False)
+    if config.get(CONF_RFR, False):
+        rfr_addr = config[CONF_RFRADDR]
+        rf_str = f"CC1101 hardware @ address {rfr_addr}" if cc1101_active else f"SW emulated @ address {rfr_addr}"
+    else:
+        rf_str = "Disabled"
+    await add_diag("RF Receiver", rf_str)
+
+    lrr = config.get(CONF_LRR, False)
+    await add_diag("LRR Supervisor", "Enabled" if lrr else "Disabled")
+
+    aui = config[CONF_AUIADDR]
+    await add_diag("AUI Address", f"Address {aui}" if aui != 0 else "Disabled")
+
+    panel_bs = [
+        entry for entry in CORE.config.get("binary_sensor", [])
+        if entry.get("platform") == "vista_alarm_panel"
+    ]
+
+    expander_zones = sorted(
+        entry["zone"]
+        for entry in panel_bs
+        if entry.get("emulated") is True and "rf_serial" not in entry
+    )
+    exp_str = ", ".join(str(z) for z in expander_zones) if expander_zones else "Disabled"
+    await add_diag("Expander Emulation (zones)", exp_str)
+
+    rf_emulated_zones = sorted(
+        entry["zone"]
+        for entry in panel_bs
+        if entry.get("emulated") is True and "rf_serial" in entry
+    )
+    rf_emu_str = ", ".join(str(z) for z in rf_emulated_zones) if rf_emulated_zones else "Disabled"
+    await add_diag("RF Emulated Zones", rf_emu_str)
         
             
     

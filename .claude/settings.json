@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api-docs.esphome.io)",
+      "WebFetch(domain:developers.esphome.io)",
+      "WebFetch(domain:esphome.io)",
+      "Read(//home/tim/**)"
+    ]
+  }
+}
