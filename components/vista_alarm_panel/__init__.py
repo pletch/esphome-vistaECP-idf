@@ -17,6 +17,7 @@ from esphome.const import (
     CONF_NAME,
     CONF_ENTITY_CATEGORY,
     CONF_DISABLED_BY_DEFAULT,
+    CONF_ICON,
 )
 from esphome.core import ID, CORE
 
@@ -247,7 +248,7 @@ async def to_code(config):
 
     text_sensor_cls = cg.esphome_ns.namespace("text_sensor").class_("TextSensor")
 
-    async def add_diag(name: str, value: str) -> None:
+    async def add_diag(name: str, value: str, icon: str = "mdi:expansion-card-variant") -> None:
         slug = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_")
         sensor_id = ID(f"vista_diag_{slug}", is_declaration=True, type=text_sensor_cls)
         sensor_config = {
@@ -255,12 +256,13 @@ async def to_code(config):
             CONF_NAME: name,
             CONF_ENTITY_CATEGORY: "diagnostic",
             CONF_DISABLED_BY_DEFAULT: False,
+            CONF_ICON: icon,
         }
         sensor_var = await ts_mod.new_text_sensor(sensor_config)
         cg.add(sensor_var.publish_state(value))
 
     protocol = "Vista SE (Legacy)" if config.get(CONF_LEGACYPROTOCOL, False) else "Vista 20P"
-    await add_diag("Panel Protocol", protocol)
+    await add_diag("Panel Protocol", protocol, "mdi:alarm-panel")
 
     keypad_map = [
         (1, CONF_KEYPAD1), (2, CONF_KEYPAD2), (3, CONF_KEYPAD3), (4, CONF_KEYPAD4),
@@ -268,21 +270,21 @@ async def to_code(config):
     ]
     active_parts = [(p, config[c]) for p, c in keypad_map if config[c] != 0]
     kp_str = ", ".join(f"P{p}: {addr}" for p, addr in active_parts)
-    await add_diag("Active Partitions (keypad addr)", kp_str)
+    await add_diag("Active Partitions (keypad addr)", kp_str, "mdi:alarm-panel")
 
     cc1101_active = CONF_CC1101_MOSI in config and not config.get(CONF_DEBUGPULSE, False)
     if config.get(CONF_RFR, False):
         rfr_addr = config[CONF_RFRADDR]
-        rf_str = f"CC1101 hardware @ address {rfr_addr}" if cc1101_active else f"SW emulated @ address {rfr_addr}"
+        rf_str = f"CC1101 HW @ addr:{rfr_addr}" if cc1101_active else f"SW emulated @ addr:{rfr_addr}"
     else:
         rf_str = "Disabled"
-    await add_diag("RF Receiver", rf_str)
+    await add_diag("RF Receiver Emulation", rf_str)
 
     lrr = config.get(CONF_LRR, False)
     await add_diag("LRR Supervisor", "Enabled" if lrr else "Disabled")
 
     aui = config[CONF_AUIADDR]
-    await add_diag("AUI Address", f"Address {aui}" if aui != 0 else "Disabled")
+    await add_diag("AUI Address", f"{aui}" if aui != 0 else "Disabled")
 
     panel_bs = [
         entry for entry in CORE.config.get("binary_sensor", [])
