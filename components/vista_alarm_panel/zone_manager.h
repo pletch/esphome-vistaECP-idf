@@ -106,6 +106,7 @@ namespace esphome
                 bool alarm    {false};        // zone is in alarm
                 bool check    {false};        // zone has a trouble/check condition
                 bool rflowbat {false};        // RF sensor is reporting low battery
+                bool emulated {false};        // zone is software-emulated (no physical sensor)
             };
 
             // -------------------------------------------------------------------
@@ -194,7 +195,7 @@ namespace esphome
             // waiting for the panel's F1 poll → FA/FB round-trip.
             // Heartbeat packets (ecp_status & 0x05) are silently ignored.
             // Must only be called from rf_direct_task; protected by zone_mutex_.
-            void on_rf_direct(uint32_t serial, uint8_t ecp_status);
+            void on_rf_direct(uint32_t serial, uint8_t ecp_status, int8_t rssi = 0);
 
             // Direct fast-path update called by VistaESPHome::svc_set_zone_fault()
             // when an emulated zone's fault state is changed via the Home Assistant
@@ -280,13 +281,27 @@ namespace esphome
         private:
 
             // -------------------------------------------------------------------
-            // Internal helper
+            // Internal helpers
             // -------------------------------------------------------------------
 
             // Publish both the binary sensor (open || check) and the text sensor
             // (formatted state string) for a single zone.  Does nothing if both
             // sensor pointers are null.
             void publish_zone(Zone *zt);
+
+#ifdef CC1101_RECEIVER
+            // Small serial→RSSI cache populated by on_rf_direct() for every
+            // decoded packet (including unregistered serials).  Queried by
+            // on_rf_zone_packet() ~50–500 ms later to append RSSI to the
+            // rf_messages string regardless of zone registration status.
+            struct RssiCacheEntry { uint32_t serial {0}; int8_t rssi {0}; };
+            static constexpr uint8_t kRssiCacheSize = 8;
+            RssiCacheEntry rssi_cache_[kRssiCacheSize] {};
+            uint8_t        rssi_cache_idx_ {0};
+
+            void   store_rssi(uint32_t serial, int8_t rssi);
+            int8_t fetch_rssi(uint32_t serial) const;
+#endif
 
             // -------------------------------------------------------------------
             // Member data

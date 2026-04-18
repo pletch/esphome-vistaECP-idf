@@ -177,14 +177,15 @@ void CC1101Receiver::rx_task(void *param)
             self->dedupe_history_[self->dedupe_idx_] = {pkt.serial, pkt.ecp_status, now};
             self->dedupe_idx_ = (self->dedupe_idx_ + 1) % 16;
 
-            // Fast direct-to-HA path: post non-heartbeat packets to rf_direct_queue
-            // so rf_direct_task can publish zone state immediately, without waiting
-            // for the panel F1 poll → FA/FB round-trip (saves 50–500 ms).
-            // Heartbeats (0x04 | 0x01) are needed by the panel for supervision but
-            // carry no zone-state information, so they are excluded from this path.
-            if (!(pkt.ecp_status & 0x05) && self->bus_.rf_direct_queue != nullptr)
+            // Post all valid packets (including heartbeats) to rf_direct_queue.
+            // Non-heartbeat packets: rf_direct_task publishes zone state to HA
+            //   immediately, bypassing the panel F1 poll → FA/FB round-trip.
+            // Heartbeat packets: on_rf_direct() stores RSSI in the cache then
+            //   returns early without updating zone state, so that on_rf_zone_packet()
+            //   can append RSSI to the rf_messages heartbeat string.
+            if (self->bus_.rf_direct_queue != nullptr)
             {
-                RfDirectMsg direct{pkt.serial, pkt.ecp_status};
+                RfDirectMsg direct{pkt.serial, pkt.ecp_status, rssi};
                 xQueueSend(self->bus_.rf_direct_queue, &direct, 0);  // non-blocking
             }
 

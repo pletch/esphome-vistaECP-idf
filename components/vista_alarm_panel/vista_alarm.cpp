@@ -379,7 +379,7 @@ namespace esphome
                                   pdMS_TO_TICKS(500)) == pdPASS)
                 {
                     if (!stop_requested_)
-                        zones_.on_rf_direct(msg.serial, msg.ecp_status);
+                        zones_.on_rf_direct(msg.serial, msg.ecp_status, msg.rssi);
                 }
             }
             rf_direct_task_handle_ = nullptr;

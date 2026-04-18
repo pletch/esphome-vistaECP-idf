@@ -53,6 +53,7 @@ struct RfDirectMsg
 {
     uint32_t serial;      // 20-bit Honeywell sensor serial number
     uint8_t  ecp_status;  // status byte: loop bits [7,6,5,4], lowbat [1]
+    int8_t   rssi;        // CC1101 RSSI at time of decode (dBm); 0 if unavailable
 };
 
 // Note: EmulatedExpander is defined as a nested struct inside VistaBus

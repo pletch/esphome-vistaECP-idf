@@ -27,6 +27,23 @@ namespace esphome
         // Suppress ECP-path publish when the direct path updated within this window.
         static constexpr int64_t kDirectSuppressUs = 3'000'000LL;  // 3 seconds
 
+#ifdef CC1101_RECEIVER
+        void ZoneManager::store_rssi(uint32_t serial, int8_t rssi)
+        {
+            for (auto &e : rssi_cache_)
+                if (e.serial == serial) { e.rssi = rssi; return; }
+            rssi_cache_[rssi_cache_idx_] = {serial, rssi};
+            rssi_cache_idx_ = (rssi_cache_idx_ + 1) % kRssiCacheSize;
+        }
+
+        int8_t ZoneManager::fetch_rssi(uint32_t serial) const
+        {
+            for (const auto &e : rssi_cache_)
+                if (e.serial == serial) return e.rssi;
+            return 0;
+        }
+#endif
+
         // RAII mutex guard — takes the semaphore on construction, gives on destruction.
         // Handles all early-return paths in methods that access zones_.
         struct ZoneMutexGuard
@@ -118,6 +135,7 @@ namespace esphome
                     z.binary_sensor = sensor;
                     z.rfserial      = rf_serial;
                     z.rfloop        = rf_loop;
+                    z.emulated      = emulated;
                     ESP_LOGI(TAG, "Updated binary sensor for zone %d  rfserial:%lu  rfloop:%d",
                              z.zone, z.rfserial, z.rfloop);
                     return;
@@ -131,7 +149,18 @@ namespace esphome
             z.zone          = zone_number;
             z.rfserial      = rf_serial;
             z.rfloop        = rf_loop;
+            z.emulated      = emulated;
+            // Physical CC1101 zones rely on the sensor's own heartbeats forwarded
+            // by CC1101Receiver; the internal timer is only needed for emulated zones
+            // (which have no physical sensor).  Disabling it for physical zones also
+            // ensures rf_messages always shows RSSI for registered zones (the FB
+            // heartbeat always originates from a CC1101 decode, so the RSSI cache
+            // is populated before on_rf_zone_packet runs).
+#ifdef CC1101_RECEIVER
+            z.rfnext_hb     = (rf_serial != 0 && !emulated) ? 0 : 1;
+#else
             z.rfnext_hb     = 1;   // non-zero sentinel: heartbeat timer not yet initialised
+#endif
             z.active        = true;
             zones_.push_back(z);
 
@@ -404,7 +433,8 @@ namespace esphome
                 +  static_cast<uint32_t>(static_cast<uint8_t>(payload[4]));
 
             // Format the display string for the rf_messages sensor.
-            // Format: "<serial>:0x<status>"  e.g. "231357:0x80"
+            // Without CC1101: "<serial>:0x<status>"        e.g. "231357:0x80"
+            // With CC1101:    "<serial>:0x<status>:<N>dBm" e.g. "231357:0x80:-72dBm"
             // The status byte encodes loop bits [7,6,5,4], lowbat [1], heartbeat [2,0].
             const uint8_t status_byte = static_cast<uint8_t>(payload[5]);
             char serial_str[20];
@@ -417,7 +447,28 @@ namespace esphome
 
             // Supervision / heartbeat packets: skip zone state update, still report serial.
             if ((status_byte & 0x04) || (status_byte & 0x01))
+            {
+#ifdef CC1101_RECEIVER
+                {
+                    ZoneMutexGuard guard(zone_mutex_);
+                    Zone *zt = get_zone_by_rf_serial(serial);
+                    if (zt != nullptr && zt->active && zt->emulated)
+                    {
+                        char emu_str[28];
+                        snprintf(emu_str, sizeof(emu_str), "%s:(emu)", serial_str);
+                        return std::string(emu_str);
+                    }
+                    const int8_t rssi = fetch_rssi(serial);
+                    if (rssi != 0)
+                    {
+                        char rssi_str[28];
+                        snprintf(rssi_str, sizeof(rssi_str), "%s:%ddBm", serial_str, rssi);
+                        return std::string(rssi_str);
+                    }
+                }
+#endif
                 return std::string(serial_str);
+            }
 
             ZoneMutexGuard guard(zone_mutex_);
 
@@ -447,6 +498,23 @@ namespace esphome
                 }
             }
 
+#ifdef CC1101_RECEIVER
+            if (zt != nullptr && zt->active && zt->emulated)
+            {
+                char emu_str[28];
+                snprintf(emu_str, sizeof(emu_str), "%s:(emu)", serial_str);
+                return std::string(emu_str);
+            }
+            {
+                const int8_t rssi = fetch_rssi(serial);
+                if (rssi != 0)
+                {
+                    char rssi_str[28];
+                    snprintf(rssi_str, sizeof(rssi_str), "%s:%ddBm", serial_str, rssi);
+                    return std::string(rssi_str);
+                }
+            }
+#endif
             return std::string(serial_str);
         }
 
@@ -463,8 +531,14 @@ namespace esphome
         // suppress the later ECP-path echo for the same event.
         // ---------------------------------------------------------------------------
 
-        void ZoneManager::on_rf_direct(uint32_t serial, uint8_t ecp_status)
+        void ZoneManager::on_rf_direct(uint32_t serial, uint8_t ecp_status, int8_t rssi)
         {
+#ifdef CC1101_RECEIVER
+            // Cache RSSI for every serial before any early-return so that
+            // on_rf_zone_packet() can include it for unregistered zones too.
+            if (rssi != 0)
+                store_rssi(serial, rssi);
+#endif
             // Heartbeat packets carry no zone-state information.  The ECP path
             // still needs them for panel supervision, so they are not filtered
             // in CC1101Receiver; guard here as a safety net.
@@ -487,8 +561,8 @@ namespace esphome
             zt->open             = open;
             zt->rflowbat         = lowbat;
 
-            ESP_LOGD(TAG, "RF direct: serial=%lu  open=%d  lowbat=%d",
-                     (unsigned long)serial, open, lowbat);
+            ESP_LOGD(TAG, "RF direct: serial=%lu  open=%d  lowbat=%d  rssi=%d dBm",
+                     (unsigned long)serial, open, lowbat, rssi);
 
             publish_zone(zt);
         }
