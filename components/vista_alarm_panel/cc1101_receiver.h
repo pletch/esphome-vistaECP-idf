@@ -44,9 +44,11 @@
 class CC1101Receiver 
 {
 public:
-    // bus:     VistaBus reference — used only to call sendRFmsg().
+    // bus:      VistaBus reference — used only to call sendRFmsg().
     // mosi/miso/sck/csn/gdo0: SPI pin numbers for the CC1101 module.
-    CC1101Receiver(VistaBus &bus, int mosi, int miso, int sck, int csn, int gdo0);
+    // spi_host: IDF SPI host to use (SPI2_HOST or SPI3_HOST, default SPI2_HOST).
+    CC1101Receiver(VistaBus &bus, int mosi, int miso, int sck, int csn, int gdo0,
+                   spi_host_device_t spi_host = SPI2_HOST);
 
     // Initialise the CC1101 hardware and start the receive task.
     // Returns false if the CC1101 does not respond (check wiring / power).

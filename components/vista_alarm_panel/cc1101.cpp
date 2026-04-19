@@ -140,8 +140,8 @@ static const RegVal kConfig[] = {
 // Construction
 // ---------------------------------------------------------------------------
 
-CC1101::CC1101(int mosi, int miso, int sck, int csn, int gdo0)
-    : mosi_(mosi), miso_(miso), sck_(sck), csn_(csn), gdo0_(gdo0)
+CC1101::CC1101(int mosi, int miso, int sck, int csn, int gdo0, spi_host_device_t spi_host)
+    : spi_host_(spi_host), mosi_(mosi), miso_(miso), sck_(sck), csn_(csn), gdo0_(gdo0)
 {}
 
 // ---------------------------------------------------------------------------
@@ -150,8 +150,8 @@ CC1101::CC1101(int mosi, int miso, int sck, int csn, int gdo0)
 
 bool CC1101::begin()
 {
-    // Initialise SPI bus (SPI2_HOST = HSPI on ESP32).
-    // Change to SPI3_HOST if SPI2 is already in use by another component.
+    // SPI2_HOST is used here; ESPHome's W5500 Ethernet component defaults to
+    // SPI3_HOST, so these two do not conflict on boards like the LilyGO T-ETH Lite S3.
     spi_bus_config_t buscfg = {};
     buscfg.mosi_io_num   = mosi_;
     buscfg.miso_io_num   = miso_;
@@ -160,8 +160,8 @@ bool CC1101::begin()
     buscfg.quadhd_io_num = -1;
     buscfg.max_transfer_sz = 32;
 
-    esp_err_t ret = spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
-    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) 
+    esp_err_t ret = spi_bus_initialize(spi_host_, &buscfg, SPI_DMA_CH_AUTO);
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE)
     {
         // ESP_ERR_INVALID_STATE means the bus is already initialised — acceptable.
         ESP_LOGE(TAG, "SPI bus init failed: %s", esp_err_to_name(ret));
@@ -174,7 +174,7 @@ bool CC1101::begin()
     devcfg.spics_io_num   = csn_;
     devcfg.queue_size     = 1;
 
-    ret = spi_bus_add_device(SPI2_HOST, &devcfg, &spi_);
+    ret = spi_bus_add_device(spi_host_, &devcfg, &spi_);
     if (ret != ESP_OK) 
     {
         ESP_LOGE(TAG, "SPI device add failed: %s", esp_err_to_name(ret));

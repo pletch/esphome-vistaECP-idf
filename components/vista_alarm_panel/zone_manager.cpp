@@ -251,10 +251,19 @@ namespace esphome
                 return;
             if (z->open == open)
                 return;
+            const int64_t now = esp_timer_get_time();
+            if ((now - z->last_direct_time) < kDirectSuppressUs)
+            {
+                // The direct path has recently published authoritative state to HA.
+                // A stale F7 (panel display not yet updated by the ECP echo) must not
+                // overwrite it — drop the update silently.
+                ESP_LOGD(TAG, "set_zone_open suppressed for zone %d (direct path active)", zone_number);
+                return;
+            }
             z->open   = open;
             z->check  = false;  // open and check are mutually exclusive
             z->bypass = false;  // opening clears bypass
-            z->time   = esp_timer_get_time();
+            z->time   = now;
             publish_zone(z);
         }
 
@@ -653,11 +662,11 @@ namespace esphome
                 if (!z.active || !z.partition)
                     continue;
 
-                // RF zones within the direct-path suppress window: the direct path
-                // has already sent authoritative state to HA.  Skip reconciliation
-                // and publish to prevent a stale panel F7 cycle from overwriting it.
-                const bool direct_fresh = (z.rfserial != 0) &&
-                                          ((now - z.last_direct_time) < kDirectSuppressUs);
+                // If the direct path has recently published authoritative state to HA,
+                // skip reconciliation and publish for ALL zone types — not just RF zones.
+                // Emulated expander zones (rfserial == 0) are equally vulnerable to a
+                // stale F7 cycle arriving before the panel has processed the ECP echo.
+                const bool direct_fresh = (now - z.last_direct_time) < kDirectSuppressUs;
                 if (direct_fresh)
                 {
                     // Still build the status string from current zone flags below,

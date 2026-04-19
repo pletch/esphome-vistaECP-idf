@@ -62,6 +62,7 @@ CONF_CC1101_MISO="cc1101_miso_pin"
 CONF_CC1101_SCK="cc1101_sck_pin"
 CONF_CC1101_CSN="cc1101_csn_pin"
 CONF_CC1101_GDO0="cc1101_gdo0_pin"
+CONF_CC1101_SPI_BUS="cc1101_spi_bus"
 CONF_RF_HEARTBEAT_EXTERNAL="rf_heartbeat_external"
 
 CC1101_PINS = [CONF_CC1101_MOSI, CONF_CC1101_MISO, CONF_CC1101_SCK,
@@ -151,6 +152,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CC1101_SCK):  cv.int_range(min=0, max=39),
             cv.Optional(CONF_CC1101_CSN):  cv.int_range(min=0, max=39),
             cv.Optional(CONF_CC1101_GDO0): cv.int_range(min=0, max=39),
+            cv.Optional(CONF_CC1101_SPI_BUS, default=2): cv.one_of(2, 3, int=True),
             cv.Optional(CONF_RF_HEARTBEAT_EXTERNAL, default=False): cv.boolean,
         }
     )
@@ -225,6 +227,7 @@ async def to_code(config):
                 config[CONF_CC1101_SCK],
                 config[CONF_CC1101_CSN],
                 config[CONF_CC1101_GDO0],
+                config[CONF_CC1101_SPI_BUS],
             ))
             _LOGGER.info("CC1101 hardware receiver enabled")
     if CONF_AUIADDR in config:

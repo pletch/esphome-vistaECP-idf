@@ -25,9 +25,10 @@ static constexpr size_t kRmtSymbols = 128;
 #endif
 
 CC1101Receiver::CC1101Receiver(VistaBus &bus,
-                               int mosi, int miso, int sck, int csn, int gdo0)
+                               int mosi, int miso, int sck, int csn, int gdo0,
+                               spi_host_device_t spi_host)
     : bus_(bus)
-    , radio_(mosi, miso, sck, csn, gdo0)
+    , radio_(mosi, miso, sck, csn, gdo0, spi_host)
 {}
 
 void CC1101Receiver::log_config() const

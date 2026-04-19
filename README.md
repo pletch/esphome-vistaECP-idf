@@ -122,6 +122,10 @@ The CC1101 module connects to the ESP32 via SPI. All five pins must be configure
 
 > **Note:** `debug_pulsing` and the CC1101 receiver both use the ESP32 RMT peripheral and cannot operate simultaneously. When `debug_pulsing: true` is set, CC1101 support is automatically suppressed at build time with a warning in the ESPHome build log.
 
+> **Note:** On ESP32 variants whose RMT peripheral supports DMA (such as the ESP32-S3), the CC1101 receiver automatically uses a 512-symbol DMA-backed capture buffer. On all other variants (original ESP32, ESP32-C3, etc.) a 128-symbol on-chip SRAM buffer is used instead. Both are sufficient for a full Honeywell 5800-series packet burst; no configuration is required.
+
+> **Note:** The CC1101 uses **SPI2** by default (`cc1101_spi_bus: 2`). If another component on your board occupies SPI2 — for example, an onboard SD card — set `cc1101_spi_bus: 3` to use SPI3 instead. On boards that also use SPI-based Ethernet (e.g. LilyGO T-ETH Lite S3 with W5500), note that ESPHome's W5500 driver defaults to SPI3, so SPI2 is free for the CC1101 and no change is needed.
+
 > **Note:** Do not enable `rf_receiver_emulation` (or attach a CC1101) if a physical RF receiver such as a 5881ENH is already enrolled in the panel — only one RF receiver is supported per system.
 
 ---
@@ -229,6 +233,7 @@ vista_alarm_panel:
 | `cc1101_sck_pin` | Optional | GPIO | — | SPI clock pin connected to the CC1101 module. |
 | `cc1101_csn_pin` | Optional | GPIO | — | SPI chip select (CSN) pin connected to the CC1101 module. |
 | `cc1101_gdo0_pin` | Optional | GPIO | — | CC1101 GDO0 pin — raw demodulated OOK output, sampled by the ESP32 RMT peripheral. Must be an RMT-capable GPIO. |
+| `cc1101_spi_bus` | Optional | int | 2 | SPI host to use for the CC1101 module: `2` for SPI2 or `3` for SPI3. Change to `3` if SPI2 is already claimed by another component (e.g. an onboard SD card). |
 | `rf_heartbeat_external` | Optional | boolean | false | Controls how supervision heartbeats are sent for virtual (emulated) RF zones. When `false` (default), the component automatically emits a heartbeat for each virtual RF zone every 70–90 minutes so the panel retains the zone's enrollment. When `true`, internal heartbeat emission is suppressed and heartbeats must be driven externally by calling the `set_rf_zone_heartbeat` Home Assistant service from an automation. Use external mode when you want an HA automation to control exactly when heartbeats fire — for example, to integrate with a watchdog or to couple heartbeat timing to real-world sensor liveness. The `set_rf_zone_heartbeat` service is available regardless of this setting. |
 | `legacy_protocol` | Optional | boolean | false | Enable older protocol for Vista 15SE / 20SE panels. |
 | `debug_logging` | Optional | boolean | false | Enable verbose ECP packet logging. Requires ESPHome logger level `DEBUG` or higher. |

@@ -29,6 +29,7 @@
 
 #ifdef CC1101_RECEIVER
 #include "cc1101_receiver.h"
+#include "driver/spi_master.h"
 #endif
 
 #include <string>
@@ -120,10 +121,11 @@ namespace esphome
             // Must be called before setup() — stores pin numbers for begin() call.
             // rf_receiver_emulation must also be true in YAML; the CC1101 acts as
             // the hardware source for the emulated RF receiver device.
-            void init_cc1101(int mosi, int miso, int sck, int csn, int gdo0)
+            void init_cc1101(int mosi, int miso, int sck, int csn, int gdo0, int spi_bus)
             {
+                const spi_host_device_t host = (spi_bus == 3) ? SPI3_HOST : SPI2_HOST;
                 cc1101_receiver_ = new CC1101Receiver(
-                    vistabus_, mosi, miso, sck, csn, gdo0);
+                    vistabus_, mosi, miso, sck, csn, gdo0, host);
             }
 #endif
 

@@ -115,7 +115,7 @@ public:
     // mosi/miso/sck/csn: SPI bus pin numbers.
     // gdo0: CC1101 GDO0 output pin — raw demodulated OOK output in async serial
     //       mode (IOCFG0=0x0D): high when carrier present, low otherwise.
-    CC1101(int mosi, int miso, int sck, int csn, int gdo0);
+    CC1101(int mosi, int miso, int sck, int csn, int gdo0, spi_host_device_t spi_host = SPI2_HOST);
 
     // Initialise SPI bus, load register config, enter RX mode.
     // Returns false if the chip does not respond (VERSION register unreadable).
@@ -141,6 +141,7 @@ private:
     void    enter_rx();
 
     spi_device_handle_t spi_       {nullptr};
+    spi_host_device_t   spi_host_;
     int    mosi_, miso_, sck_, csn_, gdo0_;
 
     static const char * const TAG;
