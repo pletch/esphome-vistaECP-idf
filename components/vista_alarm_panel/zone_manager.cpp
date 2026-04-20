@@ -773,9 +773,10 @@ namespace esphome
                 if (now <= z.rfnext_hb)
                     continue;
 
-                // Supervision heartbeat: only the supervision bit (0x04) is set.
-                // All loop-fault bits are clear — the zone is closed, not faulted.
-                static constexpr uint8_t msg = 0x04;
+                // Supervision heartbeat: supervision bit (0x04) plus current loop-fault
+                // state so the panel's zone record stays consistent with actual zone state.
+                const uint8_t loop_bit = z.open ? rfloop_to_mask(z.rfloop) : 0;
+                const uint8_t msg = static_cast<uint8_t>(0x04 | loop_bit);
                 bus.sendRFmsg(z.rfserial, msg);
 
                 // Schedule next heartbeat: 70–90 minutes with random jitter.
