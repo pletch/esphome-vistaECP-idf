@@ -114,6 +114,9 @@ public:
                     gpio_set_intr_type(this->vistabus_.rx_pin, GPIO_INTR_NEGEDGE);
                     gpio_isr_handler_add(this->vistabus_.rx_pin, gpio_isr_handler,
                                          (void *)&taskargs);
+                    // Discard any stale task notification left by a previous mark_pulse or 
+                    // BREAK handling cycle.
+                    xTaskNotifyStateClear(nullptr);
                     if (xTaskNotifyWait(0, 0xFFFFFFFF, nullptr,
                                         pdMS_TO_TICKS(535)) == pdPASS)
                     {
