@@ -311,7 +311,7 @@ async def to_code(config):
     rf_emu_str = ", ".join(str(z) for z in rf_emulated_zones) if rf_emulated_zones else "Disabled"
     await add_diag("RF Emulated Zones", rf_emu_str)
 
-    chksum_sensor = await add_diag("Checksum Failures", "0", "mdi:counter")
+    chksum_sensor = await add_diag("ECP Bus Checksum Failures", "0", "mdi:counter")
     cg.add(var.set_chksum_fail_sensor(chksum_sensor))
         
             
