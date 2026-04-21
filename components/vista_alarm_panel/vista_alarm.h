@@ -15,6 +15,7 @@
 #include "esphome/core/helpers.h"
 #include "esphome/components/time/real_time_clock.h"
 #include "esphome/components/api/custom_api_device.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 
 #include "vista_bus.h"
 #include "zone_manager.h"
@@ -194,6 +195,8 @@ namespace esphome
                     partitions_.register_text_sensor(sensor, partition_number, type);
             }
 
+            void set_chksum_fail_sensor(text_sensor::TextSensor *s) { chksum_fail_sensor_ = s; }
+
             void register_ac(vistaECPBinarySensor *sensor)
             {
                 partitions_.register_ac(sensor);
@@ -364,8 +367,9 @@ namespace esphome
             // in setup() and may be set before setup() is called.
             // -------------------------------------------------------------------
 
-            vistaECPTextSensor *lrr_sensor_ {nullptr};
-            vistaECPTextSensor *rf_sensor_  {nullptr};
+            vistaECPTextSensor *lrr_sensor_        {nullptr};
+            vistaECPTextSensor *rf_sensor_         {nullptr};
+            text_sensor::TextSensor *chksum_fail_sensor_{nullptr};
 
             // -------------------------------------------------------------------
             // Configuration state set before setup()

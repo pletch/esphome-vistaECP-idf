@@ -203,8 +203,9 @@ namespace esphome
             cfg.partitions = &partitions_;
             cfg.aui        = &aui_;
             cfg.cmd        = &cmd_;
-            cfg.lrr_sensor = lrr_sensor_;
-            cfg.rf_sensor  = rf_sensor_;
+            cfg.lrr_sensor         = lrr_sensor_;
+            cfg.rf_sensor          = rf_sensor_;
+            cfg.chksum_fail_sensor = chksum_fail_sensor_;
             cfg.rtc        = this;           // VistaESPHome IS-A RealTimeClock
             cfg.ttl        = ttl_;
 

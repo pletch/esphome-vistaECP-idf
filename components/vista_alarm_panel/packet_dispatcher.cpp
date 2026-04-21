@@ -115,6 +115,11 @@ namespace esphome
                     if (cfg_.partitions != nullptr)
                         cfg_.partitions->on_keypad_ack(static_cast<uint8_t>(payload[0]));
                 }
+                else if (src == 0xCF)
+                {
+                    // 0xCF marks a checksum failure on the primary (yellow-wire) UART.
+                    chksum_failures_++;
+                }
             }
             // Green-wire packets (type 1) come from expansion devices and RF receivers.
             else if (type == 1)
@@ -127,14 +132,24 @@ namespace esphome
                 }
                 else if (src == 0xFB && size == kRFZoneMessageLength)
                 {
-                    // RF receiver zone packet — returns serial string for publishing.
+                    // RF receiver zone packet — empty return signals checksum failure.
                     if (cfg_.zones != nullptr)
                     {
                         std::string serial = cfg_.zones->on_rf_zone_packet(payload, size);
-                        if (!serial.empty() && cfg_.rf_sensor != nullptr)
+                        if (serial.empty())
+                            chksum_failures_++;
+                        else if (cfg_.rf_sensor != nullptr)
                             cfg_.rf_sensor->process(serial);
                     }
                 }
+            }
+
+            // Publish updated failure count to the diagnostic sensor if it changed.
+            if (cfg_.chksum_fail_sensor != nullptr
+                    && chksum_failures_ != chksum_last_reported_)
+            {
+                chksum_last_reported_ = chksum_failures_;
+                cfg_.chksum_fail_sensor->publish_state(std::to_string(chksum_failures_));
             }
         }
 

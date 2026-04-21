@@ -18,6 +18,7 @@
 #include "helper_enums.h"
 #include "constants.h"
 #include "esphome/components/time/real_time_clock.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include <cstdint>
 
 namespace esphome
@@ -52,14 +53,15 @@ namespace esphome
 
             struct Config
             {
-                ZoneManager        *zones      {nullptr};
-                PartitionManager   *partitions {nullptr};
-                AUIManager         *aui        {nullptr};
-                CommandWriter      *cmd        {nullptr};
-                vistaECPTextSensor *lrr_sensor {nullptr};
-                vistaECPTextSensor *rf_sensor  {nullptr};
-                time::RealTimeClock *rtc       {nullptr};
-                int64_t             ttl        {0};
+                ZoneManager        *zones             {nullptr};
+                PartitionManager   *partitions        {nullptr};
+                AUIManager         *aui               {nullptr};
+                CommandWriter      *cmd               {nullptr};
+                vistaECPTextSensor *lrr_sensor        {nullptr};
+                vistaECPTextSensor *rf_sensor         {nullptr};
+                text_sensor::TextSensor *chksum_fail_sensor{nullptr};
+                time::RealTimeClock *rtc              {nullptr};
+                int64_t             ttl               {0};
             };
 
             PacketDispatcher(VistaBus &bus, const Config &cfg);
@@ -116,6 +118,12 @@ namespace esphome
 
             VistaBus &bus_;
             Config    cfg_;
+
+            // Cumulative checksum failure counter — incremented for source==0xCF
+            // packets (panel-direction failures) and empty returns from
+            // on_rf_zone_packet (green-wire RF data failures).
+            uint32_t chksum_failures_         {0};
+            uint32_t chksum_last_reported_    {0};
 
             // Legacy SE multi-packet assembly state.
             uint8_t legacy_packet_index_ {0};

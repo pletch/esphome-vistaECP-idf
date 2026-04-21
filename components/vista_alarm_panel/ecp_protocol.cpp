@@ -98,6 +98,12 @@ int VistaECP::uart_read_bytes_event(uart_port_t uart_num, uint8_t * rxbuf, int l
 // (active-low one-hot) is not valid ECP data and would produce parity errors.
 void VistaECP::mark_pulse(int uartNum, uint8_t address)
 {
+    // Ensure any preceding uart_write_bytes() call (e.g. quick_decodeFB response)
+    // has fully clocked out of the TX FIFO before we change the parity setting.
+    // A parity change mid-transmission corrupts the remaining bytes in the FIFO,
+    // causing the monitor UART to read them as 0xFF (parity-error substitution).
+    uart_wait_tx_done(static_cast<uart_port_t>(uartNum), pdMS_TO_TICKS(30));
+
     uart_set_parity(static_cast<uart_port_t>(uartNum), UART_PARITY_DISABLE);
 
     char snd_data[3];

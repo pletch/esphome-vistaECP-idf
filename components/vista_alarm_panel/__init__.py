@@ -251,7 +251,7 @@ async def to_code(config):
 
     text_sensor_cls = cg.esphome_ns.namespace("text_sensor").class_("TextSensor")
 
-    async def add_diag(name: str, value: str, icon: str = "mdi:expansion-card-variant") -> None:
+    async def add_diag(name: str, value: str, icon: str = "mdi:expansion-card-variant"):
         slug = "".join(c if c.isalnum() else "_" for c in name.lower()).strip("_")
         sensor_id = ID(f"vista_diag_{slug}", is_declaration=True, type=text_sensor_cls)
         sensor_config = {
@@ -263,6 +263,7 @@ async def to_code(config):
         }
         sensor_var = await ts_mod.new_text_sensor(sensor_config)
         cg.add(sensor_var.publish_state(value))
+        return sensor_var
 
     protocol = "Vista SE (Legacy)" if config.get(CONF_LEGACYPROTOCOL, False) else "Vista 20P"
     await add_diag("Panel Protocol", protocol, "mdi:alarm-panel")
@@ -309,6 +310,9 @@ async def to_code(config):
     )
     rf_emu_str = ", ".join(str(z) for z in rf_emulated_zones) if rf_emulated_zones else "Disabled"
     await add_diag("RF Emulated Zones", rf_emu_str)
+
+    chksum_sensor = await add_diag("Checksum Failures", "0", "mdi:counter")
+    cg.add(var.set_chksum_fail_sensor(chksum_sensor))
         
             
     
