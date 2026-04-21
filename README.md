@@ -74,6 +74,12 @@ You need a small interface circuit between the 12V ECP bus logic levels and the 
 
 <img src="readme_material/master_noopto.png" width="40%">
 
+**Alternative — Isolated circuit:**
+
+This optocoupler-based isolated design was contributed by [aselle](https://github.com/aselle/esphome-vistaECP) and works well in practice with added complexity of additional components.
+
+<img src="readme_material/aselle_isolated_schematic.png" width="40%">
+
 **Connecting ESP32 to Panel example:**
 
 Other items such as keypads or expansion devices will also be wired to the ECP bus terminals 4 - 7.
@@ -420,15 +426,7 @@ text_sensor:
 | `zone` | Yes (+ `zone:`) | Per-zone status string. Values: `O`=open, `B`=bypass, `T`=trouble/check, `A`=alarm |
 | `zone_status` | No | Combined status string for all zones with active states |
 | `lrr_messages` | No | Long Range Radio status messages (requires `lrr_supervisor: true`) |
-| `rf_messages` | No | RF device messages (requires `rf_receiver_emulation: true`, a CC1101 hardware receiver, or a physical RF receiver monitored via `monitor_pin`). Format: `<serial>:0x<status>` — e.g. `"231357:0x80"` where the status byte encodes loop bits [7,6,5,4], low battery [1], and heartbeat [2,0]. |
-
-> The `system_status` sensor can be filtered to rename values for the HA alarm panel card:
-> ```yaml
->     filters:
->       - lambda: |-
->           if (x == "not_ready") x = "disarmed";
->           return x;
-> ```
+| `rf_messages` | No | RF device messages (requires `rf_receiver_emulation: true`, a CC1101 hardware receiver, or a physical RF receiver monitored via `monitor_pin`). Format: `<serial>:0x<status>` — e.g. `"231357:0x80"` where the status byte encodes loop bits [7,6,5,4], low battery [1], and heartbeat [2,0]. When using the CC1101 hardware receiver, RSSI is appended: `<serial>:0x<status>:<rssi>dBm` — e.g. `"231357:0x80:-65dBm"`. |
 
 ---
 
