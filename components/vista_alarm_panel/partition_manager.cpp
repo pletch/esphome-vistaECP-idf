@@ -19,7 +19,7 @@ namespace esphome
 {
     namespace alarm_panel
     {
-        static const char * const TAG = "partition_mgr";
+        static constexpr const char *TAG = "vista-partition";
 
         // ---------------------------------------------------------------------------
         // Setup
@@ -202,6 +202,8 @@ namespace esphome
                 return -1;
             }
 
+            Partition &part = partitions_[kpi];
+
             // --- Periodic force-refresh ---
             const int64_t now = esp_timer_get_time();
             bool force_refresh = false;
@@ -218,10 +220,14 @@ namespace esphome
             // --- Display lines and beeps ---
             update_display_lines(kpi, flags);
 
-            if (partitions_[kpi].partition_state.last_beeps != flags.beeps
+            if (part.partition_state.last_beeps != flags.beeps
                     && text_sensors_[kpi].beeps != nullptr)
-                text_sensors_[kpi].beeps->process(std::to_string(flags.beeps));
-            partitions_[kpi].partition_state.last_beeps = flags.beeps;
+            {
+                char buf[4];
+                snprintf(buf, sizeof(buf), "%u", flags.beeps);
+                text_sensors_[kpi].beeps->process(buf);
+            }
+            part.partition_state.last_beeps = flags.beeps;
 
 
             // --- Zone state updates via ZoneManager ---
@@ -232,7 +238,7 @@ namespace esphome
                 // Assign partition to zone if not yet known.
                 ZoneManager::Zone *zt = zones.get_zone(flags.zone);
                 if (zt != nullptr && !zt->partition && zt->active)
-                    zt->partition = partitions_[kpi].partition;
+                    zt->partition = part.partition;
                 // Refresh the TTL timestamp every cycle the zone is still reported
                 // checked — not just on the initial transition — so the zone does
                 // not expire while the panel is actively reporting it.
@@ -285,18 +291,18 @@ namespace esphome
             // --- Publish system state if changed ---
             if (flags.system_flag || current.ready || current.armed)
             {
-                if (sys != partitions_[kpi].partition_state.previous_system_states)
+                if (sys != part.partition_state.previous_system_states)
                     publish_system_state(kpi, sys);
-                partitions_[kpi].partition_state.previous_system_states = sys;
-                partitions_[kpi].partition_state.refresh_status         = false;
+                part.partition_state.previous_system_states = sys;
+                part.partition_state.refresh_status         = false;
             }
 
             // --- Publish light-state binary sensors ---
-            const LightStates &prev = partitions_[kpi].partition_state.previous_light_states;
+            const LightStates &prev = part.partition_state.previous_light_states;
             publish_light_states(kpi, current, prev, force_refresh,
                                  flags.system_flag || current.ready || current.armed);
 
-            partitions_[kpi].partition_state.previous_light_states = current;
+            part.partition_state.previous_light_states = current;
 
             return static_cast<int>(kpi);
         }

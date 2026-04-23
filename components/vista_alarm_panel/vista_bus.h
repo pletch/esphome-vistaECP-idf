@@ -166,7 +166,7 @@ private:
     VistaSE* vprotocol;
 #endif
 
-    const char* const TAG = "vistabus";
+    static constexpr const char *TAG = "vista-bus";
     gpio_num_t tx_pin;          // Primary UART TX gpio.
     gpio_num_t monitor_pin;     // RX-only gpio for the expansion-bus monitor UART.
     bool panel_connected;       // Becomes false if no data arrives for 30 s.

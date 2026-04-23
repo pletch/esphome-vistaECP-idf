@@ -289,6 +289,16 @@ namespace esphome
             // sensor pointers are null.
             void publish_zone(Zone *zt);
 
+            // Build the combined zone-status string.  Caller must hold zone_mutex_.
+            std::string build_zone_status_string_locked() const;
+
+            // Guard+lookup helper for set_zone_* methods.  Caller must hold
+            // zone_mutex_.  Returns z only when the flag at 'field' needs to
+            // change; returns nullptr on missing/inactive/unchanged zone.
+            Zone *zone_if_flag_differs(uint8_t zone_number,
+                                       bool Zone::*field,
+                                       bool value);
+
 #ifdef CC1101_RECEIVER
             // Small serial→RSSI cache populated by on_rf_direct() for every
             // decoded packet (including unregistered serials).  Queried by

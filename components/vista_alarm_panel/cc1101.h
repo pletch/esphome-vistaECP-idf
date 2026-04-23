@@ -144,7 +144,7 @@ private:
     spi_host_device_t   spi_host_;
     int    mosi_, miso_, sck_, csn_, gdo0_;
 
-    static const char * const TAG;
+    static constexpr const char *TAG = "cc1101";
 };
 
 #endif // CC1101_RECEIVER

@@ -118,8 +118,10 @@ bool VistaBus::stop()
 {
     this->stop_requested = true;
 
-    // monitor_rx_task must shut down first — it may be parked in uart_read_bytes.
-    // Write 0xFF to the UART to unblock it.
+    // monitor_rx_task is parked in uart_read_bytes on ext_uart_num.  The ECP
+    // bus wires tx_pin (uart_num's output) and monitor_pin (ext_uart_num's
+    // input) to the same shared green wire, so a byte written on uart_num is
+    // received by ext_uart_num and unblocks the monitor read.
     char tmp[1] = {static_cast<char>(0xFF)};
     while (monitor_rx_task_Handle != nullptr)
     {

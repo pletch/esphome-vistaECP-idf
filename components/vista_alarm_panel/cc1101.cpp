@@ -10,8 +10,6 @@
 #include "cc1101.h"
 #include "esp_attr.h"
 
-const char * const CC1101::TAG = "cc1101";
-
 // ---------------------------------------------------------------------------
 // Register configuration for ~345 MHz OOK, Asynchronous Serial Mode.
 //

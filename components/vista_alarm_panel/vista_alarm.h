@@ -400,7 +400,7 @@ namespace esphome
             TaskHandle_t     rf_direct_task_handle_ {nullptr};
 #endif
 
-            static const char * const TAG;
+            static constexpr const char *TAG = "vista-alarm";
         };
 
     } // namespace alarm_panel

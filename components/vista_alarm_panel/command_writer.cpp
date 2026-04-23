@@ -17,7 +17,7 @@ namespace esphome
 {
     namespace alarm_panel
     {
-        static const char * const TAG = "cmd_writer";
+        static constexpr const char *TAG = "vista-cmd";
 
         // ---------------------------------------------------------------------------
         // Internal helpers

@@ -83,6 +83,11 @@ namespace esphome
             // -------------------------------------------------------------------
             StatusFlags decode_status_flags(const char *cbuf, int size);
 
+            // Translate a 16-byte raw prompt line into a null-terminated UTF-8
+            // string in 'out' (17 bytes minimum).  'first_byte' allows the caller
+            // to override src[0] (used to strip the backlight bit from line 1).
+            static void translate_prompt(const char *src, char first_byte, char *out);
+
             // -------------------------------------------------------------------
             // Legacy SE multi-packet assembly
             //

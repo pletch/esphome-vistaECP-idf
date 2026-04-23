@@ -9,7 +9,7 @@
 
 #ifdef CC1101_RECEIVER
 
-static const char *TAG = "honeywell345";
+static constexpr const char *TAG = "honeywell345";
 
 // ---------------------------------------------------------------------------
 // Standard CRC-16 (Left-Shifting) — matches rtl_433 protocol 70.

@@ -91,8 +91,6 @@ namespace esphome
 {
     namespace alarm_panel
     {
-        const char * const VistaESPHome::TAG = "vista-alarm";
-
         // ---------------------------------------------------------------------------
         // Construction
         //

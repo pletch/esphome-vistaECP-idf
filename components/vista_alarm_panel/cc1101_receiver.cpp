@@ -13,8 +13,6 @@
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 
-const char * const CC1101Receiver::TAG = "cc1101-rcv";
-
 // RMT capture buffer size: 512 symbols on chips with DMA-capable RMT (ESP32-S3),
 // 128 on all others (fits in 2 × 64-word hardware RMT SRAM blocks; sufficient for
 // a full Honeywell burst of ≤110 symbols).

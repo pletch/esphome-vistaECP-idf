@@ -151,7 +151,7 @@ public:
 
 protected:
     VistaBus &vistabus_;    // Back-reference to the owning bus for UART / queue access.
-    const char* const TAG = "ecp_proto";
+    static constexpr const char *TAG = "vista-ecp";
 
     // Send the ECP address pulse mark for 'address' on 'uartNum'.
     // The pulse consists of 1–3 bytes whose bits encode the address as a one-hot

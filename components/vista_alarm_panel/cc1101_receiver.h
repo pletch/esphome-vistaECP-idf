@@ -80,7 +80,7 @@ private:
     DedupeEntry dedupe_history_[16] {};
     uint8_t     dedupe_idx_ {0};
 
-    static const char * const TAG;
+    static constexpr const char *TAG = "cc1101-rcv";
 };
 
 #endif // CC1101_RECEIVER

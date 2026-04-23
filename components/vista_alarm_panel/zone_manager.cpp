@@ -22,7 +22,7 @@ namespace esphome
 {
     namespace alarm_panel
     {
-        static const char * const TAG = "zone_mgr";
+        static constexpr const char *TAG = "vista-zone";
 
         // Suppress ECP-path publish when the direct path updated within this window.
         static constexpr int64_t kDirectSuppressUs = 3'000'000LL;  // 3 seconds
@@ -243,13 +243,27 @@ namespace esphome
         // against redundant transitions and publishes immediately on change.
         // ---------------------------------------------------------------------------
 
+        // Common guard+lookup for set_zone_* methods.  Returns a pointer to the
+        // zone only if the flag at 'field' needs to change; returns nullptr if
+        // the zone is missing, inactive, or already in the requested state.
+        // Caller must hold zone_mutex_.
+        ZoneManager::Zone *ZoneManager::zone_if_flag_differs(uint8_t zone_number,
+                                                             bool Zone::*field,
+                                                             bool value)
+        {
+            Zone *z = get_zone(zone_number);
+            if (z == nullptr || !z->active)
+                return nullptr;
+            if (z->*field == value)
+                return nullptr;
+            return z;
+        }
+
         void ZoneManager::set_zone_open(uint8_t zone_number, bool open)
         {
             ZoneMutexGuard guard(zone_mutex_);
-            Zone *z = get_zone(zone_number);
-            if (z == nullptr || !z->active)
-                return;
-            if (z->open == open)
+            Zone *z = zone_if_flag_differs(zone_number, &Zone::open, open);
+            if (z == nullptr)
                 return;
             const int64_t now = esp_timer_get_time();
             if ((now - z->last_direct_time) < kDirectSuppressUs)
@@ -270,10 +284,8 @@ namespace esphome
         void ZoneManager::set_zone_bypass(uint8_t zone_number, bool bypass)
         {
             ZoneMutexGuard guard(zone_mutex_);
-            Zone *z = get_zone(zone_number);
-            if (z == nullptr || !z->active)
-                return;
-            if (z->bypass == bypass)
+            Zone *z = zone_if_flag_differs(zone_number, &Zone::bypass, bypass);
+            if (z == nullptr)
                 return;
             z->bypass = bypass;
             z->time   = esp_timer_get_time();
@@ -283,10 +295,8 @@ namespace esphome
         void ZoneManager::set_zone_alarm(uint8_t zone_number, bool alarm)
         {
             ZoneMutexGuard guard(zone_mutex_);
-            Zone *z = get_zone(zone_number);
-            if (z == nullptr || !z->active)
-                return;
-            if (z->alarm == alarm)
+            Zone *z = zone_if_flag_differs(zone_number, &Zone::alarm, alarm);
+            if (z == nullptr)
                 return;
             z->alarm = alarm;
             z->time  = esp_timer_get_time();
@@ -296,10 +306,8 @@ namespace esphome
         void ZoneManager::set_zone_check(uint8_t zone_number, bool check)
         {
             ZoneMutexGuard guard(zone_mutex_);
-            Zone *z = get_zone(zone_number);
-            if (z == nullptr || !z->active)
-                return;
-            if (z->check == check)
+            Zone *z = zone_if_flag_differs(zone_number, &Zone::check, check);
+            if (z == nullptr)
                 return;
             z->check = check;
             if (check)
@@ -315,10 +323,8 @@ namespace esphome
         void ZoneManager::set_zone_lowbat(uint8_t zone_number, bool low)
         {
             ZoneMutexGuard guard(zone_mutex_);
-            Zone *z = get_zone(zone_number);
-            if (z == nullptr || !z->active)
-                return;
-            if (z->rflowbat == low)
+            Zone *z = zone_if_flag_differs(zone_number, &Zone::rflowbat, low);
+            if (z == nullptr)
                 return;
             z->rflowbat = low;
             publish_zone(z);
@@ -652,10 +658,6 @@ namespace esphome
         {
             ZoneMutexGuard guard(zone_mutex_);
             const int64_t now = esp_timer_get_time();
-            std::string status_msg;
-            // Pre-reserve enough space to avoid repeated small allocations for a
-            // typical zone count; exact capacity is not critical.
-            status_msg.reserve(64);
 
             for (auto &z : zones_)
             {
@@ -666,68 +668,43 @@ namespace esphome
                 // skip reconciliation and publish for ALL zone types — not just RF zones.
                 // Emulated expander zones (rfserial == 0) are equally vulnerable to a
                 // stale F7 cycle arriving before the panel has processed the ECP echo.
-                const bool direct_fresh = (now - z.last_direct_time) < kDirectSuppressUs;
-                if (direct_fresh)
+                if ((now - z.last_direct_time) < kDirectSuppressUs)
+                    continue;
+
+                // --- State reconciliation against panel light flags ---
+
+                // If the panel reports ready, any open (non-bypassed) zone is stale.
+                if (!z.bypass && z.open && partition_lights.ready)
                 {
-                    // Still build the status string from current zone flags below,
-                    // but do not mutate state or publish sensors.
-                }
-                else
-                {
-                    // --- State reconciliation against panel light flags ---
-
-                    // If the panel reports ready, any open (non-bypassed) zone is stale.
-                    if (!z.bypass && z.open && partition_lights.ready)
-                    {
-                        ESP_LOGE(TAG, "Zone %d: open but panel ready — clearing open state", z.zone);
-                        z.open  = false;
-                        z.check = false;
-                        z.alarm = false;
-                    }
-
-                    // If the bypass light is off, clear any lingering bypass flag.
-                    if (z.bypass && !partition_lights.bypass)
-                        z.bypass = false;
-
-                    // If the alarm light is off, clear any lingering alarm flag.
-                    if (z.alarm && !partition_lights.alarm)
-                        z.alarm = false;
-
-                    // --- TTL-based expiry ---
-
-                    // Open and check states expire after TTL microseconds if the panel
-                    // has not re-reported them.  Bypassed zones are exempt.
-                    if (!z.bypass && z.open && (now - z.time) > ttl)
-                        z.open = false;
-
-                    if (!z.bypass && z.check && (now - z.time) > ttl)
-                        z.check = false;
-
-                    // Publish the potentially-changed zone state.
-                    publish_zone(&z);
+                    ESP_LOGE(TAG, "Zone %d: open but panel ready — clearing open state", z.zone);
+                    z.open  = false;
+                    z.check = false;
+                    z.alarm = false;
                 }
 
-                // --- Build combined zone status string ---
-                // Format: [OP|AL|BY|CK|LB]:<zone_number>, comma-separated.
-                // Only flags that are currently active contribute an entry.
-                char seg[16];
-                auto append_seg = [&](const char *prefix)
-                {
-                    if (!status_msg.empty())
-                        snprintf(seg, sizeof(seg), ",%s:%d", prefix, z.zone);
-                    else
-                        snprintf(seg, sizeof(seg),  "%s:%d", prefix, z.zone);
-                    status_msg += seg;
-                };
+                // If the bypass light is off, clear any lingering bypass flag.
+                if (z.bypass && !partition_lights.bypass)
+                    z.bypass = false;
 
-                if (z.open)    append_seg("OP");
-                if (z.alarm)   append_seg("AL");
-                if (z.bypass)  append_seg("BY");
-                if (z.check)   append_seg("CK");
-                if (z.rflowbat)append_seg("LB");
+                // If the alarm light is off, clear any lingering alarm flag.
+                if (z.alarm && !partition_lights.alarm)
+                    z.alarm = false;
+
+                // --- TTL-based expiry ---
+
+                // Open and check states expire after TTL microseconds if the panel
+                // has not re-reported them.  Bypassed zones are exempt.
+                if (!z.bypass && z.open && (now - z.time) > ttl)
+                    z.open = false;
+
+                if (!z.bypass && z.check && (now - z.time) > ttl)
+                    z.check = false;
+
+                publish_zone(&z);
             }
 
-            // Publish the zone-status string only when it has changed.
+            // Build and publish combined zone status string only when it changed.
+            std::string status_msg = build_zone_status_string_locked();
             if (status_msg != previous_zone_status_ && zone_status_sensor_ != nullptr)
                 zone_status_sensor_->process(status_msg);
 
@@ -830,6 +807,13 @@ namespace esphome
         // ---------------------------------------------------------------------------
 
         std::string ZoneManager::build_zone_status_string() const
+        {
+            ZoneMutexGuard guard(zone_mutex_);
+            return build_zone_status_string_locked();
+        }
+
+        // Caller must hold zone_mutex_.
+        std::string ZoneManager::build_zone_status_string_locked() const
         {
             std::string msg;
             msg.reserve(64);

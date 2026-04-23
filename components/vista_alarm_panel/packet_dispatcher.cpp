@@ -32,7 +32,7 @@ namespace esphome
 {
     namespace alarm_panel
     {
-        static const char * const TAG = "pkt_disp";
+        static constexpr const char *TAG = "vista-pkt";
 
         // ---------------------------------------------------------------------------
         // Construction
@@ -149,7 +149,9 @@ namespace esphome
                     && chksum_failures_ != chksum_last_reported_)
             {
                 chksum_last_reported_ = chksum_failures_;
-                cfg_.chksum_fail_sensor->publish_state(std::to_string(chksum_failures_));
+                char buf[12];
+                snprintf(buf, sizeof(buf), "%u", chksum_failures_);
+                cfg_.chksum_fail_sensor->publish_state(buf);
             }
         }
 
@@ -224,59 +226,39 @@ namespace esphome
             // strip it before processing characters.
             char stripped_byte12 = cbuf[12] & 0x7F;
 
-            // Prompt line 1 (bytes 12..27): translate extended (>0x7F) characters
-            // to their UTF-8 two-byte encoding using the panel's custom mapping.
-            {
-                char tempbuf[18];
-                memset(tempbuf, 0, sizeof(tempbuf));
-                memcpy(tempbuf, &cbuf[12], 16);
-                tempbuf[0] = stripped_byte12;
-
-                for (int i = 1; i < 18; i++)
-                {
-                    if (!tempbuf[i])
-                        break;
-                    if (static_cast<uint8_t>(tempbuf[i]) > 0x7F)
-                    {
-                        tempbuf[i] = shift_extended_char(tempbuf[i]);
-                        char buf[32];
-                        memcpy(buf, &tempbuf[i+1], 32 - i - 1);
-                        tempbuf[i+1] = static_cast<char>(0x80 | (tempbuf[i] & 0x3F));
-                        tempbuf[i]   = static_cast<char>(0xC0 | ((tempbuf[i] >> 6) & 0x1F));
-                        memcpy(&tempbuf[i+2], buf, 32 - i - 2);
-                        i++;
-                    }
-                }
-                memcpy(flags.prompt1, tempbuf, 16);
-                flags.prompt1[16] = '\0';
-            }
-
-            // Prompt line 2 (bytes 28..43).
-            {
-                char tempbuf[18];
-                memset(tempbuf, 0, sizeof(tempbuf));
-                memcpy(tempbuf, &cbuf[28], 16);
-
-                for (int i = 0; i < 18; i++)
-                {
-                    if (!tempbuf[i])
-                        break;
-                    if (static_cast<uint8_t>(tempbuf[i]) > 0x7F)
-                    {
-                        tempbuf[i] = shift_extended_char(tempbuf[i]);
-                        char buf[32];
-                        memcpy(buf, &tempbuf[i+1], 32 - i - 1);
-                        tempbuf[i+1] = static_cast<char>(0x80 | (tempbuf[i] & 0x3F));
-                        tempbuf[i]   = static_cast<char>(0xC0 | ((tempbuf[i] >> 6) & 0x1F));
-                        memcpy(&tempbuf[i+2], buf, 32 - i - 2);
-                        i++;
-                    }
-                }
-                memcpy(flags.prompt2, tempbuf, 16);
-                flags.prompt2[16] = '\0';
-            }
+            translate_prompt(&cbuf[12], stripped_byte12, flags.prompt1);
+            translate_prompt(&cbuf[28], cbuf[28],         flags.prompt2);
 
             return flags;
+        }
+
+        // Translate 16 bytes of panel prompt text into a 16-char null-terminated
+        // UTF-8 string in 'out' (out must be at least 17 bytes).  Extended
+        // characters (>0x7F) are expanded in place to their two-byte UTF-8 form
+        // via the panel's custom mapping (shift_extended_char).
+        void PacketDispatcher::translate_prompt(const char *src, char first_byte, char *out)
+        {
+            char tempbuf[18] = {};
+            memcpy(tempbuf, src, 16);
+            tempbuf[0] = first_byte;
+
+            for (int i = 0; i < 18; i++)
+            {
+                if (!tempbuf[i])
+                    break;
+                if (static_cast<uint8_t>(tempbuf[i]) > 0x7F)
+                {
+                    tempbuf[i] = shift_extended_char(tempbuf[i]);
+                    char buf[32];
+                    memcpy(buf, &tempbuf[i+1], 32 - i - 1);
+                    tempbuf[i+1] = static_cast<char>(0x80 | (tempbuf[i] & 0x3F));
+                    tempbuf[i]   = static_cast<char>(0xC0 | ((tempbuf[i] >> 6) & 0x1F));
+                    memcpy(&tempbuf[i+2], buf, 32 - i - 2);
+                    i++;
+                }
+            }
+            memcpy(out, tempbuf, 16);
+            out[16] = '\0';
         }
 
         // ---------------------------------------------------------------------------
@@ -408,10 +390,19 @@ namespace esphome
 
         void PacketDispatcher::print_packet(const char *cbuf, int type, int src, int len)
         {
+            PacketType source = static_cast<PacketType>(src);
+
+            // Checksum failures always log at ERROR.  All other packets log at
+            // DEBUG, so skip the expensive string/time formatting when the build
+            // is compiled below DEBUG — this runs for every received packet.
+#if ESPHOME_LOG_LEVEL < ESPHOME_LOG_LEVEL_DEBUG
+            if (source != kChksumFail)
+                return;
+#endif
+
             char s1[4];
             std::string s;
             char s2[48];
-            PacketType source = static_cast<PacketType>(src);
             char device[5];
             switch (source)
             {
