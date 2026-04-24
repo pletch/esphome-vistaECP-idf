@@ -14,9 +14,9 @@ namespace esphome
     namespace alarm_panel 
     {
 
-        void VistaTextSensor::process(std::string text) 
+        void VistaTextSensor::process(const std::string &text)
         {
-            this->publish_state(text);  
+            this->publish_state(text);
         }
 
     }  // namespace alarm_panel

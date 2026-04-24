@@ -19,7 +19,7 @@ namespace esphome
         class VistaTextSensor : public text_sensor::TextSensor, public vistaECPTextSensor, public Parented<VistaESPHome>
         {
             public:
-                void process(std::string text) override;
+                void process(const std::string &text) override;
             protected:
         };
 

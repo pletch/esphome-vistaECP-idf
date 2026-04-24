@@ -25,7 +25,7 @@ namespace esphome
         class vistaECPTextSensor
         {
         public:
-            virtual void process(std::string text) = 0;
+            virtual void process(const std::string &text) = 0;
             virtual ~vistaECPTextSensor() = default;
         };
 
