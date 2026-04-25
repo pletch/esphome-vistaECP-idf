@@ -211,8 +211,8 @@ namespace esphome
             // -------------------------------------------------------------------
 
             // For RF zones: encodes the fault state into a VistaBus RF message
-            // and sends it.  For hardwired zones: sets the expander fault bits
-            // directly via VistaBus::setExpFaultBits().
+            // and sends it.  For hardwired zones: sets the expander zone-status
+            // bit directly via VistaBus::setZoneStatusBit().
             void send_emulated_fault(uint8_t zone_number,
                                      bool fault,
                                      VistaBus &bus);

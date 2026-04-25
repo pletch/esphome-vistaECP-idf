@@ -37,8 +37,6 @@ This is a highly modified fork of [Dilbert66/esphome-vistaECP](https://github.co
 - RMT-based pulse capture for hardware-level bus diagnostics.
 - ESP8266 not supported.
 
-> ⚠️ Minimal testing has been done on the hard-wired type virtual zone emulation on older SE panels. Please open an issue if you encounter problems.
-
 ---
 
 ## Prerequisites
@@ -232,7 +230,7 @@ vista_alarm_panel:
 | `uart_2` | Optional | int | -1 | Hardware UART number for monitor pin. Disabled if `monitor_pin` is -1. |
 | `ttl` | Optional | int | 30 | Time-to-live in seconds for hardwired zone and fire status before expiring. Used when `monitor_pin` is not configured. |
 | `lrr_supervisor` | Optional | boolean | false | Enable Long Range Radio emulation for decoding monitoring status updates. Do not enable if a physical LRR is present in the system. |
-| `rf_receiver_emulation` | Optional | boolean | false | Enable RF receiver (5881ENH) emulation. Required for both virtual software-defined RF zones and for CC1101 hardware reception from physical Honeywell 5800-series sensors. Do not enable if a physical RF receiver is already present — the panel supports only one RF receiver. Provides more virtual zone capacity on older SE panels than expander board emulation. |
+| `rf_receiver_emulation` | Optional | boolean | false | Enable RF receiver (5881ENH) emulation. Required for both virtual software-defined RF zones and for CC1101 hardware reception from physical Honeywell 5800-series sensors. Do not enable if a physical RF receiver is already present — the panel supports only one RF receiver. Provides more virtual zone capacity on older SE panels than expander board emulation. RF receiver support must be enabled in older SE panels via *22 panel configuration option. |
 | `rf_receiver_addr` | Optional | int | 0 | Address for emulated RF receiver. Only valid address on Vista 15/20 is 0. |
 | `cc1101_mosi_pin` | Optional | GPIO | — | SPI MOSI pin connected to the CC1101 module. All five `cc1101_*` pins must be specified together. Requires `rf_receiver_emulation: true`. Automatically disabled if `debug_pulsing: true`. |
 | `cc1101_miso_pin` | Optional | GPIO | — | SPI MISO pin connected to the CC1101 module. |
@@ -313,7 +311,7 @@ binary_sensor:
 | 33–40 | 10 | — |
 | 41–48 | 11 | — |
 
-Ensure emulated zone numbers do not conflict with zones already used by physical expander boards in your system.
+Ensure emulated zone numbers do not conflict with zones already used by physical expander boards in your system.  On older SE panel, expander support must be enabled via *25 panel configuration option.
 
 **Attaching a Home Assistant entity to an emulated zone:**
 

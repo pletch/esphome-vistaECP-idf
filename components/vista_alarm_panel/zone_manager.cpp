@@ -643,7 +643,7 @@ namespace esphome
             else
             {
                 ESP_LOGI(TAG, "Emulated hardwired zone %d fault:%d", zone_number, fault);
-                bus.setExpFaultBits(zone_number, fault);
+                bus.setZoneStatusBit(zone_number, fault);
             }
         }
 
@@ -729,8 +729,8 @@ namespace esphome
                 {
                     // Stagger initial heartbeats across 1–10 minutes.
                     z.rfnext_hb = esp_timer_get_time()
-                                  + 1LL * 60 * 1000 * 1000
-                                  + static_cast<int64_t>(esp_random() % 10) * 60 * 1000 * 1000;
+                                  + kRfHeartbeatInitialMinMinutes * kUsPerMinute
+                                  + static_cast<int64_t>(esp_random() % kRfHeartbeatInitialJitterMinutes) * kUsPerMinute;
                 }
             }
         }
@@ -758,8 +758,8 @@ namespace esphome
 
                 // Schedule next heartbeat: 70–90 minutes with random jitter.
                 z.rfnext_hb = now
-                              + 70ULL * 60 * 1000 * 1000
-                              + static_cast<int64_t>(esp_random() % 20) * 60 * 1000 * 1000;
+                              + kRfHeartbeatPeriodMinMinutes * kUsPerMinute
+                              + static_cast<int64_t>(esp_random() % kRfHeartbeatPeriodJitterMinutes) * kUsPerMinute;
             }
         }
 
@@ -784,8 +784,8 @@ namespace esphome
             // Reset the internal timer so it won't fire spuriously if mode is ever
             // switched back to internal.
             z->rfnext_hb = esp_timer_get_time()
-                           + 70ULL * 60 * 1000 * 1000
-                           + static_cast<int64_t>(esp_random() % 20) * 60 * 1000 * 1000;
+                           + kRfHeartbeatPeriodMinMinutes * kUsPerMinute
+                           + static_cast<int64_t>(esp_random() % kRfHeartbeatPeriodJitterMinutes) * kUsPerMinute;
         }
 
         // ---------------------------------------------------------------------------

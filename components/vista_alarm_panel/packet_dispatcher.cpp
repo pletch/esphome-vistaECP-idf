@@ -109,7 +109,7 @@ namespace esphome
                     // LRR (Long-Range Radio) / Contact-ID event.
                     handle_lrr_packet(payload, size);
                 }
-                else if (payload[0] != 0 && src == static_cast<int>(kKeypadAck))
+                else if (payload[0] != 0 && src == static_cast<int>(PacketType::KeypadAck))
                 {
                     // F6 keypad-ACK: advance the outgoing sequence counter.
                     if (cfg_.partitions != nullptr)
@@ -396,7 +396,7 @@ namespace esphome
             // DEBUG, so skip the expensive string/time formatting when the build
             // is compiled below DEBUG — this runs for every received packet.
 #if ESPHOME_LOG_LEVEL < ESPHOME_LOG_LEVEL_DEBUG
-            if (source != kChksumFail)
+            if (source != PacketType::ChksumFail)
                 return;
 #endif
 
@@ -406,16 +406,16 @@ namespace esphome
             char device[5];
             switch (source)
             {
-                case kUnspecified:      sprintf(device, "EXT");  break;
-                case kChksumFail:       sprintf(device, "CHK");  break;
-                case kExpander:         sprintf(device, "EXP");  break;
-                case kRFReceiver:       sprintf(device, "RFR");  break;
-                case kAUI:              sprintf(device, "AUI");  break;
-                case kKeypadAck:        sprintf(device, "KPA");  break;
-                case kKeypad:           sprintf(device, "KPD");  break;
-                case kLegacyProtocol:   sprintf(device, "KPDL"); break;
-                case kLongRangeRadio:   sprintf(device, "LRR");  break;
-                default:                sprintf(device, "   ");  break;
+                case PacketType::Unspecified:    sprintf(device, "EXT");  break;
+                case PacketType::ChksumFail:     sprintf(device, "CHK");  break;
+                case PacketType::Expander:       sprintf(device, "EXP");  break;
+                case PacketType::RFReceiver:     sprintf(device, "RFR");  break;
+                case PacketType::AUI:            sprintf(device, "AUI");  break;
+                case PacketType::KeypadAck:      sprintf(device, "KPA");  break;
+                case PacketType::Keypad:         sprintf(device, "KPD");  break;
+                case PacketType::LegacyProtocol: sprintf(device, "KPDL"); break;
+                case PacketType::LongRangeRadio: sprintf(device, "LRR");  break;
+                default:                         sprintf(device, "   ");  break;
             }
 
             struct timeval tv_now;
@@ -448,7 +448,7 @@ namespace esphome
             if (abbr)
                 s += "...";
 
-            if (source == kChksumFail)
+            if (source == PacketType::ChksumFail)
                 ESP_LOGE(TAG, "%s %s", s2, s.c_str());
             else
                 ESP_LOGD(TAG, "%s %s", s2, s.c_str());

@@ -135,7 +135,7 @@ public:
                         {
                             gpio_set_intr_type(this->vistabus_.rx_pin, GPIO_INTR_POSEDGE);
                             if (this->req_to_send && pkt_to_send.type == 1
-                                    && (high_time < 60000 || high_time > 150000))
+                                    && (high_time < kSEWriteWindowBelowUs || high_time > kSEWriteWindowAboveUs))
                             {
                                 // High-time in the valid write window — send one character.
                                 const esp_timer_create_args_t oneshot_timer_args =
@@ -152,7 +152,7 @@ public:
                                 xTaskNotifyWait(0, 0xFFFFFFFF, nullptr, pdMS_TO_TICKS(10));
                                 gpio_set_intr_type(this->vistabus_.rx_pin, GPIO_INTR_ANYEDGE);
                                 bool data_written = true;
-                                uart_set_baudrate(this->vistabus_.uart_num, 2400);
+                                uart_set_baudrate(this->vistabus_.uart_num, kEcpBaudLegacy);
                                 uart_set_stop_bits(this->vistabus_.uart_num, UART_STOP_BITS_1);
                                 uart_set_word_length(this->vistabus_.uart_num, UART_DATA_5_BITS);
                                 keypad_write_SE(this->vistabus_.uart_num, pkt_to_send.payload);
@@ -174,7 +174,7 @@ public:
 
                                 uart_set_word_length(this->vistabus_.uart_num, UART_DATA_8_BITS);
                                 uart_set_stop_bits(this->vistabus_.uart_num, UART_STOP_BITS_2);
-                                uart_set_baudrate(this->vistabus_.uart_num, 4800);
+                                uart_set_baudrate(this->vistabus_.uart_num, kEcpBaudStandard);
 
                                 esp_timer_stop(oneshot_timer);
                                 esp_timer_delete(oneshot_timer);
@@ -183,7 +183,7 @@ public:
                                                      pdMS_TO_TICKS(10)) == pdPASS)
                             {
                                 int64_t end = esp_timer_get_time();
-                                if (end - start > 5700 && end - start < 6300)
+                                if (end - start > kBaudSwitchMarkMinUs && end - start < kBaudSwitchMarkMaxUs)
                                 {
                                     // ~6 ms mark: panel transmitting a 2400 baud packet.
                                     if (!this->legacy_programmode)
@@ -192,11 +192,11 @@ public:
                                         uart_read_bytes_event(this->vistabus_.uart_num, buf, 1,
                                                               pdMS_TO_TICKS(4),
                                                               this->vistabus_.uartevtQueue); // flush leading zero
-                                        uart_set_baudrate(this->vistabus_.uart_num, 2400);
+                                        uart_set_baudrate(this->vistabus_.uart_num, kEcpBaudLegacy);
                                         bytes = uart_read_bytes_event(this->vistabus_.uart_num, buf, 1,
                                                                       pdMS_TO_TICKS(15),
                                                                       this->vistabus_.uartevtQueue);
-                                        uart_set_baudrate(this->vistabus_.uart_num, 4800);
+                                        uart_set_baudrate(this->vistabus_.uart_num, kEcpBaudStandard);
                                         this->is_2400 = true;
                                     }
                                     else
@@ -247,7 +247,7 @@ public:
         xTaskNotifyWait(0xFFFFFFFF, 0xFFFFFFFF, &val, portMAX_DELAY);
         if (static_cast<uint8_t>(val >> 8) == 0x11) // break detected on main bus
         {
-            uart_set_baudrate(this->vistabus_.ext_uart_num, 2400);
+            uart_set_baudrate(this->vistabus_.ext_uart_num, kEcpBaudLegacy);
             uart_set_stop_bits(this->vistabus_.ext_uart_num, UART_STOP_BITS_1);
             uart_set_word_length(this->vistabus_.ext_uart_num, UART_DATA_5_BITS);
             buf[0] = 0;
@@ -264,7 +264,7 @@ public:
             }
             uart_set_word_length(this->vistabus_.ext_uart_num, UART_DATA_8_BITS);
             uart_set_stop_bits(this->vistabus_.ext_uart_num, UART_STOP_BITS_2);
-            uart_set_baudrate(this->vistabus_.ext_uart_num, 4800);
+            uart_set_baudrate(this->vistabus_.ext_uart_num, kEcpBaudStandard);
 
             if (bytes)
             {
@@ -290,17 +290,20 @@ public:
     {
         VistaBus::EmulatedExpander *expander = vistabus_.getExpander(0x01);
         char    lcbuf[5];
-        char    type         = cbuf[2];
-        char    exp_sequence = (cbuf[1] == 0x21 ? 0x35 : 0x30);
+        char    type         = cbuf[3];
+        char    exp_sequence = (cbuf[2] == 0x20 ? 0x35 : 0x30);
 
         if (type == 0xF1)
         {
             // Zone-state request: consume one pending DeviceMsg and reply.
+            // SE expander zones run 10–17, so shift the zone-position calculation
+            // by one relative to V20P (where zones run 9–16) so zone 10 lands at
+            // z=1 and zone 17 wraps to z=0 (encoded via lcbuf[2] = 0x01).
             DeviceMsg expMsg;
-            xQueueReceive(vistabus_.deviceMsgQueue, &expMsg, portMAX_DELAY);
+            xQueueReceive(vistabus_.deviceMsgQueue, &expMsg, pdMS_TO_TICKS(25));
             lcbuf[0] = 0x01;
             lcbuf[1] = exp_sequence;
-            uint8_t z = expMsg.source & 0x07;
+            uint8_t z = (expMsg.source - 1) & 0x07;
             lcbuf[2] = z ? 0 : 0x01;
             lcbuf[3] = (z << 5) ^ (0x10 * expMsg.msg);
             lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
@@ -308,11 +311,11 @@ public:
         }
         else if (type == 0xF7)
         {
-            // Tamper/fault poll: reply with stored bitmasks.
+            // Fault / supervision poll: reply with stored bitmasks.
             lcbuf[0] = 0xF0;
             lcbuf[1] = exp_sequence;
-            lcbuf[2] = expander->fault_NO_Bits;
-            lcbuf[3] = expander->fault_NC_Bits;
+            lcbuf[2] = expander->zone_status_bits;
+            lcbuf[3] = expander->supervision_bits;
             lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
             uart_write_bytes(vistabus_.uart_num, lcbuf, 5);
         }
@@ -333,12 +336,12 @@ public:
                                               vistabus_.uart_num,
                                               pdMS_TO_TICKS(kUartDelay),
                                               vistabus_.uartevtQueue);
-        bool chk     = valid_chksum_two(received_packet.payload, 0, rxBytes + 1);
+        bool chk = valid_chksum(received_packet.payload, 0, rxBytes + 1);
         if (chk)
         {
             uint32_t val = 0xFA << 16
                          | (received_packet.payload[1] << 8)
-                         | received_packet.payload[2];
+                         | received_packet.payload[3];
             if (vistabus_.monitor_rx_task_Handle != nullptr)
                 xTaskNotify(vistabus_.monitor_rx_task_Handle, val,
                             eSetValueWithOverwrite);

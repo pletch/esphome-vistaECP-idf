@@ -104,9 +104,9 @@ public:
     // Enable emulation of an RF receiver at the given keybus address.
     void emulateRFR(uint8_t address);
 
-    // Set or clear the fault bit for a zone on its emulated expander and
-    // notify the panel via the deviceMsgQueue.
-    void setExpFaultBits(uint8_t zone, bool fault);
+    // Set or clear the status bit (zone open/closed) for a zone on its emulated
+    // expander and notify the panel via the deviceMsgQueue.
+    void setZoneStatusBit(uint8_t zone, bool open);
 
     // Forward an RF sensor message (identified by serial number and message
     // byte) to the panel through the emulated RF receiver.
@@ -139,14 +139,17 @@ public:
     bool RFRemulation;  // True when an RF receiver is being emulated.
 
     // Represents a single emulated zone-expander module.
-    // fault_NO_Bits  – normally-open fault bits (one bit per zone within the expander).
-    // fault_NC_Bits  – normally-closed fault bits; bit is cleared to 0 per zone during
-    //                  enrollment via add_emulated_expander(); sent in the F7 poll response.
+    // zone_status_bits – per-zone open/closed status; bit set = zone open (faulted),
+    //                    bit cleared = zone closed (secure).  Sent as the first data
+    //                    byte of the F7 poll response.
+    // supervision_bits – per-zone supervision (EOL resistor) status; bit cleared during
+    //                    enrollment via add_emulated_expander() to signal "supervised /
+    //                    EOL OK"; sent as the second data byte of the F7 poll response.
     struct EmulatedExpander
     {
         uint8_t address{0};
-        char fault_NO_Bits{0};
-        char fault_NC_Bits{0xFF};
+        char zone_status_bits{0};
+        char supervision_bits{0xFF};
     };
 
     std::vector<EmulatedExpander> emulated_expanders{};

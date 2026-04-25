@@ -9,38 +9,40 @@
 
 #pragma once
 
-enum SysState
+#include <cstdint>
+
+enum class SysState : uint8_t
 {
-    kOffline,
-    kArmedAway,
-    kArmedStay,
-    kBypass,
-    kAC,
-    kChime,
-    kBattery,
-    kCheck,
-    kArmedNight,
-    kDisarmed,
-    kTriggered,
-    kUnavailable,
-    kTrouble,
-    kAlarm,
-    kFire,
-    kInstant,
-    kReady,
-    kArmed,
-    kArming
+    Offline,
+    ArmedAway,
+    ArmedStay,
+    Bypass,
+    AC,
+    Chime,
+    Battery,
+    Check,
+    ArmedNight,
+    Disarmed,
+    Triggered,
+    Unavailable,
+    Trouble,
+    Alarm,
+    Fire,
+    Instant,
+    Ready,
+    Armed,
+    Arming
 };
 
-enum PacketType
+enum class PacketType : uint8_t
 {
-    kUnspecified = 0,
-    kLegacyProtocol = 0xDD,
-    kChksumFail = 0xCF,
-    kAUI = 0xF2,
-    kKeypadAck = 0xF6,
-    kKeypad = 0xF7,
-    kLongRangeRadio = 0xF9,
-    kExpander = 0xFA,
-    kRFReceiver = 0xFB
+    Unspecified    = 0x00,
+    LegacyProtocol = 0xDD,
+    ChksumFail     = 0xCF,
+    AUI            = 0xF2,
+    KeypadAck      = 0xF6,
+    Keypad         = 0xF7,
+    LongRangeRadio = 0xF9,
+    Expander       = 0xFA,
+    RFReceiver     = 0xFB
 };

@@ -300,7 +300,7 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
 {
     const uart_config_t uart_config =
     {
-        .baud_rate           = 4800,
+        .baud_rate           = static_cast<int>(kEcpBaudStandard),
         .data_bits           = UART_DATA_8_BITS,
         .parity              = UART_PARITY_EVEN,
         .stop_bits           = UART_STOP_BITS_2,
@@ -598,6 +598,25 @@ static uint8_t getExpanderAddress(uint8_t zone)
     return 0;
 }
 
+// Compute the bit mask for a zone within its expander's status/supervision byte.
+//
+// V20P:   zones 9–16 map as (zone & 7) → 1 << (8 - z).  This produces the byte
+//         layout 15|14|13|12|11|10|9|16 (bit 7 = zone 9, ..., bit 1 = zone 15);
+//         zone 16 (z=0) shifts to 1 << 8 and truncates to 0 — that zone is
+//         reported via lcbuf[2] = 0x01 in the F1 response, not via this byte.
+// SE:     zones 10–17 on the single fixed expander, zone 10 at bit 7, zone 17
+//         at bit 0 (linear left-to-right by zone number).
+static uint8_t getZoneBit(uint8_t zone, bool legacy_protocol)
+{
+    if (legacy_protocol)
+    {
+        const uint8_t offset = static_cast<uint8_t>((zone - 10) & 0x07);
+        return static_cast<uint8_t>(1u << (7 - offset));
+    }
+    const uint8_t z = static_cast<uint8_t>(zone & 0x07);
+    return static_cast<uint8_t>(1u << (8u - z));
+}
+
 // Linear search through the emulated_expanders vector for the given address.
 // Returns a raw pointer into the vector element (safe as long as the vector
 // is not reallocated while the pointer is in use).
@@ -624,9 +643,9 @@ void VistaBus::requestF1(uint8_t address)
     xQueueSend(sendQueue, &pkt, 0);
 }
 
-// Update the fault (normally-open) bit for a zone on its expander and
-// enqueue a DeviceMsg so the rx_tx_task will request an F1 poll slot.
-void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
+// Update the open/closed status bit for a zone on its expander and enqueue a
+// DeviceMsg so the rx_tx_task will request an F1 poll slot.
+void VistaBus::setZoneStatusBit(uint8_t zone, bool open)
 {
     uint8_t address = 0;
     if (!vprotocol->legacy_protocol)
@@ -637,19 +656,18 @@ void VistaBus::setExpFaultBits(uint8_t zone, bool fault)
     EmulatedExpander *expander = getExpander(address);
     if (expander != nullptr)
     {
-        const uint8_t z    = zone & 0x07;         // zone position within the 8-zone block
-        const uint8_t bit  = static_cast<uint8_t>(1u << (8u - z)); // bit mask for this zone
+        const uint8_t bit = getZoneBit(zone, vprotocol->legacy_protocol);
 
-        // Set or clear the fault bit while leaving all other zone bits unchanged.
-        expander->fault_NO_Bits = static_cast<char>(
-            fault ? (static_cast<uint8_t>(expander->fault_NO_Bits) |  bit)
-                  : (static_cast<uint8_t>(expander->fault_NO_Bits) & ~bit));
+        // Set or clear the status bit while leaving all other zone bits unchanged.
+        expander->zone_status_bits = static_cast<char>(
+            open ? (static_cast<uint8_t>(expander->zone_status_bits) |  bit)
+                 : (static_cast<uint8_t>(expander->zone_status_bits) & ~bit));
 
         // Notify the rx_tx_task that this expander needs an F1 poll.
         DeviceMsg expMsg;
         expMsg.address = address;
         expMsg.source  = zone;
-        expMsg.msg     = static_cast<uint8_t>(fault);
+        expMsg.msg     = static_cast<uint8_t>(open);
         expMsg.time    = esp_timer_get_time();
         xQueueSend(deviceMsgQueue, &expMsg, 0);
     }
@@ -670,8 +688,8 @@ void VistaBus::sendRFmsg(uint32_t serial, uint8_t msg)
 
 // Register a zone with an emulated expander.  If no expander for that zone's
 // address exists yet, a new EmulatedExpander is created and added to the
-// vector.  The NC (tamper) bit for this zone is cleared to "normal" in either
-// case, marking the zone as enrolled.
+// vector.  The supervision bit for this zone is cleared (EOL OK / supervised)
+// in either case, marking the zone as enrolled.
 void VistaBus::add_emulated_expander(uint8_t zone)
 {
     uint8_t address = 0;
@@ -680,8 +698,7 @@ void VistaBus::add_emulated_expander(uint8_t zone)
     else
         address = 1;
 
-    const uint8_t z   = zone & 0x07;
-    const uint8_t bit = static_cast<uint8_t>(1u << (8u - z));
+    const uint8_t bit = getZoneBit(zone, vprotocol->legacy_protocol);
 
     EmulatedExpander *expander = getExpander(address);
     if (expander == nullptr)
@@ -689,8 +706,8 @@ void VistaBus::add_emulated_expander(uint8_t zone)
         // First zone for this expander address — create the expander entry.
         EmulatedExpander new_expander;
         new_expander.address       = address;
-        new_expander.fault_NC_Bits = static_cast<char>(
-            static_cast<uint8_t>(new_expander.fault_NC_Bits) & ~bit);
+        new_expander.supervision_bits = static_cast<char>(
+            static_cast<uint8_t>(new_expander.supervision_bits) & ~bit);
         this->emulated_expanders.push_back(new_expander);
         ESP_LOGI(TAG, "Adding emulated expander address:%d for zone:%d", address, zone);
         EXPemulation = true;
@@ -698,8 +715,8 @@ void VistaBus::add_emulated_expander(uint8_t zone)
     else
     {
         // Expander already exists — just enroll this additional zone.
-        expander->fault_NC_Bits = static_cast<char>(
-            static_cast<uint8_t>(expander->fault_NC_Bits) & ~bit);
+        expander->supervision_bits = static_cast<char>(
+            static_cast<uint8_t>(expander->supervision_bits) & ~bit);
         ESP_LOGI(TAG, "Existing emulated expander address:%d handling zone:%d", address, zone);
     }
 }

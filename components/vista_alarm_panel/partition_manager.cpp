@@ -115,7 +115,7 @@ namespace esphome
             const LightStates zero{};
             for (size_t kpi = 0; kpi < partitions_.size(); kpi++)
             {
-                publish_system_state(kpi, kUnavailable);
+                publish_system_state(kpi, SysState::Unavailable);
                 publish_light_states(kpi, zero, zero, /*force=*/true, /*include_armed_states=*/true);
                 if (text_sensors_[kpi].beeps != nullptr)
                     text_sensors_[kpi].beeps->process("0");
@@ -355,19 +355,19 @@ namespace esphome
                                                        const LightStates &lights) const
         {
             if (flags.fire || flags.in_alarm)
-                return kTriggered;
+                return SysState::Triggered;
 
             if (lights.armed)
             {
-                if (lights.night)   return kArmedNight;
-                if (lights.away)    return kArmedAway;
-                return kArmedStay;
+                if (lights.night)   return SysState::ArmedNight;
+                if (lights.away)    return SysState::ArmedAway;
+                return SysState::ArmedStay;
             }
 
             if (flags.ready)
-                return kDisarmed;
+                return SysState::Disarmed;
 
-            return kUnavailable;
+            return SysState::Unavailable;
         }
 
         void PartitionManager::publish_system_state(size_t kpi, SysState state)
@@ -379,12 +379,12 @@ namespace esphome
 
             switch (state)
             {
-                case kTriggered:  sensor->process(STATUS_TRIGGERED); break;
-                case kArmedAway:  sensor->process(STATUS_ARMED);     break;
-                case kArmedNight: sensor->process(STATUS_NIGHT);     break;
-                case kArmedStay:  sensor->process(STATUS_STAY);      break;
-                case kDisarmed:   sensor->process(STATUS_OFF);       break;
-                default:          sensor->process(STATUS_NOT_READY); break;
+                case SysState::Triggered:  sensor->process(STATUS_TRIGGERED); break;
+                case SysState::ArmedAway:  sensor->process(STATUS_ARMED);     break;
+                case SysState::ArmedNight: sensor->process(STATUS_NIGHT);     break;
+                case SysState::ArmedStay:  sensor->process(STATUS_STAY);      break;
+                case SysState::Disarmed:   sensor->process(STATUS_OFF);       break;
+                default:                   sensor->process(STATUS_NOT_READY); break;
             }
         }
 

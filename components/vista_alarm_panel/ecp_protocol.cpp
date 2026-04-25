@@ -650,11 +650,11 @@ void VistaECP::dispatch_legacyStatusPacket(uint8_t header)
     received_packet.type = 0;
     received_packet.payload[0] = header;
 
-    uart_set_baudrate(vistabus_.uart_num, 2400);
+    uart_set_baudrate(vistabus_.uart_num, kEcpBaudLegacy);
     int rxBytes = this->get_packet_event(&received_packet, data, 1, 4,
                                           vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
     received_packet.source = 0xDD;
-    uart_set_baudrate(vistabus_.uart_num, 4800);
+    uart_set_baudrate(vistabus_.uart_num, kEcpBaudStandard);
 
     xQueueSend(vistabus_.receiveQueue, &received_packet, 0);
 
@@ -696,7 +696,7 @@ void VistaECP::dispatchDebug(uint8_t header, uint8_t type)
 void VistaECP::track_write_attempts()
 {
     if (this->req_to_send && this->pulse_marked
-            && (esp_timer_get_time() - this->pulse_mark_time > 1200000)) // 1.2 s timeout
+            && (esp_timer_get_time() - this->pulse_mark_time > kPulseAckTimeoutUs))
     {
         this->ack_failures++;
         this->pulse_marked = false; // allow another pulse mark attempt
@@ -874,6 +874,7 @@ void VistaECP::dispatch_extFA(uint32_t val, uint8_t header, bool legacy)
                 default:                  break;
             }
         }
+        ESP_LOGE(TAG, "dispatch_extFA: decoded expander address %d from bitmask 0x%02X", req_addr, static_cast<uint8_t>(val >> 8));
 
         // Sync to the expander's address byte on the expansion bus.
         uint8_t n = 0;

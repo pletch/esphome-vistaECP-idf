@@ -120,18 +120,18 @@ public:
                                             pdMS_TO_TICKS(10)) == pdPASS)
                         {
                             int64_t end = esp_timer_get_time();
-                            if (end - start > 5700 && end - start < 6300)
+                            if (end - start > kBaudSwitchMarkMinUs && end - start < kBaudSwitchMarkMaxUs)
                             {
                                 // 6 ms mark: panel is transmitting a 2400 baud packet.
                                 uart_flush(this->vistabus_.uart_num);
                                 uart_read_bytes_event(this->vistabus_.uart_num, buf, 1,
                                                       pdMS_TO_TICKS(4),
                                                       this->vistabus_.uartevtQueue); // flush leading zero
-                                uart_set_baudrate(this->vistabus_.uart_num, 2400);
+                                uart_set_baudrate(this->vistabus_.uart_num, kEcpBaudLegacy);
                                 bytes = uart_read_bytes_event(this->vistabus_.uart_num, buf, 1,
                                                               pdMS_TO_TICKS(10),
                                                               this->vistabus_.uartevtQueue);
-                                uart_set_baudrate(this->vistabus_.uart_num, 4800);
+                                uart_set_baudrate(this->vistabus_.uart_num, kEcpBaudStandard);
                                 this->is_2400 = true;
                             }
                         }
@@ -170,7 +170,8 @@ public:
     // queue.  Handled types:
     //   0xF1 — zone-state request: dequeue one DeviceMsg and reply with current
     //           zone state encoded as address/sequence/zone-bits/checksum.
-    //   0xF7 — tamper/fault poll: reply with the stored NO/NC fault bitmasks.
+    //   0xF7 — status/supervision poll: reply with the stored zone-status bits
+    //           (open/closed) and per-zone EOL supervision bits.
     void quick_decodeFA_impl(const char *cbuf)
     {
         char     type          = cbuf[4];
@@ -199,7 +200,7 @@ public:
                 {
                     // Zone-state request: consume one pending DeviceMsg and reply.
                     DeviceMsg expMsg;
-                    xQueueReceive(vistabus_.deviceMsgQueue, &expMsg, portMAX_DELAY);
+                    xQueueReceive(vistabus_.deviceMsgQueue, &expMsg, pdMS_TO_TICKS(25));
                     lcbuf[0] = address;
                     lcbuf[1] = exp_sequence;
                     uint8_t z = expMsg.source & 0x07;
@@ -210,11 +211,11 @@ public:
                 }
                 else if (type == 0xF7)
                 {
-                    // Tamper/fault poll: reply with stored bitmasks.
+                    // Fault / supervision poll: reply with stored bitmasks.
                     lcbuf[0] = 0xF0;
                     lcbuf[1] = exp_sequence;
-                    lcbuf[2] = expander->fault_NO_Bits;
-                    lcbuf[3] = expander->fault_NC_Bits;
+                    lcbuf[2] = expander->zone_status_bits;
+                    lcbuf[3] = expander->supervision_bits;
                     lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
                     uart_write_bytes(vistabus_.uart_num, lcbuf, 5);
                 }
@@ -237,7 +238,7 @@ public:
                                               vistabus_.uart_num,
                                               pdMS_TO_TICKS(kUartDelay),
                                               vistabus_.uartevtQueue);
-        bool chk     = valid_chksum(received_packet.payload, 0, rxBytes + 1);
+        bool chk = valid_chksum(received_packet.payload, 0, rxBytes + 1);
         if (chk)
         {
             uint32_t val = 0xFA << 16
