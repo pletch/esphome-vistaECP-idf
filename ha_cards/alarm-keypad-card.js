@@ -739,19 +739,6 @@ ha-card[color-scheme="light"] {
           text-decoration: underline;
         }
   
-        /* text blinking */
-        .blink{
-          animation:blinkingText 1.2s infinite;
-        }
-  
-        @keyframes blinkingText{
-            0%  { color: #000;        }
-            49% { color: #000;        }
-            60% { color: transparent; }
-            99% { color:transparent;  }
-            100%{ color: #000;        }
-        }
-        
        .keypad_cmd_text {
         font-size: 0.52rem;
         font-style: italic; 

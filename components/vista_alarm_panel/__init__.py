@@ -64,6 +64,7 @@ CONF_CC1101_CSN="cc1101_csn_pin"
 CONF_CC1101_GDO0="cc1101_gdo0_pin"
 CONF_CC1101_SPI_BUS="cc1101_spi_bus"
 CONF_RF_HEARTBEAT_EXTERNAL="rf_heartbeat_external"
+CONF_CC1101_RSSI_THRESHOLD="cc1101_rssi_threshold"
 
 CC1101_PINS = [CONF_CC1101_MOSI, CONF_CC1101_MISO, CONF_CC1101_SCK,
                CONF_CC1101_CSN, CONF_CC1101_GDO0]
@@ -153,6 +154,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_CC1101_CSN):  cv.int_range(min=0, max=39),
             cv.Optional(CONF_CC1101_GDO0): cv.int_range(min=0, max=39),
             cv.Optional(CONF_CC1101_SPI_BUS, default=2): cv.one_of(2, 3, int=True),
+            cv.Optional(CONF_CC1101_RSSI_THRESHOLD, default=-87): cv.int_range(min=-95, max=-65),
             cv.Optional(CONF_RF_HEARTBEAT_EXTERNAL, default=False): cv.boolean,
         }
     )
@@ -229,7 +231,9 @@ async def to_code(config):
                 config[CONF_CC1101_GDO0],
                 config[CONF_CC1101_SPI_BUS],
             ))
-            _LOGGER.info("CC1101 hardware receiver enabled")
+            cg.add(var.set_cc1101_rssi_threshold(config[CONF_CC1101_RSSI_THRESHOLD]))
+            _LOGGER.info("CC1101 hardware receiver enabled (RSSI threshold: %d dBm)",
+                         config[CONF_CC1101_RSSI_THRESHOLD])
     if CONF_AUIADDR in config:
         cg.add(var.set_auiaddr(config[CONF_AUIADDR]))
     if CONF_AUTOCLOCKSYNC in config:

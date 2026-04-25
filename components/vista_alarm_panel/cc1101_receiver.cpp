@@ -35,6 +35,7 @@ void CC1101Receiver::log_config() const
                   radio_.mosi_pin(), radio_.miso_pin(),
                   radio_.sck_pin(),  radio_.csn_pin(),
                   radio_.gdo0_pin());
+    ESP_LOGCONFIG(TAG, "    RSSI threshold: %d dBm", rssi_threshold_);
 }
 
 bool CC1101Receiver::begin()
@@ -133,7 +134,7 @@ void CC1101Receiver::rx_task(void *param)
         int8_t rssi = self->radio_.rssi_now();
         // Gate by RSSI to avoid processing noise floors from the asynchronous output
         {
-            if (rssi < -87)
+            if (rssi < self->rssi_threshold_)
                 continue;
         }
         if (num_symbols >= 40) 

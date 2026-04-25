@@ -128,6 +128,11 @@ namespace esphome
                 cc1101_receiver_ = new CC1101Receiver(
                     vistabus_, mosi, miso, sck, csn, gdo0, host);
             }
+
+            void set_cc1101_rssi_threshold(int8_t dbm)
+            {
+                if (cc1101_receiver_) cc1101_receiver_->set_rssi_threshold(dbm);
+            }
 #endif
 
             // -------------------------------------------------------------------

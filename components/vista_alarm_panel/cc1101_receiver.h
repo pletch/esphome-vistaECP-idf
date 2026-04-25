@@ -62,6 +62,10 @@ public:
     // Log SPI and GDO0 pin assignments via ESP_LOGCONFIG.
     void log_config() const;
 
+    // RSSI gating threshold in dBm. Packets received below this level are
+    // discarded as noise. Valid range -95..-65; default -87.
+    void set_rssi_threshold(int8_t dbm) { rssi_threshold_ = dbm; }
+
 
 private:
     static void rx_task(void *param);
@@ -79,6 +83,7 @@ private:
     };
     DedupeEntry dedupe_history_[16] {};
     uint8_t     dedupe_idx_ {0};
+    int8_t      rssi_threshold_ {-87};
 
     static constexpr const char *TAG = "cc1101-rcv";
 };
