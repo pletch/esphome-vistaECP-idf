@@ -278,6 +278,16 @@ namespace esphome
 
             void publish_initial_states();
 
+            // True if any registered zone is a physical RF sensor (rfserial != 0
+            // and not emulated).  Used to decide whether the CC1101 packet-absence
+            // watchdog should be active — pointless if no physical sensors exist.
+            bool has_physical_rf_zones() const
+            {
+                for (const auto &z : zones_)
+                    if (z.active && z.rfserial != 0 && !z.emulated) return true;
+                return false;
+            }
+
         private:
 
             // -------------------------------------------------------------------

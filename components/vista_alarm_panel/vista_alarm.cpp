@@ -171,6 +171,13 @@ namespace esphome
             {
                 cc1101_receiver_->begin();
 
+                // Enable tier-2 packet-absence watchdog only if at least one
+                // physical RF sensor is configured.  Pure-emulated / no-RF
+                // setups would otherwise trigger a full chip re-init every
+                // 90 minutes for nothing.
+                cc1101_receiver_->set_packet_watchdog_enabled(
+                    zones_.has_physical_rf_zones());
+
                 // Start the direct RF→HA task.  It blocks on rf_direct_queue and
                 // calls ZoneManager::on_rf_direct() as soon as CC1101Receiver posts
                 // a valid packet, bypassing the panel ECP round-trip.

@@ -66,14 +66,34 @@ public:
     // discarded as noise. Valid range -95..-65; default -87.
     void set_rssi_threshold(int8_t dbm) { rssi_threshold_ = dbm; }
 
+    // Enable or disable the tier-2 packet-absence watchdog.  Should be set true
+    // only when at least one physical RF sensor is configured — without one,
+    // long stretches of silence are normal and the full-reinit recovery would
+    // fire pointlessly every 90 minutes.  Tier 1 (MARCSTATE check) always runs.
+    void set_packet_watchdog_enabled(bool enabled) { packet_watchdog_enabled_ = enabled; }
+
 
 private:
     static void rx_task(void *param);
+
+    // Two-tier health watchdog called when the rx_task notification times out
+    // (no RMT activity for kHealthCheckPeriodMs).  Tier 1: cheap MARCSTATE check
+    // — if the chip has dropped out of RX, kick_rx().  Tier 2: if no valid
+    // decoded packet has been seen for kPacketWatchdogUs, do a full begin();
+    // if begin() itself fails (SPI dead) the system reboots as last resort.
+    void check_health();
 
     VistaBus    &bus_;
     CC1101       radio_;
     TaskHandle_t task_handle_ {nullptr};
     rmt_channel_handle_t rmt_rx_chan_ {nullptr};
+
+    // Timestamp (esp_timer_get_time, µs) of the last valid decoded packet.
+    // Updated only on pkt.valid; consulted by check_health() for tier 2.
+    int64_t last_packet_us_ {0};
+
+    // Tier-2 watchdog gate — see set_packet_watchdog_enabled() above.
+    bool packet_watchdog_enabled_ {false};
 
     // De-duplication state
     struct DedupeEntry {

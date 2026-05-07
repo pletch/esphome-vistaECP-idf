@@ -125,6 +125,20 @@ public:
     // Use this before read_packet() to gate on signal strength.
     int8_t rssi_now();
 
+    // Read the MARCSTATE status register.  In normal operation the chip should
+    // sit at 0x0D (RX).  Used by the receiver-task watchdog to detect the chip
+    // having dropped out of RX without any external indication.
+    uint8_t marcstate() { return read_status_reg(CC1101Status::MARCSTATE); }
+
+    // Lightweight recovery — strobe SIDLE then SRX to cycle the state machine.
+    // Cheaper and less disruptive than a full begin() re-init; clears most
+    // chip-state wedges in async-serial mode (where the RX FIFO is unused).
+    void kick_rx()
+    {
+        strobe(CC1101Strobe::SIDLE);
+        strobe(CC1101Strobe::SRX);
+    }
+
     // Return the GPIO numbers for all SPI and data pins.
     int mosi_pin() const { return mosi_; }
     int miso_pin() const { return miso_; }

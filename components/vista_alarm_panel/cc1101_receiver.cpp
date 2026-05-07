@@ -22,6 +22,17 @@ static constexpr size_t kRmtSymbols = 512;
 static constexpr size_t kRmtSymbols = 128;
 #endif
 
+// Watchdog tunables.
+// Tier 1 cadence — the rx_task wakes this often when no RMT activity, runs
+// MARCSTATE check.  Also breaks any deadlock if the chip's GDO0 stops firing.
+static constexpr uint32_t kHealthCheckPeriodMs = 60'000;       // 60 s
+// Tier 2 threshold — full re-init if no valid packet has been decoded in this
+// window.  90 min covers the worst-case heartbeat interval (sensors transmit
+// every 60–90 min) with a small margin.
+static constexpr int64_t  kPacketWatchdogUs   = 90LL * 60 * 1000 * 1000;
+// Expected MARCSTATE value when the chip is in RX (per TI CC1101 datasheet).
+static constexpr uint8_t  kMarcstateRx        = 0x0D;
+
 CC1101Receiver::CC1101Receiver(VistaBus &bus,
                                int mosi, int miso, int sck, int csn, int gdo0,
                                spi_host_device_t spi_host)
@@ -116,20 +127,40 @@ void CC1101Receiver::rx_task(void *param)
         .signal_range_max_ns = 2000000,
     };
 
+    // Initialise the watchdog clock so the first 90-min window starts now,
+    // not from boot (which would be unfair if the rx_task starts late).
+    self->last_packet_us_ = esp_timer_get_time();
+
+    bool receive_armed = false;
     while (1)
     {
-        // Start RMT asynchronous receive. rmt_receive() takes buffer size in bytes.
-        esp_err_t ret = rmt_receive(self->rmt_rx_chan_, symbols, symbols_size_bytes, &recv_config);
-        if (ret != ESP_OK) {
-            // Avoid crashing on transient errors (like ESP_ERR_INVALID_STATE during noise).
-            ESP_LOGE(TAG, "rmt_receive failed: %s (0x%X)", esp_err_to_name(ret), ret);
-            vTaskDelay(pdMS_TO_TICKS(100));
+        if (!receive_armed)
+        {
+            // Start RMT asynchronous receive. rmt_receive() takes buffer size in bytes.
+            esp_err_t ret = rmt_receive(self->rmt_rx_chan_, symbols, symbols_size_bytes, &recv_config);
+            if (ret != ESP_OK) {
+                // Avoid crashing on transient errors (like ESP_ERR_INVALID_STATE during noise).
+                ESP_LOGE(TAG, "rmt_receive failed: %s (0x%X)", esp_err_to_name(ret), ret);
+                vTaskDelay(pdMS_TO_TICKS(100));
+                continue;
+            }
+            receive_armed = true;
+        }
+
+        // Wait for RMT to finish — finite timeout so the task wakes periodically
+        // for the watchdog even if the chip's GDO0 has stopped firing entirely.
+        uint32_t num_symbols = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(kHealthCheckPeriodMs));
+
+        if (num_symbols == 0)
+        {
+            // Notification timeout — no RMT activity.  Run health check and loop;
+            // the original rmt_receive is still pending so we must not re-arm.
+            self->check_health();
             continue;
         }
 
-        // Wait for RMT to finish (notification value is the number of symbols)
-        uint32_t num_symbols = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        if (num_symbols == 0) continue;
+        // Receive completed; next iteration must re-arm rmt_receive.
+        receive_armed = false;
 
         int8_t rssi = self->radio_.rssi_now();
         // Gate by RSSI to avoid processing noise floors from the asynchronous output
@@ -148,6 +179,9 @@ void CC1101Receiver::rx_task(void *param)
         if (pkt.valid)
         {
             int64_t now = esp_timer_get_time();
+            // Tier-2 watchdog: any valid decode (including duplicates and
+            // heartbeats) is proof the chip and antenna are working.
+            self->last_packet_us_ = now;
             bool is_duplicate = false;
 
             // Two-tier dedup:
@@ -192,6 +226,54 @@ void CC1101Receiver::rx_task(void *param)
             // ECP path: always forward to the panel via the emulated RF receiver.
             self->bus_.sendRFmsg(pkt.serial, pkt.ecp_status);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Health watchdog — called from rx_task when the notify timeout expires.
+//
+// Tier 1 (chip-state):  Read MARCSTATE.  If the chip has dropped out of RX,
+//   strobe SIDLE+SRX (kick_rx) to cycle the state machine.  Cheap; runs every
+//   minute and catches the common "chip lost RX state" wedge within 60 s.
+//
+// Tier 2 (packet-absence):  If no valid packet has been decoded for the
+//   90-minute watchdog window, do a full radio_.begin() re-init.  This covers
+//   deeper failures (register corruption, antenna issue, etc.) that the
+//   MARCSTATE reading alone cannot diagnose.  If begin() itself fails, SPI is
+//   broken and a reboot is the only recovery.
+// ---------------------------------------------------------------------------
+void CC1101Receiver::check_health()
+{
+    const int64_t now = esp_timer_get_time();
+    const int64_t silence_us = now - last_packet_us_;
+
+    // Tier 2 first — if we've been silent past the 90-min window, the chip
+    // has either wedged silently or something deeper is wrong.  A full
+    // re-init is the right level of intervention.  Skipped entirely when no
+    // physical RF sensors are configured (silence is expected then).
+    if (packet_watchdog_enabled_ && silence_us > kPacketWatchdogUs)
+    {
+        ESP_LOGE(TAG, "Watchdog: no valid packet in %lld s — re-initialising CC1101",
+                 silence_us / 1000000);
+        if (!radio_.begin())
+        {
+            ESP_LOGE(TAG, "CC1101 begin() failed during watchdog recovery — rebooting");
+            esp_restart();  // SPI is dead; reboot is the only option.
+        }
+        // Reset the watchdog so the next 90-min window starts from now,
+        // not from a long-stale last_packet_us_.
+        last_packet_us_ = now;
+        return;
+    }
+
+    // Tier 1 — cheap MARCSTATE check.  If the chip has slipped out of RX,
+    // a SIDLE/SRX cycle almost always recovers it.
+    const uint8_t state = radio_.marcstate();
+    if (state != kMarcstateRx)
+    {
+        ESP_LOGW(TAG, "Watchdog: MARCSTATE=0x%02X (expected 0x%02X) — kicking back to RX",
+                 state, kMarcstateRx);
+        radio_.kick_rx();
     }
 }
 
