@@ -22,6 +22,7 @@
  */
 
 #include "vista_alarm.h"
+#include "constants.h"
 #include "panel_text.h"
 //#include "esp_log.h"
 #include "esp_timer.h"
@@ -183,7 +184,7 @@ namespace esphome
                 // a valid packet, bypassing the panel ECP round-trip.
                 xTaskCreate(rf_direct_task_start,
                             "rf_direct",
-                            4096,
+                            kRfDirectTaskStackSize,
                             static_cast<void *>(this),
                             8,       // priority 8: above cc1101_rx (5), below processReceiveQueue (10)
                             &rf_direct_task_handle_);
@@ -219,7 +220,7 @@ namespace esphome
             // --- Start receive task ---
             xTaskCreate(processReceiveQueue_task_start,
                         "pRQtask",
-                        4096,
+                        kProcessRxTaskStackSize,
                         static_cast<void *>(this),
                         10,
                         &processReceiveQHandle);

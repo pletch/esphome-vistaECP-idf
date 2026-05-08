@@ -73,3 +73,65 @@ inline constexpr int64_t kRfHeartbeatInitialMinMinutes   = 1;   // earliest firs
 inline constexpr int64_t kRfHeartbeatInitialJitterMinutes = 10; // added random jitter
 inline constexpr int64_t kRfHeartbeatPeriodMinMinutes    = 70;  // baseline interval
 inline constexpr int64_t kRfHeartbeatPeriodJitterMinutes = 20;  // added random jitter
+
+// ===========================================================================
+// Runtime tunables
+// ---------------------------------------------------------------------------
+// Behavioural parameters consolidated here so they can be reviewed and adjusted
+// in one place.  Hardware register definitions and protocol bit layouts remain
+// in their domain headers (cc1101.h, honeywell_345.h, etc.).
+// ===========================================================================
+
+// --- FreeRTOS queue depths ---------------------------------------------------
+inline constexpr uint16_t kReceiveQueueDepth    = 15;  // decoded panel frames awaiting dispatch
+inline constexpr uint16_t kSendQueueDepth       = 8;   // outbound commands awaiting transmission
+inline constexpr uint16_t kDeviceMsgQueueDepth  = 8;   // pending expander/RF responses for next F1 poll
+inline constexpr uint16_t kRfDirectQueueDepth   = 8;   // CC1101 → HA fast path
+
+// --- FreeRTOS task stack sizes (bytes) --------------------------------------
+inline constexpr uint16_t kRfDirectTaskStackSize  = 4096; // ZoneManager publish chain
+inline constexpr uint16_t kProcessRxTaskStackSize = 4096; // PacketDispatcher dispatch chain
+inline constexpr uint16_t kCc1101RxTaskStackSize  = 5120; // RMT decode + Honeywell parser
+
+// --- CC1101 receiver health watchdog ----------------------------------------
+// Tier 1: cheap MARCSTATE register check cadence.  Also breaks the rx_task's
+// notification block if GDO0 stops firing entirely.
+inline constexpr uint32_t kCc1101HealthCheckPeriodMs = 60'000;
+// Tier 2: full radio_.begin() re-init if no valid packet has been decoded in
+// this window.  Sized to comfortably exceed Honeywell sensor heartbeat
+// intervals (60–90 min).
+inline constexpr int64_t  kCc1101PacketWatchdogUs    = 90LL * 60 * 1000 * 1000;
+
+// --- CC1101 RMT receive capture ---------------------------------------------
+// Glitch filter: drop pulses shorter than this (Honeywell chips ≈ 136 µs).
+inline constexpr uint32_t kCc1101RmtSignalMinNs   = 3'000;
+// End-of-frame: terminate capture after this much idle (inter-burst gap ≥ 30 ms).
+inline constexpr uint32_t kCc1101RmtSignalMaxNs   = 2'000'000;
+// RMT capture buffer size (symbols).  Larger on chips with DMA-capable RMT.
+#ifdef SOC_RMT_SUPPORT_DMA
+inline constexpr size_t   kCc1101RmtSymbols       = 512;
+#else
+inline constexpr size_t   kCc1101RmtSymbols       = 128;
+#endif
+
+// --- CC1101 / RF de-duplication ---------------------------------------------
+// Ring buffer of recently seen (serial, status) packets.
+inline constexpr uint8_t  kDedupeHistorySize       = 16;
+// Burst suppressor: any retransmission of the same serial within this window
+// is dropped, regardless of status byte.  Catches interleaved fault/clear
+// packets that some sensors emit during state transitions.
+inline constexpr int64_t  kDedupeBurstWindowUs     = 300'000;
+// Long-range exact-match suppressor: same (serial, status) seen within this
+// window is dropped.
+inline constexpr int64_t  kDedupeLongRangeWindowUs = 2'500'000;
+
+// --- Direct/ECP path coherency ----------------------------------------------
+// When ZoneManager::on_rf_direct() runs, ECP-path zone updates for the same
+// serial are suppressed for this long so the panel's later FB echo can't
+// overwrite the authoritative direct-path state.
+inline constexpr int64_t  kDirectSuppressUs        = 3'000'000LL;
+
+// --- RSSI cache --------------------------------------------------------------
+// Number of (serial, rssi) entries retained for use by the rf_messages text
+// sensor.  8 is enough for typical home deployments without rapid eviction.
+inline constexpr uint8_t  kRssiCacheSize           = 8;

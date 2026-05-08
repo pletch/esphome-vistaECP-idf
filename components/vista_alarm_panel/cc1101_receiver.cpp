@@ -8,30 +8,11 @@
 #ifdef CC1101_RECEIVER
 
 #include "cc1101_receiver.h"
+#include "constants.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
-
-// RMT capture buffer size: 512 symbols on chips with DMA-capable RMT (ESP32-S3),
-// 128 on all others (fits in 2 × 64-word hardware RMT SRAM blocks; sufficient for
-// a full Honeywell burst of ≤110 symbols).
-#ifdef SOC_RMT_SUPPORT_DMA
-static constexpr size_t kRmtSymbols = 512;
-#else
-static constexpr size_t kRmtSymbols = 128;
-#endif
-
-// Watchdog tunables.
-// Tier 1 cadence — the rx_task wakes this often when no RMT activity, runs
-// MARCSTATE check.  Also breaks any deadlock if the chip's GDO0 stops firing.
-static constexpr uint32_t kHealthCheckPeriodMs = 60'000;       // 60 s
-// Tier 2 threshold — full re-init if no valid packet has been decoded in this
-// window.  90 min covers the worst-case heartbeat interval (sensors transmit
-// every 60–90 min) with a small margin.
-static constexpr int64_t  kPacketWatchdogUs   = 90LL * 60 * 1000 * 1000;
-// Expected MARCSTATE value when the chip is in RX (per TI CC1101 datasheet).
-static constexpr uint8_t  kMarcstateRx        = 0x0D;
 
 CC1101Receiver::CC1101Receiver(VistaBus &bus,
                                int mosi, int miso, int sck, int csn, int gdo0,
@@ -58,13 +39,13 @@ bool CC1101Receiver::begin()
     }
 
     // Initialize RMT RX Channel to capture demodulated pulses from GDO0.
-    // Buffer size and DMA flag are selected at compile time via kRmtSymbols above.
-    rmt_rx_channel_config_t rx_chan_config = 
+    // Buffer size and DMA flag are selected at compile time via kCc1101RmtSymbols.
+    rmt_rx_channel_config_t rx_chan_config =
     {
         .gpio_num = static_cast<gpio_num_t>(radio_.gdo0_pin()),
         .clk_src = RMT_CLK_SRC_DEFAULT,
         .resolution_hz = 1000000, // 1 µs resolution
-        .mem_block_symbols = kRmtSymbols,
+        .mem_block_symbols = kCc1101RmtSymbols,
         .intr_priority = 3,
 #ifdef SOC_RMT_SUPPORT_DMA
         .flags = { .invert_in = false, .with_dma = true }
@@ -91,7 +72,7 @@ bool CC1101Receiver::begin()
 
     xTaskCreate(rx_task,
                 "cc1101_rx",
-                5120,
+                kCc1101RxTaskStackSize,
                 static_cast<void *>(this),
                 5,
                 &task_handle_);
@@ -107,24 +88,20 @@ void CC1101Receiver::rx_task(void *param)
     // The receive buffer must live in internal SRAM — required for DMA-mode chips and
     // safe on all others (internal SRAM is always DMA-capable).  Stack allocation is
     // not used because rmt_receive() rejects non-DMA-capable addresses on DMA channels.
-    const size_t symbols_size_bytes = kRmtSymbols * sizeof(rmt_symbol_word_t);
+    const size_t symbols_size_bytes = kCc1101RmtSymbols * sizeof(rmt_symbol_word_t);
     rmt_symbol_word_t *symbols = static_cast<rmt_symbol_word_t *>(
         heap_caps_malloc(symbols_size_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
-    if (symbols == nullptr) 
+    if (symbols == nullptr)
     {
         ESP_LOGE(TAG, "Failed to allocate RMT DMA buffer. Task exiting.");
         vTaskDelete(NULL);
         return;
     }
 
-    rmt_receive_config_t recv_config = 
+    rmt_receive_config_t recv_config =
     {
-        // Filter out pulses shorter than 3 µs — suppresses sub-chip electrical
-        // glitches on GDO0 without clipping real chips (~136 µs nominal).
-        .signal_range_min_ns = 3000,
-        // Terminate capture after 2 ms of idle (inter-repetition gaps are 30+ ms,
-        // so each Honeywell packet repetition is captured as a separate frame).
-        .signal_range_max_ns = 2000000,
+        .signal_range_min_ns = kCc1101RmtSignalMinNs,
+        .signal_range_max_ns = kCc1101RmtSignalMaxNs,
     };
 
     // Initialise the watchdog clock so the first 90-min window starts now,
@@ -149,7 +126,7 @@ void CC1101Receiver::rx_task(void *param)
 
         // Wait for RMT to finish — finite timeout so the task wakes periodically
         // for the watchdog even if the chip's GDO0 has stopped firing entirely.
-        uint32_t num_symbols = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(kHealthCheckPeriodMs));
+        uint32_t num_symbols = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(kCc1101HealthCheckPeriodMs));
 
         if (num_symbols == 0)
         {
@@ -194,8 +171,8 @@ void CC1101Receiver::rx_task(void *param)
             {
                 if (entry.serial != pkt.serial) continue;
                 int64_t age = now - entry.timestamp;
-                if (age < 300000)                                    { is_duplicate = true; break; }
-                if (entry.status == pkt.ecp_status && age < 2500000) { is_duplicate = true; break; }
+                if (age < kDedupeBurstWindowUs)                                    { is_duplicate = true; break; }
+                if (entry.status == pkt.ecp_status && age < kDedupeLongRangeWindowUs) { is_duplicate = true; break; }
             }
 
             if (is_duplicate)
@@ -209,7 +186,7 @@ void CC1101Receiver::rx_task(void *param)
 
             // Add to circular history buffer
             self->dedupe_history_[self->dedupe_idx_] = {pkt.serial, pkt.ecp_status, now};
-            self->dedupe_idx_ = (self->dedupe_idx_ + 1) % 16;
+            self->dedupe_idx_ = (self->dedupe_idx_ + 1) % kDedupeHistorySize;
 
             // Post all valid packets (including heartbeats) to rf_direct_queue.
             // Non-heartbeat packets: rf_direct_task publishes zone state to HA
@@ -251,7 +228,7 @@ void CC1101Receiver::check_health()
     // has either wedged silently or something deeper is wrong.  A full
     // re-init is the right level of intervention.  Skipped entirely when no
     // physical RF sensors are configured (silence is expected then).
-    if (packet_watchdog_enabled_ && silence_us > kPacketWatchdogUs)
+    if (packet_watchdog_enabled_ && silence_us > kCc1101PacketWatchdogUs)
     {
         ESP_LOGE(TAG, "Watchdog: no valid packet in %lld s — re-initialising CC1101",
                  silence_us / 1000000);
@@ -269,10 +246,10 @@ void CC1101Receiver::check_health()
     // Tier 1 — cheap MARCSTATE check.  If the chip has slipped out of RX,
     // a SIDLE/SRX cycle almost always recovers it.
     const uint8_t state = radio_.marcstate();
-    if (state != kMarcstateRx)
+    if (state != CC1101Status::MARCSTATE_RX)
     {
         ESP_LOGW(TAG, "Watchdog: MARCSTATE=0x%02X (expected 0x%02X) — kicking back to RX",
-                 state, kMarcstateRx);
+                 state, CC1101Status::MARCSTATE_RX);
         radio_.kick_rx();
     }
 }

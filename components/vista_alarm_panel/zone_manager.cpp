@@ -24,8 +24,7 @@ namespace esphome
     {
         static constexpr const char *TAG = "vista-zone";
 
-        // Suppress ECP-path publish when the direct path updated within this window.
-        static constexpr int64_t kDirectSuppressUs = 3'000'000LL;  // 3 seconds
+        // kDirectSuppressUs is defined centrally in constants.h.
 
 #ifdef CC1101_RECEIVER
         void ZoneManager::store_rssi(uint32_t serial, int8_t rssi)

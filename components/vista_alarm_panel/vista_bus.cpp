@@ -8,6 +8,7 @@
 // See COPYING.LESSER in the project root for details.
 
 #include "vista_bus.h"
+#include "constants.h"
 
 // Select the matching ECP protocol implementation.
 #ifndef LEGACY_SE_PROTOCOL
@@ -40,10 +41,10 @@ VistaBus::VistaBus()
     // Pre-allocate the inter-task queues so they are ready before begin() is
     // called.  Queue depths are chosen to hold a small burst without blocking
     // the real-time UART task.
-    this->receiveQueue    = xQueueCreate(15, sizeof(ReceivedPacket)); // app reads decoded frames here
-    this->sendQueue       = xQueueCreate(8,  sizeof(SendPacket));     // app posts commands here
-    this->deviceMsgQueue  = xQueueCreate(4,  sizeof(DeviceMsg));      // expander/RF notifications
-    this->rf_direct_queue = xQueueCreate(8,  sizeof(RfDirectMsg));    // fast direct-to-HA RF path
+    this->receiveQueue    = xQueueCreate(kReceiveQueueDepth,   sizeof(ReceivedPacket)); // app reads decoded frames here
+    this->sendQueue       = xQueueCreate(kSendQueueDepth,      sizeof(SendPacket));     // app posts commands here
+    this->deviceMsgQueue  = xQueueCreate(kDeviceMsgQueueDepth, sizeof(DeviceMsg));      // expander/RF notifications
+    this->rf_direct_queue = xQueueCreate(kRfDirectQueueDepth,  sizeof(RfDirectMsg));    // fast direct-to-HA RF path
 
     this->rx_tx_task_Handle      = nullptr;
     this->monitor_rx_task_Handle = nullptr;

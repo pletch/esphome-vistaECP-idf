@@ -315,7 +315,6 @@ namespace esphome
             // on_rf_zone_packet() ~50–500 ms later to append RSSI to the
             // rf_messages string regardless of zone registration status.
             struct RssiCacheEntry { uint32_t serial {0}; int8_t rssi {0}; };
-            static constexpr uint8_t kRssiCacheSize = 8;
             RssiCacheEntry rssi_cache_[kRssiCacheSize] {};
             uint8_t        rssi_cache_idx_ {0};
 

@@ -9,6 +9,7 @@
 #ifdef CC1101_RECEIVER
 
 #include "cc1101.h"
+#include "constants.h"
 #include "driver/rmt_rx.h"
 #include "honeywell_345.h"
 #include "vista_bus.h"
@@ -35,7 +36,7 @@
 // packets can arrive.
 // ---------------------------------------------------------------------------
 
-// kRmtSymbols is defined in cc1101_receiver.cpp based on SOC_RMT_SUPPORT_DMA:
+// kCc1101RmtSymbols is defined in constants.h based on SOC_RMT_SUPPORT_DMA:
 //   512 symbols on chips with RMT DMA (ESP32-S3) — buffer in system RAM.
 //   128 symbols on all other chips       — buffer in on-chip RMT SRAM
 //                                          (2 × 64-word hardware blocks on original ESP32;
@@ -77,10 +78,11 @@ private:
     static void rx_task(void *param);
 
     // Two-tier health watchdog called when the rx_task notification times out
-    // (no RMT activity for kHealthCheckPeriodMs).  Tier 1: cheap MARCSTATE check
-    // — if the chip has dropped out of RX, kick_rx().  Tier 2: if no valid
-    // decoded packet has been seen for kPacketWatchdogUs, do a full begin();
-    // if begin() itself fails (SPI dead) the system reboots as last resort.
+    // (no RMT activity for kCc1101HealthCheckPeriodMs).  Tier 1: cheap MARCSTATE
+    // check — if the chip has dropped out of RX, kick_rx().  Tier 2: if no valid
+    // decoded packet has been seen for kCc1101PacketWatchdogUs, do a full
+    // begin(); if begin() itself fails (SPI dead) the system reboots as last
+    // resort.  Both windows are tunable in constants.h.
     void check_health();
 
     VistaBus    &bus_;
@@ -101,7 +103,7 @@ private:
         uint8_t  status;
         int64_t  timestamp;
     };
-    DedupeEntry dedupe_history_[16] {};
+    DedupeEntry dedupe_history_[kDedupeHistorySize] {};
     uint8_t     dedupe_idx_ {0};
     int8_t      rssi_threshold_ {-87};
 

@@ -95,6 +95,8 @@ namespace CC1101Status {
     inline constexpr uint8_t VERSION   = 0x31;
     inline constexpr uint8_t RSSI      = 0x34;
     inline constexpr uint8_t MARCSTATE = 0x35;
+    // Expected MARCSTATE value when the chip is in RX (per TI CC1101 datasheet).
+    inline constexpr uint8_t MARCSTATE_RX = 0x0D;
 }
 
 // CC1101 command strobes
