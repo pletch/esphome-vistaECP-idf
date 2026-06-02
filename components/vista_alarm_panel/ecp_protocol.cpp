@@ -149,16 +149,38 @@ void VistaECP::mark_pulse(int uartNum, uint8_t address)
     uart_set_parity(static_cast<uart_port_t>(uartNum), UART_PARITY_EVEN);
 }
 
+// Copy rxBytes of rxbuf into received_packet->payload at offset 'start', clamped
+// to the payload buffer so neither the copy nor the trailing null terminator can
+// overrun it.  The terminator is written only when a free byte remains — a binary
+// frame that exactly fills the buffer (e.g. a full 48-byte F7) is consumed via
+// 'size', not as a C-string, so the missing terminator is harmless.
+// Returns the number of bytes actually stored.
+static int store_packet_payload(struct ReceivedPacket * received_packet,
+                                const uint8_t * rxbuf, int start, int rxBytes)
+{
+    const int cap = static_cast<int>(sizeof(received_packet->payload));
+    if (start < 0)             start   = 0;
+    if (start > cap)           start   = cap;
+    if (rxBytes < 0)           rxBytes = 0;
+    if (start + rxBytes > cap) rxBytes = cap - start;   // never copy past the buffer
+
+    memcpy(received_packet->payload + start, rxbuf, static_cast<size_t>(rxBytes));
+
+    const int total = start + rxBytes;
+    if (total < cap)
+        received_packet->payload[total] = '\0';         // terminate only if room
+    received_packet->size = total;
+    return rxBytes;
+}
+
 // Append up to 'len' bytes (event-queue driven) to received_packet starting at
 // offset 'start', then null-terminate the payload and update the size field.
 // Returns the number of bytes read from the UART in this call.
 int VistaECP::get_packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf,
         int start, int len, uart_port_t uart_num, int timeout, QueueHandle_t queue)
 {
-    const int rxBytes = uart_read_bytes_event(uart_num, rxbuf, len, timeout, queue);
-    memcpy(received_packet->payload + start, rxbuf, rxBytes);
-    received_packet->payload[rxBytes + start] = '\0';
-    received_packet->size = rxBytes + start;
+    int rxBytes = uart_read_bytes_event(uart_num, rxbuf, len, timeout, queue);
+    rxBytes = store_packet_payload(received_packet, rxbuf, start, rxBytes);
     return rxBytes;
 }
 
@@ -168,10 +190,8 @@ int VistaECP::get_packet_event(struct ReceivedPacket * received_packet, uint8_t 
 int VistaECP::get_packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf,
         int start, int len, uart_port_t uart_num, int timeout)
 {
-    const int rxBytes = uart_read_bytes(uart_num, rxbuf, len, timeout);
-    memcpy(received_packet->payload + start, rxbuf, rxBytes);
-    received_packet->payload[rxBytes + start] = '\0';
-    received_packet->size = rxBytes + start;
+    int rxBytes = uart_read_bytes(uart_num, rxbuf, len, timeout);
+    rxBytes = store_packet_payload(received_packet, rxbuf, start, rxBytes);
     return rxBytes;
 }
 
@@ -202,15 +222,24 @@ int VistaECP::get_packet(struct ReceivedPacket * received_packet, uint8_t * rxbu
 // When type == 0 (writedirect), bytes are already encoded; copy them verbatim.
 int VistaECP::keypad_write(const uart_port_t uart_n, const SendPacket &pkt_to_send)
 {
-    char outbuffer[24];
+    // The wire frame is size + 3 bytes (sequence, length, payload, checksum), so
+    // the buffer must be the payload capacity plus that 3-byte overhead.  Clamp
+    // size to the payload capacity defensively: a size that fit SendPacket.payload
+    // could still have overrun a 24-byte frame buffer (off-by-the-overhead).
+    const int max_payload = static_cast<int>(sizeof(pkt_to_send.payload));
+    int size = pkt_to_send.size;
+    if (size < 0)           size = 0;
+    if (size > max_payload) size = max_payload;
+
+    char outbuffer[sizeof(pkt_to_send.payload) + 3];
     memset(outbuffer, '\0', sizeof(outbuffer));
     outbuffer[0] = pkt_to_send.sequence;
-    outbuffer[1] = pkt_to_send.size + 1; // length field includes itself
+    outbuffer[1] = size + 1; // length field includes itself
 
     uint8_t chksum = 0;
     chksum += outbuffer[0] + outbuffer[1];
 
-    for (int i = 2; i < pkt_to_send.size + 2; i++)
+    for (int i = 2; i < size + 2; i++)
     {
         if (pkt_to_send.type == 0) // write direct as hex — no translation needed
         {
@@ -240,9 +269,9 @@ int VistaECP::keypad_write(const uart_port_t uart_n, const SendPacket &pkt_to_se
 
     // Two's-complement checksum: ~sum + 1, so that all bytes (including the
     // checksum itself) sum to 0x00 modulo 256.
-    outbuffer[pkt_to_send.size + 2] = ~chksum + 1;
+    outbuffer[size + 2] = ~chksum + 1;
 
-    return uart_write_bytes(uart_n, outbuffer, pkt_to_send.size + 3);
+    return uart_write_bytes(uart_n, outbuffer, size + 3);
 }
 
 
