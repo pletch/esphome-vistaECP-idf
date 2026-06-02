@@ -260,8 +260,25 @@ namespace esphome
             // or aui_ immediately.
             // -------------------------------------------------------------------
 
+            // Reject service calls made before setup() has completed (e.g. from an
+            // on_boot lambda or an imported-sensor on_press handler that fires
+            // during boot).  Until VistaBus::begin() runs the bus task is not
+            // draining sendQueue and the emulation modes are not configured, so
+            // such early calls would be silently deferred or dropped.  Logging a
+            // warning and returning makes the misuse visible instead of surprising.
+            bool not_ready(const char *what) const
+            {
+                if (!ready_)
+                {
+                    ESP_LOGW(TAG, "%s called before setup complete — ignored", what);
+                    return true;
+                }
+                return false;
+            }
+
             void svc_set_panel_time()
             {
+                if (not_ready("set_panel_time")) return;
                 aui_.request_time_sync(vistabus_,
                                        /*in_program_mode=*/false,
                                        this);
@@ -269,12 +286,14 @@ namespace esphome
 
             void svc_alarm_keypress(std::string keys)
             {
+                if (not_ready("alarm_keypress")) return;
                 ESP_LOGI(TAG, "svc_alarm_keypress: keys='%s'", keys.c_str());
                 cmd_.keypress(keys, default_partition_);
             }
 
             void svc_alarm_keypress_partition(std::string keys, int32_t partition)
             {
+                if (not_ready("alarm_keypress_partition")) return;
                 ESP_LOGI(TAG, "svc_alarm_keypress_partition: keys='%s' partition=%d",
                          keys.c_str(), static_cast<int>(partition));
                 cmd_.keypress(keys, static_cast<int>(partition));
@@ -282,37 +301,44 @@ namespace esphome
 
             void svc_alarm_disarm(std::string code, int32_t partition)
             {
+                if (not_ready("alarm_disarm")) return;
                 ESP_LOGI(TAG, "svc_alarm_disarm: partition=%d", static_cast<int>(partition));
                 cmd_.disarm(static_cast<int>(partition), code);
             }
 
             void svc_alarm_arm_home(int32_t partition)
             {
+                if (not_ready("alarm_arm_home")) return;
                 cmd_.arm_stay(static_cast<int>(partition));
             }
 
             void svc_alarm_arm_night(int32_t partition)
             {
+                if (not_ready("alarm_arm_night")) return;
                 cmd_.arm_night(static_cast<int>(partition));
             }
 
             void svc_alarm_arm_away(int32_t partition)
             {
+                if (not_ready("alarm_arm_away")) return;
                 cmd_.arm_away(static_cast<int>(partition));
             }
 
             void svc_alarm_trigger_panic(std::string code, int32_t partition)
             {
+                if (not_ready("alarm_trigger_panic")) return;
                 cmd_.trigger_panic(static_cast<int>(partition), code);
             }
 
             void svc_alarm_trigger_fire(std::string code, int32_t partition)
             {
+                if (not_ready("alarm_trigger_fire")) return;
                 cmd_.trigger_fire(static_cast<int>(partition), code);
             }
 
             void svc_set_zone_fault(int32_t zone, bool fault)
             {
+                if (not_ready("set_zone_fault")) return;
                 // Direct fast-path: publish to HA immediately without waiting for
                 // the panel's ECP echo (FA expander or FB RF receiver packet).
                 zones_.on_zone_direct(static_cast<uint8_t>(zone), fault);
@@ -326,6 +352,7 @@ namespace esphome
             // whether external_heartbeat_mode is active.
             void svc_set_rf_zone_heartbeat(int32_t zone, bool fault)
             {
+                if (not_ready("set_rf_zone_heartbeat")) return;
                 ESP_LOGI(TAG, "svc_set_rf_zone_heartbeat: zone=%d fault=%d",
                          static_cast<int>(zone), fault);
                 zones_.send_rf_heartbeat(static_cast<uint8_t>(zone), fault, vistabus_);
@@ -401,6 +428,8 @@ namespace esphome
             int64_t          last_connection_check  {0};
             volatile bool    stop_requested_        {false};
             TaskHandle_t     caller_task_           {nullptr};
+            // Set true at the end of setup(); gates service calls (see not_ready()).
+            bool             ready_                 {false};
 #ifdef CC1101_RECEIVER
             TaskHandle_t     rf_direct_task_handle_ {nullptr};
 #endif

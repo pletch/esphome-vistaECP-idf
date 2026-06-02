@@ -227,6 +227,12 @@ namespace esphome
 
         ZoneManager::Zone *ZoneManager::get_zone_by_rf_serial(uint32_t serial)
         {
+            // serial 0 is the sentinel for "hardwired zone" (Zone::rfserial default).
+            // A real RF device never has serial 0, so reject it here — otherwise a
+            // corrupted serial-0 RF packet would match and overwrite the first
+            // hardwired zone's state.
+            if (serial == 0)
+                return nullptr;
             for (auto &z : zones_)
             {
                 if (z.rfserial == serial)

@@ -229,6 +229,9 @@ namespace esphome
             vistabus_.begin(uart1_, rx_pin_, tx_pin_, uart2_, monitor_pin_);
 
             last_connection_check = esp_timer_get_time();
+            // Bus task is running and emulation modes are configured; service
+            // calls are now safe to honour.
+            ready_ = true;
             ESP_LOGD(TAG, "Setup complete — free heap: %lu", esp_get_free_heap_size());
         }
 
