@@ -167,11 +167,12 @@ namespace esphome
                 vistabus_.emulateRFR(rfr_emulation_addr_);
 
 #ifdef CC1101_RECEIVER
-            // Start the CC1101 hardware receiver after emulateRFR().
-            if (cc1101_receiver_ != nullptr)
+            // Start the CC1101 hardware receiver after emulateRFR().  If begin()
+            // fails (radio or RMT init), the receiver is disabled but the rest of
+            // the panel keeps running — so skip the watchdog and the now-idle
+            // RF direct task too.
+            if (cc1101_receiver_ != nullptr && cc1101_receiver_->begin())
             {
-                cc1101_receiver_->begin();
-
                 // Enable tier-2 packet-absence watchdog only if at least one
                 // physical RF sensor is configured.  Pure-emulated / no-RF
                 // setups would otherwise trigger a full chip re-init every

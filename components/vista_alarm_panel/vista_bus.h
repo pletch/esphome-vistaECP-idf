@@ -161,12 +161,14 @@ public:
     EmulatedRFReceiver emulated_rf_receiver;
 
 private:
-// Pointer to the active ECP protocol handler (Vista20P or VistaSE).
-// Owns decoding/encoding of all panel wire-format packets.
+// Owning handle to the active ECP protocol handler (Vista20P or VistaSE),
+// which decodes/encodes all panel wire-format packets.  Destroyed automatically
+// with the VistaBus; ~VistaBus() is defined in vista_bus.cpp where the concrete
+// type is complete, so the unique_ptr can be deleted there.
 #ifndef LEGACY_SE_PROTOCOL
-    Vista20P* vprotocol;
+    std::unique_ptr<Vista20P> vprotocol;
 #else
-    VistaSE* vprotocol;
+    std::unique_ptr<VistaSE> vprotocol;
 #endif
 
     static constexpr const char *TAG = "vista-bus";

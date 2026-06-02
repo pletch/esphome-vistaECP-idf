@@ -33,9 +33,9 @@ VistaBus::VistaBus()
     // The protocol object is given a back-reference to this VistaBus so it
     // can access the queues and GPIO information it needs.
 #ifndef LEGACY_SE_PROTOCOL
-    vprotocol = new Vista20P(*this);
+    vprotocol = std::make_unique<Vista20P>(*this);
 #else
-    vprotocol = new VistaSE(*this);
+    vprotocol = std::make_unique<VistaSE>(*this);
 #endif
 
     // Pre-allocate the inter-task queues so they are ready before begin() is
@@ -69,9 +69,9 @@ VistaBus::~VistaBus()
     if (this->rf_direct_queue != nullptr)
         vQueueDelete(this->rf_direct_queue);
 
-    // Fix: vprotocol was new-allocated in the constructor but never deleted.
-    delete vprotocol;
-    vprotocol = nullptr;
+    // vprotocol is a unique_ptr: it is destroyed automatically after this body
+    // returns.  stop() above has already shut down the task that uses it, so the
+    // handler is still valid throughout this destructor.
 }
 
 

@@ -53,11 +53,21 @@ bool CC1101Receiver::begin()
         .flags = { .invert_in = false, .with_dma = false }
 #endif
     };
-    ESP_ERROR_CHECK(rmt_new_rx_channel(&rx_chan_config, &rmt_rx_chan_));
-
-    rmt_rx_event_callbacks_t cbs = 
+    // RMT init must degrade gracefully: the CC1101 is an optional peripheral, so a
+    // failure here must not abort the firmware and take down wired-zone monitoring
+    // and ECP panel comms.  Return false (like the radio_.begin() path above) and
+    // let setup() simply skip the RF direct task; the panel keeps running.
+    esp_err_t err = rmt_new_rx_channel(&rx_chan_config, &rmt_rx_chan_);
+    if (err != ESP_OK)
     {
-        .on_recv_done = [](rmt_channel_handle_t, const rmt_rx_done_event_data_t *edata, 
+        ESP_LOGE(TAG, "rmt_new_rx_channel failed: %s — RF receiver disabled",
+                 esp_err_to_name(err));
+        return false;
+    }
+
+    rmt_rx_event_callbacks_t cbs =
+    {
+        .on_recv_done = [](rmt_channel_handle_t, const rmt_rx_done_event_data_t *edata,
                            void *user_data) {
             auto *self = static_cast<CC1101Receiver *>(user_data);
             if (self->task_handle_ != nullptr) {
@@ -67,8 +77,23 @@ bool CC1101Receiver::begin()
             return false;
         }
     };
-    ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(rmt_rx_chan_, &cbs, this));
-    ESP_ERROR_CHECK(rmt_enable(rmt_rx_chan_));
+    err = rmt_rx_register_event_callbacks(rmt_rx_chan_, &cbs, this);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "rmt_rx_register_event_callbacks failed: %s — RF receiver disabled",
+                 esp_err_to_name(err));
+        rmt_del_channel(rmt_rx_chan_);
+        rmt_rx_chan_ = nullptr;
+        return false;
+    }
+    err = rmt_enable(rmt_rx_chan_);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "rmt_enable failed: %s — RF receiver disabled", esp_err_to_name(err));
+        rmt_del_channel(rmt_rx_chan_);
+        rmt_rx_chan_ = nullptr;
+        return false;
+    }
 
     xTaskCreate(rx_task,
                 "cc1101_rx",

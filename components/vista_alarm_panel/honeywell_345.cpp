@@ -5,9 +5,14 @@
 // See COPYING.LESSER in the project root for details.
 
 #include "honeywell_345.h"
-#include <vector>
+#include "constants.h"
 
 #ifdef CC1101_RECEIVER
+
+// Worst-case decoded-chip count: each RMT symbol yields at most 4 chips
+// (two half-symbols × up to 2 chips each), plus a possible leading and trailing
+// pad chip.  num_symbols is bounded by the RMT capture buffer (kCc1101RmtSymbols).
+static constexpr size_t kMaxChips = kCc1101RmtSymbols * 4 + 2;
 
 static constexpr const char *TAG = "honeywell345";
 
@@ -37,15 +42,21 @@ HoneywellPacket honeywell345_parse(const rmt_symbol_word_t *symbols, size_t num_
     // Convert RMT symbol durations into a chip bitstream.
     // The chip clock is estimated adaptively from the preamble below; 136 µs is the
     // nominal fallback used when insufficient preamble samples are available.
-    std::vector<uint8_t> chips;
-    chips.reserve(num_symbols * 2 + 2);
+    //
+    // The chip buffer is a function-local static reused across calls: this avoids a
+    // per-burst heap allocation (and the long-term fragmentation it causes) without
+    // putting ~2 KB on the task stack.  Safe because honeywell345_parse() is only
+    // ever called from the single CC1101Receiver::rx_task — it is NOT reentrant.
+    static uint8_t chips[kMaxChips];
+    size_t chip_count = 0;
+    auto push_chip = [&](uint8_t c) { if (chip_count < kMaxChips) chips[chip_count++] = c; };
 
-    // If the capture starts with a High signal (level 1), it indicates the RMT 
-    // hardware triggered on the first rising edge, missing the initial Low chip 
+    // If the capture starts with a High signal (level 1), it indicates the RMT
+    // hardware triggered on the first rising edge, missing the initial Low chip
     // of the Manchester '01' sequence. Prepend a single Low chip to restore phase.
-    if (num_symbols > 0 && symbols[0].level0 == 1) 
+    if (num_symbols > 0 && symbols[0].level0 == 1)
     {
-        chips.push_back(0);
+        push_chip(0);
     }
 
     // Estimate the chip width from individual short pulses in the preamble.
@@ -81,32 +92,32 @@ HoneywellPacket honeywell345_parse(const rmt_symbol_word_t *symbols, size_t num_
     // never more.  Classifying each duration independently against a 1.5× threshold
     // means errors are bounded to a single segment. 
     const uint32_t threshold = (uint32_t)(tuned_clock * 1.5f + 0.5f);
-    for (size_t i = 0; i < num_symbols; i++) 
+    for (size_t i = 0; i < num_symbols; i++)
     {
         int n0 = (symbols[i].duration0 >= threshold) ? 2 : 1;
-        for (int j = 0; j < n0; j++) chips.push_back(symbols[i].level0);
+        for (int j = 0; j < n0; j++) push_chip(symbols[i].level0);
 
         int n1 = (symbols[i].duration1 >= threshold) ? 2 : 1;
-        for (int j = 0; j < n1; j++) chips.push_back(symbols[i].level1);
+        for (int j = 0; j < n1; j++) push_chip(symbols[i].level1);
     }
 
-    // If the resulting chip count is odd, append a trailing zero chip to ensure 
+    // If the resulting chip count is odd, append a trailing zero chip to ensure
     // the sliding window pairs remain aligned for the final bit of the payload.
-    if (chips.size() % 2 != 0) 
+    if (chip_count % 2 != 0)
     {
-        chips.push_back(0);
+        push_chip(0);
     }
 
     // Minimum chips required: 8 (sync nibble 'E') + 96 (6-byte payload) = 104.
-    if (chips.size() < 104) 
+    if (chip_count < 104)
     {
-        ESP_LOGV(TAG, "Insufficient chips (%zu), ignoring burst", chips.size());
+        ESP_LOGV(TAG, "Insufficient chips (%zu), ignoring burst", chip_count);
         return pkt;
     }
-    ESP_LOGV(TAG, "Processing %zu chips...", chips.size());
+    ESP_LOGV(TAG, "Processing %zu chips...", chip_count);
 
     // Log raw chip bitstream for debugging (up to 256 chips)
-    size_t to_print = chips.size() > 256 ? 256 : chips.size();
+    size_t to_print = chip_count > 256 ? 256 : chip_count;
     char raw_str[257];
     for (size_t k = 0; k < to_print; k++) raw_str[k] = chips[k] ? '1' : '0';
     raw_str[to_print] = '\0';
@@ -114,7 +125,7 @@ HoneywellPacket honeywell345_parse(const rmt_symbol_word_t *symbols, size_t num_
 
     // Sliding window: try to decode Manchester from every possible chip offset.
     // We scan for the 'E' nibble (01010110) then validate the 96-chip payload following it.
-    for (size_t i = 0; i + 104 <= chips.size(); /* i incremented inside */) 
+    for (size_t i = 0; i + 104 <= chip_count; /* i incremented inside */)
     {
             // Check for Manchester 'E' nibble (1110) -> 01 01 01 10
             if (chips[i] != 0 || chips[i+1] != 1 || chips[i+2] != 0 || chips[i+3] != 1 ||
