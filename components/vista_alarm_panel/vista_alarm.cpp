@@ -107,13 +107,13 @@ namespace esphome
                                    int     uartnum1,
                                    int     monitorTxPin,
                                    int     uartnum2)
-            : keypad_addr1_  (kpaddr)
+            : cmd_           (vistabus_, partitions_)   // holds refs — must come after both
+            , keypad_addr1_  (kpaddr)
             , rx_pin_        (receivePin)
             , tx_pin_        (transmitPin)
             , uart1_         (uartnum1)
             , monitor_pin_   (monitorTxPin)
             , uart2_         (uartnum2)
-            , cmd_           (vistabus_, partitions_)   // holds refs — must come after both
         {
         }
 

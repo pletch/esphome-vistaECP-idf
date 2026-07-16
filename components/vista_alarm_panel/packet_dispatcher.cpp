@@ -150,7 +150,7 @@ namespace esphome
             {
                 chksum_last_reported_ = chksum_failures_;
                 char buf[12];
-                snprintf(buf, sizeof(buf), "%u", chksum_failures_);
+                snprintf(buf, sizeof(buf), "%lu", static_cast<unsigned long>(chksum_failures_));
                 cfg_.chksum_fail_sensor->publish_state(buf);
             }
         }

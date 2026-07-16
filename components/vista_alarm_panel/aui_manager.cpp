@@ -271,12 +271,12 @@ namespace esphome
             // day_of_week is 1-based in ESPTime; the panel expects 0-based.
             snprintf(&bytes[8], 14, "%02d%02d%02d%02d%02d%02d%d",
                      t.year % 100,
-                     t.month,
-                     t.day_of_month,
-                     t.hour,
-                     t.minute,
-                     t.second,
-                     t.day_of_week - 1);
+                     t.month % 100,
+                     t.day_of_month % 100,
+                     t.hour % 100,
+                     t.minute % 100,
+                     t.second % 100,
+                     (t.day_of_week + 9) % 10);
 
             bus.writedirect(bytes, 21, device_.address, device_.sequence1);
             device_.sequence1 += 0x40;
@@ -340,7 +340,7 @@ namespace esphome
 
             if (clock_.auto_sync && delta > 60)
             {
-                ESP_LOGI(TAG, "Panel clock drift %d s — will correct.", delta);
+                ESP_LOGI(TAG, "Panel clock drift %ld s — will correct.", static_cast<long>(delta));
                 // Store the bus reference so set_panel_time can be called here.
                 // We receive the bus through on_f2_packet; pass it through the
                 // stored pointer set in on_f2_packet_with_bus() below.

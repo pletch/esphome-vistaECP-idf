@@ -35,9 +35,9 @@
 //
 // Decoded packet byte layout (6 bytes after software Manchester decode):
 //   Byte 0 [7:4] : 4-bit channel
-//   Byte 0 [3:0] : device serial bits 19-16   \
+//   Byte 0 [3:0] : device serial bits 19-16   )
 //   Byte 1       : device serial bits 15-8      > 20-bit serial
-//   Byte 2       : device serial bits 7-0       /
+//   Byte 2       : device serial bits 7-0       )
 //   Byte 3       : event byte — bit layout:
 //                    bit 7 : loop 1 (contact)  → ECP 0x80
 //                    bit 6 : loop 4            → ECP 0x40
