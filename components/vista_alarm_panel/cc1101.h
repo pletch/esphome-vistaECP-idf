@@ -48,119 +48,118 @@
 
 // CC1101 register addresses
 namespace CC1101Reg {
-    inline constexpr uint8_t IOCFG2   = 0x00;
-    inline constexpr uint8_t IOCFG1   = 0x01;
-    inline constexpr uint8_t IOCFG0   = 0x02;
-    inline constexpr uint8_t FIFOTHR  = 0x03;
-    inline constexpr uint8_t SYNC1    = 0x04;
-    inline constexpr uint8_t SYNC0    = 0x05;
-    inline constexpr uint8_t PKTLEN   = 0x06;
-    inline constexpr uint8_t PKTCTRL1 = 0x07;
-    inline constexpr uint8_t PKTCTRL0 = 0x08;
-    inline constexpr uint8_t ADDR     = 0x09;
-    inline constexpr uint8_t CHANNR   = 0x0A;
-    inline constexpr uint8_t FSCTRL1  = 0x0B;
-    inline constexpr uint8_t FSCTRL0  = 0x0C;
-    inline constexpr uint8_t FREQ2    = 0x0D;
-    inline constexpr uint8_t FREQ1    = 0x0E;
-    inline constexpr uint8_t FREQ0    = 0x0F;
-    inline constexpr uint8_t MDMCFG4  = 0x10;
-    inline constexpr uint8_t MDMCFG3  = 0x11;
-    inline constexpr uint8_t MDMCFG2  = 0x12;
-    inline constexpr uint8_t MDMCFG1  = 0x13;
-    inline constexpr uint8_t MDMCFG0  = 0x14;
-    inline constexpr uint8_t DEVIATN  = 0x15;
-    inline constexpr uint8_t MCSM2    = 0x16;
-    inline constexpr uint8_t MCSM1    = 0x17;
-    inline constexpr uint8_t MCSM0    = 0x18;
-    inline constexpr uint8_t FOCCFG   = 0x19;
-    inline constexpr uint8_t BSCFG    = 0x1A;
-    inline constexpr uint8_t AGCCTRL2 = 0x1B;
-    inline constexpr uint8_t AGCCTRL1 = 0x1C;
-    inline constexpr uint8_t AGCCTRL0 = 0x1D;
-    inline constexpr uint8_t FREND1   = 0x21;
-    inline constexpr uint8_t FREND0   = 0x22;
-    inline constexpr uint8_t FSCAL3   = 0x23;
-    inline constexpr uint8_t FSCAL2   = 0x24;
-    inline constexpr uint8_t FSCAL1   = 0x25;
-    inline constexpr uint8_t FSCAL0   = 0x26;
-    inline constexpr uint8_t TEST2    = 0x2C;
-    inline constexpr uint8_t TEST1    = 0x2D;
-    inline constexpr uint8_t TEST0    = 0x2E;
-}
+inline constexpr uint8_t IOCFG2 = 0x00;
+inline constexpr uint8_t IOCFG1 = 0x01;
+inline constexpr uint8_t IOCFG0 = 0x02;
+inline constexpr uint8_t FIFOTHR = 0x03;
+inline constexpr uint8_t SYNC1 = 0x04;
+inline constexpr uint8_t SYNC0 = 0x05;
+inline constexpr uint8_t PKTLEN = 0x06;
+inline constexpr uint8_t PKTCTRL1 = 0x07;
+inline constexpr uint8_t PKTCTRL0 = 0x08;
+inline constexpr uint8_t ADDR = 0x09;
+inline constexpr uint8_t CHANNR = 0x0A;
+inline constexpr uint8_t FSCTRL1 = 0x0B;
+inline constexpr uint8_t FSCTRL0 = 0x0C;
+inline constexpr uint8_t FREQ2 = 0x0D;
+inline constexpr uint8_t FREQ1 = 0x0E;
+inline constexpr uint8_t FREQ0 = 0x0F;
+inline constexpr uint8_t MDMCFG4 = 0x10;
+inline constexpr uint8_t MDMCFG3 = 0x11;
+inline constexpr uint8_t MDMCFG2 = 0x12;
+inline constexpr uint8_t MDMCFG1 = 0x13;
+inline constexpr uint8_t MDMCFG0 = 0x14;
+inline constexpr uint8_t DEVIATN = 0x15;
+inline constexpr uint8_t MCSM2 = 0x16;
+inline constexpr uint8_t MCSM1 = 0x17;
+inline constexpr uint8_t MCSM0 = 0x18;
+inline constexpr uint8_t FOCCFG = 0x19;
+inline constexpr uint8_t BSCFG = 0x1A;
+inline constexpr uint8_t AGCCTRL2 = 0x1B;
+inline constexpr uint8_t AGCCTRL1 = 0x1C;
+inline constexpr uint8_t AGCCTRL0 = 0x1D;
+inline constexpr uint8_t FREND1 = 0x21;
+inline constexpr uint8_t FREND0 = 0x22;
+inline constexpr uint8_t FSCAL3 = 0x23;
+inline constexpr uint8_t FSCAL2 = 0x24;
+inline constexpr uint8_t FSCAL1 = 0x25;
+inline constexpr uint8_t FSCAL0 = 0x26;
+inline constexpr uint8_t TEST2 = 0x2C;
+inline constexpr uint8_t TEST1 = 0x2D;
+inline constexpr uint8_t TEST0 = 0x2E;
+}  // namespace CC1101Reg
 
 // CC1101 status registers (read with burst bit set: addr | 0xC0)
 namespace CC1101Status {
-    inline constexpr uint8_t PARTNUM   = 0x30;
-    inline constexpr uint8_t VERSION   = 0x31;
-    inline constexpr uint8_t RSSI      = 0x34;
-    inline constexpr uint8_t MARCSTATE = 0x35;
-    // Expected MARCSTATE value when the chip is in RX (per TI CC1101 datasheet).
-    inline constexpr uint8_t MARCSTATE_RX = 0x0D;
-}
+inline constexpr uint8_t PARTNUM = 0x30;
+inline constexpr uint8_t VERSION = 0x31;
+inline constexpr uint8_t RSSI = 0x34;
+inline constexpr uint8_t MARCSTATE = 0x35;
+// Expected MARCSTATE value when the chip is in RX (per TI CC1101 datasheet).
+inline constexpr uint8_t MARCSTATE_RX = 0x0D;
+}  // namespace CC1101Status
 
 // CC1101 command strobes
 namespace CC1101Strobe {
-    inline constexpr uint8_t SRES  = 0x30;  // Reset
-    inline constexpr uint8_t SRX   = 0x34;  // Enable RX
-    inline constexpr uint8_t SIDLE = 0x36;  // Enter IDLE state
-    inline constexpr uint8_t SFRX  = 0x3A;  // Flush RX FIFO
-    inline constexpr uint8_t SNOP  = 0x3D;  // No-op / read status
-}
+inline constexpr uint8_t SRES = 0x30;   // Reset
+inline constexpr uint8_t SRX = 0x34;    // Enable RX
+inline constexpr uint8_t SIDLE = 0x36;  // Enter IDLE state
+inline constexpr uint8_t SFRX = 0x3A;   // Flush RX FIFO
+inline constexpr uint8_t SNOP = 0x3D;   // No-op / read status
+}  // namespace CC1101Strobe
 
 inline constexpr uint8_t CC1101_READ_BURST = 0xC0;  // status register read flag
-inline constexpr uint8_t CC1101_READ_BIT   = 0x80;  // single-byte read flag
-inline constexpr uint8_t CC1101_WRITE_BIT  = 0x00;
+inline constexpr uint8_t CC1101_READ_BIT = 0x80;    // single-byte read flag
+inline constexpr uint8_t CC1101_WRITE_BIT = 0x00;
 
 class CC1101 {
-public:
-    // mosi/miso/sck/csn: SPI bus pin numbers.
-    // gdo0: CC1101 GDO0 output pin — raw demodulated OOK output in async serial
-    //       mode (IOCFG0=0x0D): high when carrier present, low otherwise.
-    CC1101(int mosi, int miso, int sck, int csn, int gdo0, spi_host_device_t spi_host = SPI2_HOST);
+ public:
+  // mosi/miso/sck/csn: SPI bus pin numbers.
+  // gdo0: CC1101 GDO0 output pin — raw demodulated OOK output in async serial
+  //       mode (IOCFG0=0x0D): high when carrier present, low otherwise.
+  CC1101(int mosi, int miso, int sck, int csn, int gdo0, spi_host_device_t spi_host = SPI2_HOST);
 
-    // Initialise SPI bus, load register config, enter RX mode.
-    // Returns false if the chip does not respond (VERSION register unreadable).
-    bool begin();
+  // Initialise SPI bus, load register config, enter RX mode.
+  // Returns false if the chip does not respond (VERSION register unreadable).
+  bool begin();
 
-    // Live RSSI read directly from the RSSI status register, in dBm.
-    // Use this before read_packet() to gate on signal strength.
-    int8_t rssi_now();
+  // Live RSSI read directly from the RSSI status register, in dBm.
+  // Use this before read_packet() to gate on signal strength.
+  int8_t rssi_now();
 
-    // Read the MARCSTATE status register.  In normal operation the chip should
-    // sit at 0x0D (RX).  Used by the receiver-task watchdog to detect the chip
-    // having dropped out of RX without any external indication.
-    uint8_t marcstate() { return read_status_reg(CC1101Status::MARCSTATE); }
+  // Read the MARCSTATE status register.  In normal operation the chip should
+  // sit at 0x0D (RX).  Used by the receiver-task watchdog to detect the chip
+  // having dropped out of RX without any external indication.
+  uint8_t marcstate() { return read_status_reg(CC1101Status::MARCSTATE); }
 
-    // Lightweight recovery — strobe SIDLE then SRX to cycle the state machine.
-    // Cheaper and less disruptive than a full begin() re-init; clears most
-    // chip-state wedges in async-serial mode (where the RX FIFO is unused).
-    void kick_rx()
-    {
-        strobe(CC1101Strobe::SIDLE);
-        strobe(CC1101Strobe::SRX);
-    }
+  // Lightweight recovery — strobe SIDLE then SRX to cycle the state machine.
+  // Cheaper and less disruptive than a full begin() re-init; clears most
+  // chip-state wedges in async-serial mode (where the RX FIFO is unused).
+  void kick_rx() {
+    strobe(CC1101Strobe::SIDLE);
+    strobe(CC1101Strobe::SRX);
+  }
 
-    // Return the GPIO numbers for all SPI and data pins.
-    int mosi_pin() const { return mosi_; }
-    int miso_pin() const { return miso_; }
-    int sck_pin()  const { return sck_;  }
-    int csn_pin()  const { return csn_;  }
-    int gdo0_pin() const { return gdo0_; }
+  // Return the GPIO numbers for all SPI and data pins.
+  int mosi_pin() const { return mosi_; }
+  int miso_pin() const { return miso_; }
+  int sck_pin() const { return sck_; }
+  int csn_pin() const { return csn_; }
+  int gdo0_pin() const { return gdo0_; }
 
-private:
-    void    write_reg(uint8_t addr, uint8_t val);
-    uint8_t read_reg(uint8_t addr);
-    uint8_t read_status_reg(uint8_t addr);
-    void    strobe(uint8_t cmd);
-    void    load_config();
-    void    enter_rx();
+ private:
+  void write_reg(uint8_t addr, uint8_t val);
+  uint8_t read_reg(uint8_t addr);
+  uint8_t read_status_reg(uint8_t addr);
+  void strobe(uint8_t cmd);
+  void load_config();
+  void enter_rx();
 
-    spi_device_handle_t spi_       {nullptr};
-    spi_host_device_t   spi_host_;
-    int    mosi_, miso_, sck_, csn_, gdo0_;
+  spi_device_handle_t spi_{nullptr};
+  spi_host_device_t spi_host_;
+  int mosi_, miso_, sck_, csn_, gdo0_;
 
-    static constexpr const char *TAG = "cc1101";
+  static constexpr const char *TAG = "cc1101";
 };
 
-#endif // CC1101_RECEIVER
+#endif  // CC1101_RECEIVER

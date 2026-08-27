@@ -42,7 +42,7 @@
 //                    bit 7 : loop 1 (contact)  → ECP 0x80
 //                    bit 6 : loop 4            → ECP 0x40
 //                    bit 5 : loop 2            → ECP 0x20
-//                            Note: many sensors set bit 7 + bit 5 during a loop 2 
+//                            Note: many sensors set bit 7 + bit 5 during a loop 2
 //                            fault; the real 5881 receiver may strip bit 5.
 //                    bit 4 : loop 3            → ECP 0x10
 //                    bit 3 : battery_low       → ECP 0x02
@@ -61,10 +61,10 @@
 // ---------------------------------------------------------------------------
 
 struct HoneywellPacket {
-    uint32_t serial;      // 20-bit device serial number (max 0xFFFFF = 1,048,575)
-    uint8_t  ecp_status;  // translated ECP FB status byte
-    bool     heartbeat;   // true if this is a supervision / heartbeat packet
-    bool     valid;       // false if no valid packet was found in the chip buffer
+  uint32_t serial;     // 20-bit device serial number (max 0xFFFFF = 1,048,575)
+  uint8_t ecp_status;  // translated ECP FB status byte
+  bool heartbeat;      // true if this is a supervision / heartbeat packet
+  bool valid;          // false if no valid packet was found in the chip buffer
 };
 
 // Scan an array of RMT pulse-width symbols for a Honeywell 5800-series packet.
@@ -74,4 +74,4 @@ struct HoneywellPacket {
 // Returns a HoneywellPacket with valid=false if no packet was found.
 HoneywellPacket honeywell345_parse(const rmt_symbol_word_t *symbols, size_t num_symbols);
 
-#endif // CC1101_RECEIVER
+#endif  // CC1101_RECEIVER

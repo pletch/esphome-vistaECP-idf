@@ -92,13 +92,14 @@ inline constexpr uint32_t kMonitorSyncNotifyWaitMs = 500;
 // task is woken, so the read itself needs only a short grace period.
 inline constexpr uint32_t kMonitorSyncReadWaitMs = 20;
 
-inline constexpr uint16_t kPulseCyclePeriod = 550; // maximum period of long low pulse cycle on yellow wire in ms. sets maximum delay of rx_tx_task looping.
-                                            // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
+inline constexpr uint16_t kPulseCyclePeriod =
+    550;  // maximum period of long low pulse cycle on yellow wire in ms. sets maximum delay of rx_tx_task looping.
+          // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
 
 // ECP-bus baud rates.  Standard ECP framing is 4800 8E2; the 2400 rate is used
 // for SE-series legacy packets and for 2400-baud FA/FB expander transmissions.
 inline constexpr uint32_t kEcpBaudStandard = 4800;
-inline constexpr uint32_t kEcpBaudLegacy   = 2400;
+inline constexpr uint32_t kEcpBaudLegacy = 2400;
 
 // Timeout between a mark_pulse and the expected F6 ACK from the panel.
 inline constexpr int64_t kPulseAckTimeoutUs = 1'200'000;  // 1.2 s
@@ -116,11 +117,11 @@ inline constexpr int64_t kSEWriteWindowBelowUs = 60'000;
 inline constexpr int64_t kSEWriteWindowAboveUs = 150'000;
 
 // RF supervision heartbeat scheduling (all in microseconds).
-inline constexpr int64_t kUsPerMinute                    = 60'000'000LL;
-inline constexpr int64_t kRfHeartbeatInitialMinMinutes   = 1;   // earliest first heartbeat
-inline constexpr int64_t kRfHeartbeatInitialJitterMinutes = 10; // added random jitter
-inline constexpr int64_t kRfHeartbeatPeriodMinMinutes    = 70;  // baseline interval
-inline constexpr int64_t kRfHeartbeatPeriodJitterMinutes = 20;  // added random jitter
+inline constexpr int64_t kUsPerMinute = 60'000'000LL;
+inline constexpr int64_t kRfHeartbeatInitialMinMinutes = 1;      // earliest first heartbeat
+inline constexpr int64_t kRfHeartbeatInitialJitterMinutes = 10;  // added random jitter
+inline constexpr int64_t kRfHeartbeatPeriodMinMinutes = 70;      // baseline interval
+inline constexpr int64_t kRfHeartbeatPeriodJitterMinutes = 20;   // added random jitter
 
 // ===========================================================================
 // Runtime tunables
@@ -131,9 +132,9 @@ inline constexpr int64_t kRfHeartbeatPeriodJitterMinutes = 20;  // added random 
 // ===========================================================================
 
 // --- FreeRTOS queue depths ---------------------------------------------------
-inline constexpr uint16_t kReceiveQueueDepth    = 15;  // decoded panel frames awaiting dispatch
-inline constexpr uint16_t kSendQueueDepth       = 8;   // outbound commands awaiting transmission
-inline constexpr uint16_t kDeviceMsgQueueDepth  = 16;  // pending expander/RF responses for next F1 poll
+inline constexpr uint16_t kReceiveQueueDepth = 15;    // decoded panel frames awaiting dispatch
+inline constexpr uint16_t kSendQueueDepth = 8;        // outbound commands awaiting transmission
+inline constexpr uint16_t kDeviceMsgQueueDepth = 16;  // pending expander/RF responses for next F1 poll
 
 // How long a queued expander/RF message may wait for an F1 window before
 // rx_tx_task gives up on it.
@@ -150,12 +151,12 @@ inline constexpr uint16_t kDeviceMsgQueueDepth  = 16;  // pending expander/RF re
 // heartbeat to fall back on, and there should not be: fabricating supervision
 // for a real sensor would stop the panel ever noticing a dead battery.
 inline constexpr int64_t kDeviceMsgMaxWaitUs = 20LL * 1000 * 1000;
-inline constexpr uint16_t kRfDirectQueueDepth   = 8;   // CC1101 → HA fast path
+inline constexpr uint16_t kRfDirectQueueDepth = 8;  // CC1101 → HA fast path
 
 // --- FreeRTOS task stack sizes (bytes) --------------------------------------
-inline constexpr uint16_t kRfDirectTaskStackSize  = 4096; // ZoneManager publish chain
-inline constexpr uint16_t kProcessRxTaskStackSize = 4096; // PacketDispatcher dispatch chain
-inline constexpr uint16_t kCc1101RxTaskStackSize  = 5120; // RMT decode + Honeywell parser
+inline constexpr uint16_t kRfDirectTaskStackSize = 4096;   // ZoneManager publish chain
+inline constexpr uint16_t kProcessRxTaskStackSize = 4096;  // PacketDispatcher dispatch chain
+inline constexpr uint16_t kCc1101RxTaskStackSize = 5120;   // RMT decode + Honeywell parser
 
 // --- CC1101 receiver health watchdog ----------------------------------------
 // Tier 1: cheap MARCSTATE register check cadence.  Also breaks the rx_task's
@@ -164,36 +165,36 @@ inline constexpr uint32_t kCc1101HealthCheckPeriodMs = 60'000;
 // Tier 2: full radio_.begin() re-init if no valid packet has been decoded in
 // this window.  Sized to comfortably exceed Honeywell sensor heartbeat
 // intervals (60–90 min).
-inline constexpr int64_t  kCc1101PacketWatchdogUs    = 90LL * 60 * 1000 * 1000;
+inline constexpr int64_t kCc1101PacketWatchdogUs = 90LL * 60 * 1000 * 1000;
 
 // --- CC1101 RMT receive capture ---------------------------------------------
 // Glitch filter: drop pulses shorter than this (Honeywell chips ≈ 136 µs).
-inline constexpr uint32_t kCc1101RmtSignalMinNs   = 3'000;
+inline constexpr uint32_t kCc1101RmtSignalMinNs = 3'000;
 // End-of-frame: terminate capture after this much idle (inter-burst gap ≥ 30 ms).
-inline constexpr uint32_t kCc1101RmtSignalMaxNs   = 2'000'000;
+inline constexpr uint32_t kCc1101RmtSignalMaxNs = 2'000'000;
 // RMT capture buffer size (symbols).  Larger on chips with DMA-capable RMT.
 #ifdef SOC_RMT_SUPPORT_DMA
-inline constexpr size_t   kCc1101RmtSymbols       = 512;
+inline constexpr size_t kCc1101RmtSymbols = 512;
 #else
-inline constexpr size_t   kCc1101RmtSymbols       = 128;
+inline constexpr size_t kCc1101RmtSymbols = 128;
 #endif
 
 // --- CC1101 / RF de-duplication ---------------------------------------------
 // Ring buffer of recently seen (serial, status) packets.
-inline constexpr uint8_t  kDedupeHistorySize       = 16;
+inline constexpr uint8_t kDedupeHistorySize = 16;
 // Burst suppressor: any retransmission of the same serial within this window
 // is dropped, regardless of status byte.  Catches interleaved fault/clear
 // packets that some sensors emit during state transitions.
-inline constexpr int64_t  kDedupeBurstWindowUs     = 300'000;
+inline constexpr int64_t kDedupeBurstWindowUs = 300'000;
 // Long-range exact-match suppressor: same (serial, status) seen within this
 // window is dropped.
-inline constexpr int64_t  kDedupeLongRangeWindowUs = 2'500'000;
+inline constexpr int64_t kDedupeLongRangeWindowUs = 2'500'000;
 
 // --- Direct/ECP path coherency ----------------------------------------------
 // When ZoneManager::on_rf_direct() runs, ECP-path zone updates for the same
 // serial are suppressed for this long so the panel's later FB echo can't
 // overwrite the authoritative direct-path state.
-inline constexpr int64_t  kDirectSuppressUs        = 3'000'000LL;
+inline constexpr int64_t kDirectSuppressUs = 3'000'000LL;
 
 // Minimum spacing between AUI zone-fault queries.
 //
@@ -207,4 +208,4 @@ inline constexpr int64_t kAuiZoneQueryMinIntervalUs = 15LL * 1000 * 1000;
 // --- RSSI cache --------------------------------------------------------------
 // Number of (serial, rssi) entries retained for use by the rf_messages text
 // sensor.  8 is enough for typical home deployments without rapid eviction.
-inline constexpr uint8_t  kRssiCacheSize           = 8;
+inline constexpr uint8_t kRssiCacheSize = 8;

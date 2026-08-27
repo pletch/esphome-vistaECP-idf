@@ -23,16 +23,16 @@
 // Sums bytes cbuf[start..len) and returns true if the result is divisible by
 // 256 (i.e. the sum wraps to 0x00 modulo 256).  The ECP protocol appends a
 // checksum byte such that the whole frame including the checksum sums to zero.
-bool valid_chksum(const char * cbuf, int start, int len);
+bool valid_chksum(const char *cbuf, int start, int len);
 
 // Compute a two's-complement checksum over cbuf[start..start+len).
 // Returns ~(sum of bytes) + 1, which when appended to a frame makes the full
 // frame sum to 0x00 modulo 256.
-uint8_t calc_chksum_two(const char * cbuf, int start, int len);
+uint8_t calc_chksum_two(const char *cbuf, int start, int len);
 
 // Validate a frame whose last byte is a two's-complement checksum.
 // Sums bytes cbuf[start..len-1) and checks whether ~sum+1 equals cbuf[len-1].
-bool valid_chksum_two(const char * cbuf, int start, int len);
+bool valid_chksum_two(const char *cbuf, int start, int len);
 
 // Returns true if string s represents a valid integer in the given base.
 // Rejects empty strings and strings with leading whitespace.

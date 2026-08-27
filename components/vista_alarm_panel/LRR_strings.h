@@ -9,7 +9,7 @@
 
 #pragma once
 
-static constexpr const char* const lrr_msg_values[] = {
+static constexpr const char *const lrr_msg_values[] = {
     /*   0 */ "ZMedical",
     /*   1 */ "ZPersonal Emergency",
     /*   2 */ "ZFail to report in",
@@ -99,8 +99,8 @@ static constexpr const char* const lrr_msg_values[] = {
     /*  86 */ "ZNotification Appliance Ckt. #4",
     /*  87 */ "ZSystem Peripheral trouble",
     /*  88 */ "ZExpansion module failure",  // 330 - same label, different subsystem
-    /*  89 */ "ZPolling loop open",           // 331
-    /*  90 */ "ZPolling loop short",          // 332
+    /*  89 */ "ZPolling loop open",         // 331
+    /*  90 */ "ZPolling loop short",        // 332
     /*  91 */ "ZRepeater failure",
     /*  92 */ "ZLocal printer out of paper",
     /*  93 */ "ZLocal printer failure",
@@ -303,114 +303,114 @@ static constexpr const char* const lrr_msg_values[] = {
 static constexpr int LRR_MSG_UNKNOWN_IDX = 287;
 
 struct LrrEntry {
-    uint16_t code;
-    uint16_t idx;
+  uint16_t code;
+  uint16_t idx;
 };
 
 // Must remain sorted by code for binary search.
 // Verified by static_assert below.
 static constexpr LrrEntry lrr_lookup_table[] = {
-    {100,   0},  // Medical
-    {101,   1},  // Personal Emergency
-    {102,   2},  // Fail to report in
-    {110,   3},  // Fire
-    {111,   4},  // Smoke
-    {112,   5},  // Combustion
-    {113,   6},  // Water Flow
-    {114,   7},  // Heat
-    {115,   8},  // Pull Station
-    {116,   9},  // Duct
-    {117,  10},  // Flame
-    {118,  11},  // Near Alarm
-    {120,  12},  // Panic
-    {121,  13},  // Duress
-    {122,  14},  // Silent
-    {123,  15},  // Audible
-    {124,  16},  // Duress - Access granted
-    {125,  17},  // Duress - Egress granted
-    {126,  18},  // Holdup suspicion print
-    {127,  19},  // Remote Silent Panic
-    {129,  20},  // Panic Verifier
-    {130,  21},  // Burglary
-    {131,  22},  // Perimeter
-    {132,  23},  // Interior
-    {133,  24},  // 24 Hour (Safe)
-    {134,  25},  // Entry/Exit
-    {135,  26},  // Day/Night
-    {136,  27},  // Outdoor
-    {137,  28},  // Tamper
-    {138,  29},  // Near alarm
-    {139,  30},  // Intrusion Verifier
-    {140,  31},  // General Alarm
-    {141,  32},  // Polling loop open
-    {142,  33},  // Polling loop short
-    {143,  34},  // Expansion module failure
-    {144,  35},  // Sensor tamper
-    {145,  36},  // Expansion module tamper
-    {146,  37},  // Silent Burglary
-    {147,  38},  // Sensor Supervision Failure
-    {150,  39},  // 24 Hour NonBurglary
-    {151,  40},  // Gas detected
-    {152,  41},  // Refrigeration
-    {153,  42},  // Loss of heat
-    {154,  43},  // Water Leakage
-    {155,  44},  // Foil Break
-    {156,  45},  // Day Trouble
-    {157,  46},  // Low bottled gas level
-    {158,  47},  // High temp
-    {159,  48},  // Low temp
-    {160,  49},  // Awareness Zone Response
-    {161,  50},  // Loss of air flow
-    {162,  51},  // Carbon Monoxide detected
-    {163,  52},  // Tank level
-    {168,  53},  // High Humidity
-    {169,  54},  // Low Humidity
-    {200,  55},  // Fire Supervisory
-    {201,  56},  // Low water pressure
-    {202,  57},  // Low CO2
-    {203,  58},  // Gate valve sensor
-    {204,  59},  // Low water level
-    {205,  60},  // Pump activated
-    {206,  61},  // Pump failure
-    {300,  62},  // System Trouble
-    {301,  63},  // AC Loss
-    {302,  64},  // Low system battery
-    {303,  65},  // RAM Checksum bad
-    {304,  66},  // ROM checksum bad
-    {305,  67},  // System reset
-    {306,  68},  // Panel programming changed
-    {307,  69},  // Selftest failure
-    {308,  70},  // System shutdown
-    {309,  71},  // Battery test failure
-    {310,  72},  // Ground fault
-    {311,  73},  // Battery Missing/Dead
-    {312,  74},  // Power Supply Overcurrent
-    {313,  75},  // Engineer Reset
-    {314,  76},  // Primary Power Supply Failure
-    {315,  62},  // System Trouble (same label as 300)
-    {316,  77},  // System Tamper
-    {317,  78},  // Control Panel System Tamper
-    {320,  79},  // Sounder/Relay
-    {321,  80},  // Bell 1
-    {322,  81},  // Bell 2
-    {323,  82},  // Alarm relay
-    {324,  83},  // Trouble relay
-    {325,  84},  // Reversing relay
-    {326,  85},  // Notification Appliance Ckt. #3
-    {327,  86},  // Notification Appliance Ckt. #4
-    {330,  87},  // System Peripheral trouble
-    {331,  88},  // Expansion module failure (bus)
-    {332,  89},  // Polling loop open (bus)
-    {333,  90},  // Polling loop short (bus)
-    {334,  91},  // Repeater failure
-    {335,  92},  // Local printer out of paper
-    {336,  93},  // Local printer failure
-    {337,  94},  // Exp. Module DC Loss
-    {338,  95},  // Exp. Module Low Batt.
-    {339,  96},  // Exp. Module Reset
-    {341,  97},  // Exp. Module Tamper
-    {342,  98},  // Exp. Module AC Loss
-    {343,  99},  // Exp. Module selftest fail
+    {100, 0},    // Medical
+    {101, 1},    // Personal Emergency
+    {102, 2},    // Fail to report in
+    {110, 3},    // Fire
+    {111, 4},    // Smoke
+    {112, 5},    // Combustion
+    {113, 6},    // Water Flow
+    {114, 7},    // Heat
+    {115, 8},    // Pull Station
+    {116, 9},    // Duct
+    {117, 10},   // Flame
+    {118, 11},   // Near Alarm
+    {120, 12},   // Panic
+    {121, 13},   // Duress
+    {122, 14},   // Silent
+    {123, 15},   // Audible
+    {124, 16},   // Duress - Access granted
+    {125, 17},   // Duress - Egress granted
+    {126, 18},   // Holdup suspicion print
+    {127, 19},   // Remote Silent Panic
+    {129, 20},   // Panic Verifier
+    {130, 21},   // Burglary
+    {131, 22},   // Perimeter
+    {132, 23},   // Interior
+    {133, 24},   // 24 Hour (Safe)
+    {134, 25},   // Entry/Exit
+    {135, 26},   // Day/Night
+    {136, 27},   // Outdoor
+    {137, 28},   // Tamper
+    {138, 29},   // Near alarm
+    {139, 30},   // Intrusion Verifier
+    {140, 31},   // General Alarm
+    {141, 32},   // Polling loop open
+    {142, 33},   // Polling loop short
+    {143, 34},   // Expansion module failure
+    {144, 35},   // Sensor tamper
+    {145, 36},   // Expansion module tamper
+    {146, 37},   // Silent Burglary
+    {147, 38},   // Sensor Supervision Failure
+    {150, 39},   // 24 Hour NonBurglary
+    {151, 40},   // Gas detected
+    {152, 41},   // Refrigeration
+    {153, 42},   // Loss of heat
+    {154, 43},   // Water Leakage
+    {155, 44},   // Foil Break
+    {156, 45},   // Day Trouble
+    {157, 46},   // Low bottled gas level
+    {158, 47},   // High temp
+    {159, 48},   // Low temp
+    {160, 49},   // Awareness Zone Response
+    {161, 50},   // Loss of air flow
+    {162, 51},   // Carbon Monoxide detected
+    {163, 52},   // Tank level
+    {168, 53},   // High Humidity
+    {169, 54},   // Low Humidity
+    {200, 55},   // Fire Supervisory
+    {201, 56},   // Low water pressure
+    {202, 57},   // Low CO2
+    {203, 58},   // Gate valve sensor
+    {204, 59},   // Low water level
+    {205, 60},   // Pump activated
+    {206, 61},   // Pump failure
+    {300, 62},   // System Trouble
+    {301, 63},   // AC Loss
+    {302, 64},   // Low system battery
+    {303, 65},   // RAM Checksum bad
+    {304, 66},   // ROM checksum bad
+    {305, 67},   // System reset
+    {306, 68},   // Panel programming changed
+    {307, 69},   // Selftest failure
+    {308, 70},   // System shutdown
+    {309, 71},   // Battery test failure
+    {310, 72},   // Ground fault
+    {311, 73},   // Battery Missing/Dead
+    {312, 74},   // Power Supply Overcurrent
+    {313, 75},   // Engineer Reset
+    {314, 76},   // Primary Power Supply Failure
+    {315, 62},   // System Trouble (same label as 300)
+    {316, 77},   // System Tamper
+    {317, 78},   // Control Panel System Tamper
+    {320, 79},   // Sounder/Relay
+    {321, 80},   // Bell 1
+    {322, 81},   // Bell 2
+    {323, 82},   // Alarm relay
+    {324, 83},   // Trouble relay
+    {325, 84},   // Reversing relay
+    {326, 85},   // Notification Appliance Ckt. #3
+    {327, 86},   // Notification Appliance Ckt. #4
+    {330, 87},   // System Peripheral trouble
+    {331, 88},   // Expansion module failure (bus)
+    {332, 89},   // Polling loop open (bus)
+    {333, 90},   // Polling loop short (bus)
+    {334, 91},   // Repeater failure
+    {335, 92},   // Local printer out of paper
+    {336, 93},   // Local printer failure
+    {337, 94},   // Exp. Module DC Loss
+    {338, 95},   // Exp. Module Low Batt.
+    {339, 96},   // Exp. Module Reset
+    {341, 97},   // Exp. Module Tamper
+    {342, 98},   // Exp. Module AC Loss
+    {343, 99},   // Exp. Module selftest fail
     {344, 100},  // RF Receiver Jam Detect
     {345, 101},  // AES Encryption disabled/enabled
     {350, 102},  // Communication trouble
@@ -568,63 +568,56 @@ static constexpr LrrEntry lrr_lookup_table[] = {
     {703, 253},  // Auxiliary #3
     {704, 254},  // Installer Test
     {750, 255},  // User Assigned (750-789, 920-929 share this)
-    {751, 255}, {752, 255}, {753, 255}, {754, 255}, {755, 255},
-    {756, 255}, {757, 255}, {758, 255}, {759, 255}, {760, 255},
-    {761, 255}, {762, 255}, {763, 255}, {764, 255}, {765, 255},
-    {766, 255}, {767, 255}, {768, 255}, {769, 255}, {770, 255},
-    {771, 255}, {772, 255}, {773, 255}, {774, 255}, {775, 255},
-    {776, 255}, {777, 255}, {778, 255}, {779, 255}, {780, 255},
-    {781, 255}, {782, 255}, {783, 255}, {784, 255}, {785, 255},
-    {786, 255}, {787, 255}, {788, 255}, {789, 255},
-    {796, 256},  // Unable to output signal (Derived Channel)
-    {798, 257},  // STU Controller down (Derived Channel)
-    {900, 258},  // Download Abort
-    {901, 259},  // Download Start/End
-    {902, 260},  // Download Interrupted
-    {903, 261},  // Device Flash Update Started/Completed
-    {904, 262},  // Device Flash Update Failed
-    {910, 263},  // Autoclose with Bypass
-    {911, 264},  // Bypass Closing
-    {912, 265},  // Fire Alarm Silence
-    {913, 266},  // Supervisory Point test Start/End
-    {914, 267},  // Holdup test Start/End
-    {915, 268},  // Burg. Test Print Start/End
-    {916, 269},  // Supervisory Test Print Start/End
-    {917, 270},  // Burg. Diagnostics Start/End
-    {918, 271},  // Fire Diagnostics Start/End
-    {919, 272},  // Untyped diagnostics
-    {920, 273},  // Trouble Closing
-    {921, 274},  // Access Denied Code Unknown
-    {922, 275},  // Supervisory Point Alarm
-    {923, 276},  // Supervisory Point Bypass
-    {924, 277},  // Supervisory Point Trouble
-    {925, 278},  // Holdup Point Bypass
-    {926, 279},  // AC Failure for 4 hours
-    {927, 280},  // Output Trouble
-    {928, 281},  // User code for event
-    {929, 282},  // Logoff
-    {954, 283},  // CS Connection Failure
-    {961, 284},  // Rcvr Database Connection Fail/Restore
-    {962, 285},  // License Expiration Notify
-    {999, 286},  // 1 and 1/3 Day No Read Log
+    {751, 255}, {752, 255}, {753, 255}, {754, 255}, {755, 255}, {756, 255}, {757, 255}, {758, 255}, {759, 255},
+    {760, 255}, {761, 255}, {762, 255}, {763, 255}, {764, 255}, {765, 255}, {766, 255}, {767, 255}, {768, 255},
+    {769, 255}, {770, 255}, {771, 255}, {772, 255}, {773, 255}, {774, 255}, {775, 255}, {776, 255}, {777, 255},
+    {778, 255}, {779, 255}, {780, 255}, {781, 255}, {782, 255}, {783, 255}, {784, 255}, {785, 255}, {786, 255},
+    {787, 255}, {788, 255}, {789, 255}, {796, 256},  // Unable to output signal (Derived Channel)
+    {798, 257},                                      // STU Controller down (Derived Channel)
+    {900, 258},                                      // Download Abort
+    {901, 259},                                      // Download Start/End
+    {902, 260},                                      // Download Interrupted
+    {903, 261},                                      // Device Flash Update Started/Completed
+    {904, 262},                                      // Device Flash Update Failed
+    {910, 263},                                      // Autoclose with Bypass
+    {911, 264},                                      // Bypass Closing
+    {912, 265},                                      // Fire Alarm Silence
+    {913, 266},                                      // Supervisory Point test Start/End
+    {914, 267},                                      // Holdup test Start/End
+    {915, 268},                                      // Burg. Test Print Start/End
+    {916, 269},                                      // Supervisory Test Print Start/End
+    {917, 270},                                      // Burg. Diagnostics Start/End
+    {918, 271},                                      // Fire Diagnostics Start/End
+    {919, 272},                                      // Untyped diagnostics
+    {920, 273},                                      // Trouble Closing
+    {921, 274},                                      // Access Denied Code Unknown
+    {922, 275},                                      // Supervisory Point Alarm
+    {923, 276},                                      // Supervisory Point Bypass
+    {924, 277},                                      // Supervisory Point Trouble
+    {925, 278},                                      // Holdup Point Bypass
+    {926, 279},                                      // AC Failure for 4 hours
+    {927, 280},                                      // Output Trouble
+    {928, 281},                                      // User code for event
+    {929, 282},                                      // Logoff
+    {954, 283},                                      // CS Connection Failure
+    {961, 284},                                      // Rcvr Database Connection Fail/Restore
+    {962, 285},                                      // License Expiration Notify
+    {999, 286},                                      // 1 and 1/3 Day No Read Log
 };
 
 static constexpr int LRR_TABLE_SIZE = sizeof(lrr_lookup_table) / sizeof(lrr_lookup_table[0]);
 
-inline const char* lrr_msg_lookup(int statusCode)
-{
-    // Binary search over lrr_lookup_table (sorted by code).
-    int lo = 0, hi = LRR_TABLE_SIZE - 1;
-    while (lo <= hi)
-    {
-        int mid = lo + (hi - lo) / 2;
-        if (lrr_lookup_table[mid].code == statusCode)
-            return lrr_msg_values[lrr_lookup_table[mid].idx];
-        else if (lrr_lookup_table[mid].code < statusCode)
-            lo = mid + 1;
-        else
-            hi = mid - 1;
-    }
-    return lrr_msg_values[LRR_MSG_UNKNOWN_IDX];
+inline const char *lrr_msg_lookup(int statusCode) {
+  // Binary search over lrr_lookup_table (sorted by code).
+  int lo = 0, hi = LRR_TABLE_SIZE - 1;
+  while (lo <= hi) {
+    int mid = lo + (hi - lo) / 2;
+    if (lrr_lookup_table[mid].code == statusCode)
+      return lrr_msg_values[lrr_lookup_table[mid].idx];
+    else if (lrr_lookup_table[mid].code < statusCode)
+      lo = mid + 1;
+    else
+      hi = mid - 1;
+  }
+  return lrr_msg_values[LRR_MSG_UNKNOWN_IDX];
 }
-

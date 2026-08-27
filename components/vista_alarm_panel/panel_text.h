@@ -12,7 +12,7 @@
 #include "esphome/core/defines.h"
 
 // EN
-// Zone status is now communicated via flag-based text in 
+// Zone status is now communicated via flag-based text in
 // ZoneManager::publish_zone() rather than string lookups.
 
 // Looks for the <space>*<space> found in the "Hit * to view messages".

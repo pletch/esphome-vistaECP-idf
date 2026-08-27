@@ -8,12 +8,11 @@
 # See COPYING.LESSER in the project root for details.
 
 import esphome.codegen as cg
-import esphome.config_validation as cv
 from esphome.components import text_sensor
-from .. import (
-    alarm_panel_ns,
-    AlarmComponent,
-)
+import esphome.config_validation as cv
+
+from .. import AlarmComponent, alarm_panel_ns
+
 DEPENDENCIES = ["vista_alarm_panel"]
 VistaTextSensor = alarm_panel_ns.class_("VistaTextSensor", text_sensor.TextSensor)
 
@@ -27,22 +26,25 @@ TTYPES = [
     "LINE1",
     "LINE2",
     "ZONE_STATUS",
-    "BEEPS"
+    "BEEPS",
 ]
 
 CONF_ZONE = "zone"
 CONF_PARTITION = "partition"
 CONF_TYPE = "type"
 
+
 def _validate(value):
     if value[CONF_TYPE] == "ZONE":
         if CONF_ZONE not in value or CONF_PARTITION not in value:
-            raise cv.Invalid("type: \"zone\" requires both zone: and partition:")
+            raise cv.Invalid('type: "zone" requires both zone: and partition:')
     if value[CONF_TYPE] != "ZONE" and CONF_ZONE in value:
-        raise cv.Invalid("zone: parameter only valid with type: \"zone\"")
+        raise cv.Invalid('zone: parameter only valid with type: "zone"')
     return value
 
-CONFIG_SCHEMA = cv.All(text_sensor.text_sensor_schema(VistaTextSensor).extend(
+
+CONFIG_SCHEMA = cv.All(
+    text_sensor.text_sensor_schema(VistaTextSensor).extend(
         {
             cv.GenerateID(CONF_ALARM_ID): cv.use_id(AlarmComponent),
             cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=8),
@@ -52,6 +54,7 @@ CONFIG_SCHEMA = cv.All(text_sensor.text_sensor_schema(VistaTextSensor).extend(
     ),
     _validate,
 )
+
 
 async def to_code(config):
     var = await text_sensor.new_text_sensor(config)

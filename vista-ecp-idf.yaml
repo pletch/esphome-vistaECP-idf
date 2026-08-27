@@ -4,21 +4,21 @@ substitutions:
   friendlyName: "Vista Alarm"  # Used as the friendly name of your application in HomeAssistant
   panelId: "VistaAlarm"        # Used as the service variable name.
   accesscode: !secret access_code
-  
+
 vista_alarm_panel:
   id: $panelId
   access_code: $accesscode # Only relevant if needed for arming and quickarm is not set
 
   default_partition: "1"  # Set to system main partition
-  debug_logging: "false"  # Enables additional bus activity logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm  
+  debug_logging: "false"  # Enables additional bus activity logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm
                           # component (if configured) logging level must be set to DEBUG or higher in logging component section
-                          # to output all messages. 
-  debug_pulsing: "false" # Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences 
-                         # 60 seconds after startup and continues indefinitely.  DO NOT enable for routine use of component! 
-  legacy_protocol: "false" # Set to true if using an older panel such as the Vista-15SE or Vista20SE.  
+                          # to output all messages.
+  debug_pulsing: "false" # Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences
+                         # 60 seconds after startup and continues indefinitely.  DO NOT enable for routine use of component!
+  legacy_protocol: "false" # Set to true if using an older panel such as the Vista-15SE or Vista20SE.
 
   # Assign a new virtual keypad address to each active partition using programs *190 - *196 (on Vista 15P/20P)
-  # and enter it below. For older Vista 15SE/20SE, use address of 31. For unused partitions, use 0 as the 
+  # and enter it below. For older Vista 15SE/20SE, use address of 31. For unused partitions, use 0 as the
   # keypad address or comment out associated keypad_addr line.
   keypad_addr_1: "20" #partition 1 virtual keypad. Comment out or set to 0 to disable
   #keypad_addr_2: "0" #partition 2 virtual keypad. Comment out or set to 0 to disable
@@ -31,16 +31,16 @@ vista_alarm_panel:
 
   # AUI address from program field *189 to use for faster zone closure status for zones directly
   # hardwired to the panel and to allow time sync of panel via manual Home Assistant service or via
-  # automatic option if enabled. 
+  # automatic option if enabled.
   # Ensure it is not assigned to a physical touchpad or to Total Connect 2.0 (assigned to address 2).
-  #        Note: Older vista20 panel firmwares only have addresses 1 and 2 while newer will have 1,2,5 and 6. 
-  # For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program #93, 
+  #        Note: Older vista20 panel firmwares only have addresses 1 and 2 while newer will have 1,2,5 and 6.
+  # For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program #93,
   # device programming. Omission of the parameter or a value of zero disables AUI handling.
-  aui_addr: "0" 
-  aui_auto_clock_sync: "false" # Automatically periodically sync panel clock using esphome clock time.  
-                               # Useful for automatically pushing correct time to touchpad displays. 
+  aui_addr: "0"
+  aui_auto_clock_sync: "false" # Automatically periodically sync panel clock using esphome clock time.
+                               # Useful for automatically pushing correct time to touchpad displays.
 
-  rx_pin: "21" # GPIO pin to use for data receive (yellow line) 
+  rx_pin: "21" # GPIO pin to use for data receive (yellow line)
   tx_pin: "23" # GPIO pin to use for data transmit (green line)
   uart_1: "1" # Hardware UART number to use for tx/rx.
 
@@ -70,13 +70,13 @@ vista_alarm_panel:
   #cc1101_csn_pin:  "15"
   #cc1101_gdo0_pin: "27"
 
-# Location of alarm panel code.  You can use the github release version or 
+# Location of alarm panel code.  You can use the github release version or
 # copy the code to directory "components" in your main esphome directory
-# see here for more info: https://esphome.io/components/external_components    
+# see here for more info: https://esphome.io/components/external_components
 external_components:
   - source: github://Tim Pletcher/esphome-vistaECP-idf
-  #- source:  components #uncomment to use local directory  
-    components: [vista_alarm_panel] 
+  #- source:  components #uncomment to use local directory
+    components: [vista_alarm_panel]
     refresh: 10min
 
 esphome:
@@ -96,15 +96,15 @@ wifi:
 
 time:
   - platform: homeassistant
-  
+
 # Enable logging
 logger:
-  baud_rate: 115200   
+  baud_rate: 115200
   level: DEBUG
   logs:
     vista-alarm: DEBUG  # Set this as desired to suppress/enable verbosity of log messages for vista-alarm component.
 
-safe_mode: 
+safe_mode:
 
 ota:
   platform: esphome
@@ -113,12 +113,12 @@ api:
   port: 6053
   custom_services: true
 
-######################################################################## 
+########################################################################
 # Edit binary and text sensors below to suit your alarm setup.
 # You can safely add or remove any sensor as needed.
-# 
+#
 # Examples are provided for both hardwired and RF zones.
-#  
+#
 # RF zone configuration uses the rf_serial and rf_loop parameters.
 # rf_serial is the 20-bit serial number printed on the sensor label (1-1048575, no leading zeros).
 # For most devices loop 1 is used (e.g. 5800PIR); other devices such as the 5816 use loop 2.
@@ -154,9 +154,9 @@ api:
 
 binary_sensor:
 ### zone sensors ###
-# open/close status for each zone 
+# open/close status for each zone
 #  - platform: vista_alarm_panel
-#    id: z8  
+#    id: z8
 #    name: "Flood Sensor"
 #    partition: 1
 #    zone: 8
@@ -209,9 +209,9 @@ binary_sensor:
 
 
 #######################################################################
-# Non-zone binary sensors should be specified with 
+# Non-zone binary sensors should be specified with
 # status_indicator parameter.  Valid options are
-# [ready, trouble, bypass, armed_away, armed_instant, armed_night, 
+# [ready, trouble, bypass, armed_away, armed_instant, armed_night,
 # chime, alarm, fire, ac_power, and battery]
 # Partition specific indicators will require specifying partition:
 ### non zone sensors ###
@@ -223,15 +223,15 @@ binary_sensor:
     partition: 1
     status_indicator: "ready"
 
-# partition/panel trouble status 
+# partition/panel trouble status
   - platform: vista_alarm_panel
     id: trbl_1
     name: "Trouble"
     partition: 1
     status_indicator: "trouble"
     device_class: problem
- 
-# bypass zones active status 
+
+# bypass zones active status
 #  - platform: vista_alarm_panel
 #    id: byp_1
 #    partition: 1
@@ -245,45 +245,45 @@ binary_sensor:
 #    partition: 1
 #    status_indicator: "armed_away"
 
-# armed status 
+# armed status
   - platform: vista_alarm_panel
-    id: arm_1  
+    id: arm_1
     partition: 1
     status_indicator: "armed"
     name: "Armed"
 
 
-# ac status     
+# ac status
   - platform: vista_alarm_panel
     id: ac
     name: "Power Status"
     status_indicator: "ac_power"
-    device_class: plug  
+    device_class: plug
 
-# alarm status 
+# alarm status
   - platform: vista_alarm_panel
-    id: alm_1  
+    id: alm_1
     name: "Alarm"
     partition: 1
     status_indicator: "alarm"
- 
+
 # battery status
 #  - platform: vista_alarm_panel
-#    id: bat  
+#    id: bat
 #    name: "Battery Status"
 #    status_indicator: "battery"
 #    device_class: problem
 
-# fire alarm status  
+# fire alarm status
 # - platform: vista_alarm_panel
-#    id: fire_1  
+#    id: fire_1
 #    name: "Fire"
 #    partition: 1
-#    status_indicator: "fire"  
+#    status_indicator: "fire"
 #    device_class: smoke
 
 #########################################################################
-# Zone text sensors can be specified to include alternative zone status as 
+# Zone text sensors can be specified to include alternative zone status as
 # a text sensor using type: zone. Output values: (O=open, B=bypass,T=trbl or check,A=alarm)
 # Other general text sensors are available.
 # type:
@@ -293,7 +293,7 @@ binary_sensor:
 #    line2 = keypad prompt line 2 displayed messages
 #    zone_status = combined status for zones with messages
 #    beeps = beeps output
-# 
+#
 # Text sensors with partition specific data will require specifying partition:
 #### text sensors ####
 text_sensor:
@@ -305,9 +305,9 @@ text_sensor:
 #    zone: 13
 #    partition: 1
 
-# system status messages  
+# system status messages
   - platform: vista_alarm_panel
-    id: ss_1  
+    id: ss_1
     name: "System Status"
     icon: "mdi:shield"
     type: "system_status"
@@ -320,52 +320,52 @@ text_sensor:
 
 # long range radio messages
   - platform: vista_alarm_panel
-    id: lrr  
+    id: lrr
     name: "Lrr Msg"
     type: "lrr_messages"
     icon: "mdi:alert-box"
 
-# RF zone messages 
+# RF zone messages
   - platform: vista_alarm_panel
-    id: rf  
+    id: rf
     name: "RF Msg"
     type: "rf_messages"
-    icon: "mdi:alert-box"    
+    icon: "mdi:alert-box"
 
-# virtual lcd keypad line1 and line2 messages for each partition   
+# virtual lcd keypad line1 and line2 messages for each partition
   - platform: vista_alarm_panel
     name: "Line1"
     id: ln1_1
     partition: 1
-    type: "line1"    
+    type: "line1"
   - platform: vista_alarm_panel
     name: "Line2"
     id: ln2_1
     partition: 1
-    type: "line2"    
+    type: "line2"
 
 # zone status messages bypas/open/alarm
   - platform: vista_alarm_panel
-    name: "Zone Status" 
+    name: "Zone Status"
     id: zs
     type: "zone_status"
 
-# system beeps   
+# system beeps
   - platform: vista_alarm_panel
-    name: "Beeps"  
+    name: "Beeps"
     id: bp_1
     partition: 1
     type: "beeps"
-    
-#optional cmd button example.  Send any keypad keys 
+
+#optional cmd button example.  Send any keypad keys
 #button:
 #    - platform: vista_alarm_panel
 #      name: Gate Button
 #      id: gate1
-#      icon: "mdi:emoticon-outline"    
+#      icon: "mdi:emoticon-outline"
 #      on_press:
 #        - lambda: |-
-#            $panelId->alarm_keypress_partition("${accesscode}#701",1);     
+#            $panelId->alarm_keypress_partition("${accesscode}#701",1);
 
  # end of panel sensor setup - no need to edit anything below.
 ##############################################################################
@@ -374,7 +374,7 @@ switch:
   - platform: template
     name: "$name Connection"
     id: connection_status_switch
-    restore_mode: DISABLED    
+    restore_mode: DISABLED
     optimistic: true
     lambda: |-
       return $panelId->connected();
@@ -387,4 +387,4 @@ switch:
   - platform: restart
     id: restart_switch
   - platform: safe_mode
-    name: "Safe Mode"   
+    name: "Safe Mode"

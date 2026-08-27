@@ -12,9 +12,9 @@
 
 // Looks for the <space>*<space> found in the "Hit * to view messages".
 #ifndef LEGACY_SE_PROTOCOL
-    const char *HITSTAR = " * ";
+const char *HITSTAR = " * ";
 #else
-    const char *HITSTAR = "Press *";
+const char *HITSTAR = "Press *";
 #endif
 
 // messages to display to home assistant

@@ -13,14 +13,16 @@
 #include "../vista_alarm.h"
 
 namespace esphome {
-    namespace alarm_panel {
+namespace alarm_panel {
 
-        class VistaBinarySensor : public binary_sensor::BinarySensor, public vistaECPBinarySensor, public Parented<VistaESPHome>
-        {
-            public:
-                void process(bool triggered) override;
-            protected:
-        };
+class VistaBinarySensor : public binary_sensor::BinarySensor,
+                          public vistaECPBinarySensor,
+                          public Parented<VistaESPHome> {
+ public:
+  void process(bool triggered) override;
 
-    }  // namespace alarm_panel
+ protected:
+};
+
+}  // namespace alarm_panel
 }  // namespace esphome
