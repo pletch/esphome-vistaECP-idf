@@ -1,4 +1,4 @@
-# Modified to work with https://github.com/Tim Pletcher/esphome-vistaECP-idf
+# Modified to work with https://github.com/pletch/esphome-vistaECP-idf
 substitutions:
   name: "vista-ecp-idf"  # Unique network name, system name
   friendlyName: "Vista Alarm"  # Used as the friendly name of your application in HomeAssistant
@@ -74,7 +74,7 @@ vista_alarm_panel:
 # copy the code to directory "components" in your main esphome directory
 # see here for more info: https://esphome.io/components/external_components
 external_components:
-  - source: github://Tim Pletcher/esphome-vistaECP-idf
+  - source: github://pletch/esphome-vistaECP-idf
     # - source:  components #uncomment to use local directory
     components: [vista_alarm_panel]
     refresh: 10min

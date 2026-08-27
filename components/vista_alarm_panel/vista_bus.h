@@ -20,7 +20,7 @@ Data from expander modules and relay mddules is not currently handled as I have 
 
 Data is exchanged / exposed with calling application via separate FreeRTOS Queues.
 
-Written by Tim Tim Pletcherer.
+Written by Tim Pletcher.
 Date: 2-Feb-2025
 
 */

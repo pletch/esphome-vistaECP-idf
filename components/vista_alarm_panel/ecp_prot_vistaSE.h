@@ -22,7 +22,7 @@ Key differences from Vista20P:
   - 0xFA expander frames are 3 bytes (sequence, type, address) — shorter than the
     5-byte Vista20P format.
 
-Written by Tim Tim Pletcherer.
+Written by Tim Pletcher.
 */
 #pragma once
 

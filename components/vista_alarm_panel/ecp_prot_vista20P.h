@@ -23,7 +23,7 @@ Key characteristics:
     checksum.  Responses must be generated in-line (quick_decodeFA_impl) because
     the panel's timing window is too tight to round-trip through the receive queue.
 
-Written by Tim Tim Pletcherer.
+Written by Tim Pletcher.
 */
 #pragma once
 
