@@ -44,6 +44,21 @@ inline constexpr uint16_t kUartRxTxTaskStackSize = 4096;
 inline constexpr uint16_t kUartMonitorTaskStackSize = 3072;
 inline constexpr uint8_t kUartDelay = 15;
 
+// Depth of the UART driver's event queue for the primary (full-duplex) port.
+//
+// The driver posts one UART_DATA event per received byte, and the ISR drops
+// events silently once the queue is full -- the bytes still land in the ring
+// buffer, but nothing tells the reader they arrived, so a frame read returns
+// short and the leftovers surface later as stray single bytes.  The depth is
+// therefore a budget for how long rx_tx_task may be blocked elsewhere while
+// traffic continues: at 4800 baud one byte is 2.5 ms, so 48 events covers about
+// 120 ms of back-to-back reception.  A single 48-byte F7 alone is 48 events.
+//
+// Raised from 25 (about 62 ms) after truncated F2 frames were observed
+// clustering around AUI writes, where the handler can block long enough for the
+// shallower queue to overflow.
+inline constexpr uint8_t kUartEventQueueDepth = 48;
+
 inline constexpr uint16_t kPulseCyclePeriod = 550; // maximum period of long low pulse cycle on yellow wire in ms. sets maximum delay of rx_tx_task looping.
                                             // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
 

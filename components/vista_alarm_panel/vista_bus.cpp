@@ -340,7 +340,9 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     if (static_cast<int>(tx_pin) == -1)
         ESP_ERROR_CHECK(uart_driver_install(u_n, kRXBufSize + 8, 0, 0, nullptr, intr_alloc_flags));
     else
-        ESP_ERROR_CHECK(uart_driver_install(u_n, kRXBufSize + 8, 0, 25, &uartevtQueue, intr_alloc_flags));
+        ESP_ERROR_CHECK(uart_driver_install(u_n, kRXBufSize + 8, 0,
+                                            kUartEventQueueDepth, &uartevtQueue,
+                                            intr_alloc_flags));
 
     ESP_ERROR_CHECK(uart_param_config(u_n, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(u_n, tx_pin, rx_pin, -1, -1));

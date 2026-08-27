@@ -459,8 +459,19 @@ void VistaECP::dispatchF6(const SendPacket &pkt_to_send)
         this->keypad_write(vistabus_.uart_num, pkt_to_send);
 
         // Wait for the panel to echo our sequence number as confirmation.
+        //
+        // Keep this short.  It blocks rx_tx_task, which is what drains the UART
+        // event queue, so the wait is bounded by how much traffic that queue can
+        // absorb meanwhile -- see kUartEventQueueDepth.  It was 100 ms, longer
+        // than the queue could hold, which made a missing echo cost dropped
+        // events and a truncated read on the frame that followed.  The panel
+        // echoes promptly when it echoes at all; waiting longer cannot produce a
+        // byte that is not coming.
+        constexpr uint32_t kSequenceEchoWaitMs = 20;
         rxBytes = this->get_packet_event(&received_packet, data, 0, 1,
-                                          vistabus_.uart_num, pdMS_TO_TICKS(100), vistabus_.uartevtQueue, sizeof(data));
+                                          vistabus_.uart_num,
+                                          pdMS_TO_TICKS(kSequenceEchoWaitMs),
+                                          vistabus_.uartevtQueue, sizeof(data));
         if (rxBytes)
         {
             if (data[0] == pkt_to_send.sequence)
