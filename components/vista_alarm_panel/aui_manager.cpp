@@ -504,6 +504,26 @@ namespace esphome
 
             for (uint8_t z = 1; z <= 128; z++)
             {
+                // Zones driven by a direct path -- a CC1101 sensor, or an emulated
+                // zone fed from Home Assistant -- are never driven from here.
+                //
+                // The fault list is stale by construction.  The panel broadcasts
+                // roughly 0.9 s after the event, the query then waits for an F6
+                // poll of our address (measured at 1.7-1.9 s, and the poll interval
+                // itself is 2.6-3.1 s), and the reply follows ~0.1 s later.  So the
+                // answer describes the bus as it was some 2.7 s ago, and longer if
+                // the query just missed a slot.  The direct path already published
+                // the truth within milliseconds.
+                //
+                // ZoneManager::set_zone_open() does hold a 3 s suppression window
+                // against exactly this, but 2.7 s of unavoidable latency inside a
+                // 3 s guard is not a margin worth relying on -- and once a zone has
+                // a direct path there is nothing the AUI answer can contribute
+                // even when it happens to agree.  Skipping outright is both safer
+                // and cheaper than racing.
+                if (zones.zone_has_direct_path(z))
+                    continue;
+
                 uint8_t  bank   = (z - 1) / 32;
                 uint8_t  bit    = (z - 1) % 32;
                 bool     faulted = (mask[bank] >> bit) & 0x01u;

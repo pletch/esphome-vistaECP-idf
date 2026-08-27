@@ -158,6 +158,18 @@ namespace esphome
             //   set_zone_check(true) clears open and alarm.
             // -------------------------------------------------------------------
 
+            // True when this zone's state is maintained by a direct path: the
+            // CC1101 receiver through on_rf_direct(), or a Home Assistant service
+            // call through on_zone_direct() for an emulated zone.  Both stamp
+            // last_direct_time; a zone that has never been touched by either
+            // reports false.
+            //
+            // Such a zone must not be driven by the AUI fault list at all.  That
+            // answer is a poll cycle stale by construction -- see the note on
+            // AUIManager::apply_zone_fault_masks() -- and the direct path already
+            // knows the truth sooner.  Takes zone_mutex_.
+            bool zone_has_direct_path(uint8_t zone_number) const;
+
             // Refresh a zone's last-activity timestamp (used to defer TTL expiry
             // while the panel is still reporting the zone).  Takes zone_mutex_ —
             // callers must not hold a raw Zone* across this call.

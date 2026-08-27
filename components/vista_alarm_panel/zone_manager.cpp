@@ -648,6 +648,16 @@ namespace esphome
         // on_rf_zone_packet() will suppress the later ECP-path echo.
         // ---------------------------------------------------------------------------
 
+        bool ZoneManager::zone_has_direct_path(uint8_t zone_number) const
+        {
+            ZoneMutexGuard guard(zone_mutex_);
+
+            // get_zone() is non-const only because it hands back a mutable Zone*;
+            // nothing here mutates, and the mutex is held for the lookup.
+            const Zone *z = const_cast<ZoneManager *>(this)->get_zone(zone_number);
+            return z != nullptr && z->active && z->last_direct_time != 0;
+        }
+
         void ZoneManager::on_zone_direct(uint8_t zone_number, bool fault)
         {
             ZoneMutexGuard guard(zone_mutex_);
