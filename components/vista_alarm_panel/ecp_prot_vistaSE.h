@@ -48,6 +48,16 @@ public:
                 xQueueReceive(this->vistabus_.sendQueue, &pkt, 0);
                 this->req_to_send = true;
             }
+            // No merge path here, so nothing to exclude type-2 from -- unlike the
+            // Vista20P handler.  A pulse has size 0, so it falls straight through
+            // to the break below and is transmitted as itself.
+            //
+            // The re-read at the end of the split does now behave differently:
+            // with requestF1() inserting at the front, it takes the nudge rather
+            // than the first split character.  That is the intended priority, and
+            // the split characters keep their order among themselves, but it has
+            // not been exercised on SE hardware -- worth watching a multi-key
+            // sequence sent while an RF or expander relay is pending.
             if (pkt.size > 1) // split multi-byte payload into individual chars
             {
                 SendPacket next_char{};

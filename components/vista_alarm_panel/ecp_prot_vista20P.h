@@ -59,9 +59,19 @@ public:
             {
                 // Peek at the next queued packet; if it targets the same keypad
                 // and the combined payload fits in 24 bytes, merge it in.
+                //
+                // Never merge a type-2 pulse, in either direction.  It carries no
+                // payload, so a merge would dequeue it and append zero bytes --
+                // silently consuming the F1 nudge without ever issuing it, leaving
+                // the device message to wait at least another kPulseCyclePeriod
+                // for the next one.  Only same-keypadaddress packets merge, so
+                // this needs a colliding address to bite; requestF1() putting the
+                // nudge at the front of the queue makes it the packet peeked here
+                // every time, which is reason enough to be explicit.
                 SendPacket next_pkt;
                 xQueuePeek(this->vistabus_.sendQueue, &next_pkt, pdMS_TO_TICKS(0));
-                if (next_pkt.keypadaddress == pkt.keypadaddress
+                if (pkt.type != 2 && next_pkt.type != 2
+                        && next_pkt.keypadaddress == pkt.keypadaddress
                         && (next_pkt.size + pkt.size) <= 24)
                 {
                     xQueueReceive(this->vistabus_.sendQueue, &next_pkt, 0);

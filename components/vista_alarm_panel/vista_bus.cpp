@@ -742,7 +742,20 @@ void VistaBus::requestF1(uint8_t address)
     pkt.payload[0]     = 0;
     pkt.size           = 0;
     pkt.sequence       = 0;   // type-2 pulse carries no sequence; set it explicitly
-    xQueueSend(sendQueue, &pkt, 0);
+
+    // To the front, ahead of anything optional already queued.  This nudge is the
+    // first step in relaying a zone state the panel cannot learn any other way,
+    // and it is discarded after kDeviceMsgMaxWaitUs without an F1 window.  An AUI
+    // query or a clock sync queued in front of it holds the outgoing slot for a
+    // whole poll cycle -- 1.7 to 2.6 s measured -- and two or three of those in a
+    // row are enough to lose the relay.
+    //
+    // Device message order is unaffected.  This packet carries only an address;
+    // the message itself stays in deviceMsgQueue, which is untouched and strictly
+    // FIFO, and quick_decodeFA/quick_decodeFB take its head on the grant.  Nor can
+    // two nudges reorder against each other: rx_tx_task issues one only when
+    // req_to_send is clear and at most one per kPulseCyclePeriod.
+    xQueueSendToFront(sendQueue, &pkt, 0);
 }
 
 // Update the open/closed status bit for a zone on its expander and enqueue a
