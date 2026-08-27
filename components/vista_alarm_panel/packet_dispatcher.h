@@ -135,6 +135,11 @@ namespace esphome
             // Cumulative checksum failure counter — incremented for source==0xCF
             // packets (panel-direction failures) and empty returns from
             // on_rf_zone_packet (green-wire RF data failures).
+            // Record one checksum failure, unless the device is still inside the
+            // post-boot settle window -- see kChksumSettleUs.  'what' names the
+            // source for the log line.
+            void note_chksum_failure(const char *what);
+
             uint32_t chksum_failures_         {0};
             uint32_t chksum_last_reported_    {0};
 

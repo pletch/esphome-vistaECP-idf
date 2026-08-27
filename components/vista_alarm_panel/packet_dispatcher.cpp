@@ -118,7 +118,7 @@ namespace esphome
                 else if (src == 0xCF)
                 {
                     // 0xCF marks a checksum failure on the primary (yellow-wire) UART.
-                    chksum_failures_++;
+                    note_chksum_failure("primary bus");
                 }
             }
             // Green-wire packets (type 1) come from expansion devices and RF receivers.
@@ -137,7 +137,7 @@ namespace esphome
                     {
                         std::string serial = cfg_.zones->on_rf_zone_packet(payload, size);
                         if (serial.empty())
-                            chksum_failures_++;
+                            note_chksum_failure("RF zone packet");
                         else if (cfg_.rf_sensor != nullptr)
                             cfg_.rf_sensor->process(serial);
                     }
@@ -153,6 +153,22 @@ namespace esphome
                 snprintf(buf, sizeof(buf), "%lu", static_cast<unsigned long>(chksum_failures_));
                 cfg_.chksum_fail_sensor->publish_state(buf);
             }
+        }
+
+        // Count a checksum failure, or log and discard it if the device has not
+        // been up long enough for the count to mean anything.  See kChksumSettleUs
+        // for why the early window is excluded.
+        void PacketDispatcher::note_chksum_failure(const char *what)
+        {
+            if (esp_timer_get_time() < kChksumSettleUs)
+            {
+                ESP_LOGI(TAG, "Checksum failure (%s) %llu ms after boot — inside the "
+                              "settle window, not counted.",
+                         what,
+                         static_cast<unsigned long long>(esp_timer_get_time() / 1000));
+                return;
+            }
+            chksum_failures_++;
         }
 
         // ---------------------------------------------------------------------------

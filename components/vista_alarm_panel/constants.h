@@ -59,6 +59,21 @@ inline constexpr uint8_t kUartDelay = 15;
 // shallower queue to overflow.
 inline constexpr uint8_t kUartEventQueueDepth = 48;
 
+// Checksum failures reported before this much uptime are logged but not counted.
+//
+// The first seconds after a reset are the least representative period the device
+// ever sees: safe_mode writes its boot-counter reset to NVS, the preferences
+// component flushes, the network stack connects, and the receive task joins a
+// bus conversation already in progress rather than at a frame boundary.  Failures
+// there are transient and self-correcting, and counting them leaves the
+// diagnostic entity sitting at a non-zero value on every boot -- which is exactly
+// the value someone watches to decide whether anything is wrong long-term.
+//
+// Long enough to cover safe_mode marking the boot good (about 30 s) and the
+// preferences flush that follows it.  Suppressed failures still reach the log at
+// INFO, so nothing is hidden -- only kept out of the counter.
+inline constexpr int64_t kChksumSettleUs = 60LL * 1000 * 1000;
+
 inline constexpr uint16_t kPulseCyclePeriod = 550; // maximum period of long low pulse cycle on yellow wire in ms. sets maximum delay of rx_tx_task looping.
                                             // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
 
