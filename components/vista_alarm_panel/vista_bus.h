@@ -116,6 +116,17 @@ public:
     // byte) to the panel through the emulated RF receiver.
     void sendRFmsg(uint32_t serial, uint8_t msg);
 
+    // True while an expander or RF message is queued for delivery to the panel.
+    //
+    // Those relays are the only way the panel learns the state of a zone whose
+    // sensor it cannot hear itself, so they are functionally required and must
+    // not be made to wait.  requestF1() and writedirect() share one outgoing
+    // slot, so anything optional that writes to the bus should check this first
+    // and defer.
+    bool device_msg_pending() const
+    {
+        return deviceMsgQueue != nullptr && uxQueueMessagesWaiting(deviceMsgQueue) > 0;
+    }
 
     // --- FreeRTOS inter-task communication handles ---
     // uartevtQueue  – fed by the ESP-IDF UART ISR; consumed by handle_UART_events().

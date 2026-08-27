@@ -8,6 +8,7 @@
 // See COPYING.LESSER in the project root for details.
 
 #include "vista_bus.h"
+#include <cinttypes>
 #include "constants.h"
 
 // Select the matching ECP protocol implementation.
@@ -490,7 +491,7 @@ void VistaBus::rx_tx_task(void *args)
         {
             DeviceMsg q_msg;
             xQueuePeek(deviceMsgQueue, &q_msg, pdMS_TO_TICKS(0));
-            if (esp_timer_get_time() - q_msg.time < 5 * 1000 * 1000)
+            if (esp_timer_get_time() - q_msg.time < kDeviceMsgMaxWaitUs)
             {
                 requestF1(q_msg.address);
                 request_F1_time = esp_timer_get_time();
@@ -499,8 +500,11 @@ void VistaBus::rx_tx_task(void *args)
             {
                 // Message has been waiting > 5 s with no F1 window — drop it.
                 xQueueReceive(deviceMsgQueue, &q_msg, pdMS_TO_TICKS(0));
-                ESP_LOGE(TAG, "Dropping msg for device at address %d — no F1 response in 5 s.",
-                         q_msg.address);
+                ESP_LOGE(TAG, "Dropping msg for device at address %d — no F1 window in %llu s. "
+                              "The panel now holds a stale state for this device until it "
+                              "next reports.",
+                         q_msg.address,
+                         static_cast<unsigned long long>(kDeviceMsgMaxWaitUs / 1000000));
             }
         }
 
@@ -767,7 +771,14 @@ void VistaBus::setZoneStatusBit(uint8_t zone, bool open)
         expMsg.source  = zone;
         expMsg.msg     = static_cast<uint8_t>(open);
         expMsg.time    = esp_timer_get_time();
-        xQueueSend(deviceMsgQueue, &expMsg, 0);
+
+        // Less serious than the RF case: quick_decodeFA() answers the panel's F7
+        // supervision poll from expander->zone_status_bits, which was already
+        // updated above, so expander state re-asserts within a poll cycle even if
+        // this notification is lost.  Still worth knowing about.
+        if (xQueueSend(deviceMsgQueue, &expMsg, 0) != pdPASS)
+            ESP_LOGW(TAG, "Device message queue full; dropped expander notify for zone %d.",
+                     zone);
     }
 }
 
@@ -781,7 +792,12 @@ void VistaBus::sendRFmsg(uint32_t serial, uint8_t msg)
     rfMsg.source  = serial;
     rfMsg.msg     = msg;
     rfMsg.time    = esp_timer_get_time();
-    xQueueSend(deviceMsgQueue, &rfMsg, 0);
+
+    // A full queue loses the message with no other trace, and an RF state is not
+    // something that gets re-sent until the sensor next transmits.  Say so.
+    if (xQueueSend(deviceMsgQueue, &rfMsg, 0) != pdPASS)
+        ESP_LOGE(TAG, "Device message queue full; dropped RF state for serial %" PRIu32
+                      " (msg 0x%02X).", serial, msg);
 }
 
 // Register a zone with an emulated expander.  If no expander for that zone's

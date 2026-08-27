@@ -123,8 +123,9 @@ struct AUIDevice
 
 struct AUIRequest
 {
-    bool    pending {false};
-    int64_t time    {0};
+    bool    pending   {false};
+    int64_t time      {0};   // when the outstanding query was issued
+    int64_t last_sent {0};   // when any query was last issued; rate limiting
 };
 
 struct EmulatedRFReceiver  

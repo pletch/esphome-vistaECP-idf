@@ -330,6 +330,36 @@ namespace esphome
             if (device_.address == 0 || request_.pending)
                 return;
 
+            // Yield to the expander/RF relay.  requestF1() and writedirect()
+            // share a single outgoing slot, and this query holds it for a whole
+            // poll cycle -- 1.7 to 2.6 s measured, waiting for the panel to poll
+            // our AUI address.  A queued RF message is dropped after 5 s without
+            // an F1 window, so two or three queries in a row are enough to lose
+            // one.
+            //
+            // Losing one matters far more than this query does.  The panel has no
+            // receiver of its own for a CC1101 sensor; the relay is the only way
+            // it ever learns that zone restored.  Drop the restore and the panel
+            // holds the fault indefinitely, which then keeps the fault broadcast
+            // running, which triggers more queries -- a loop that does not
+            // recover on its own.  This query is only ever informational, and
+            // apply_zone_fault_masks() already discards its answer for every zone
+            // that has a direct path.
+            if (bus.device_msg_pending())
+            {
+                ESP_LOGD(TAG, "Zone fault query deferred; device message pending.");
+                return;
+            }
+
+            // Backstop against the same contention when the queue happens to be
+            // momentarily empty.  The panel rebroadcasts a fault every second or
+            // two for as long as one is present, and answering every one of them
+            // keeps the outgoing slot permanently busy for no benefit -- the
+            // fault list does not change that fast.
+            const int64_t now = esp_timer_get_time();
+            if (request_.last_sent != 0 && (now - request_.last_sent) < kAuiZoneQueryMinIntervalUs)
+                return;
+
             char bytes[22] = {0,    0,    0x62, 0x31, 0x45, 0x49, 0xF5, 0x31,
                                0xFB, 0x45, 0x4A, 0xF5, 0x32, 0xFB, 0x45, 0x43,
                                0xF5, 0x31, 0xFB, 0x43, 0x6C};
@@ -339,8 +369,9 @@ namespace esphome
             bus.writedirect(bytes, 21, device_.address, device_.sequence1);
             device_.sequence1 += 0x40;
 
-            request_.pending = true;
-            request_.time    = esp_timer_get_time();
+            request_.pending   = true;
+            request_.time      = esp_timer_get_time();
+            request_.last_sent = request_.time;
             ESP_LOGD(TAG, "Zone fault query sent.");
         }
 

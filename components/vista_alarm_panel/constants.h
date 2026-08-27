@@ -133,7 +133,23 @@ inline constexpr int64_t kRfHeartbeatPeriodJitterMinutes = 20;  // added random 
 // --- FreeRTOS queue depths ---------------------------------------------------
 inline constexpr uint16_t kReceiveQueueDepth    = 15;  // decoded panel frames awaiting dispatch
 inline constexpr uint16_t kSendQueueDepth       = 8;   // outbound commands awaiting transmission
-inline constexpr uint16_t kDeviceMsgQueueDepth  = 8;   // pending expander/RF responses for next F1 poll
+inline constexpr uint16_t kDeviceMsgQueueDepth  = 16;  // pending expander/RF responses for next F1 poll
+
+// How long a queued expander/RF message may wait for an F1 window before
+// rx_tx_task gives up on it.
+//
+// This is a backstop against a message that can never be delivered -- a
+// misprogrammed receiver address, say -- wedging the head of the queue, since
+// the queue is served head-first and one stuck entry blocks every other device.
+// It is not meant to fire in normal operation: the panel offers an FB poll
+// roughly once a second, so 20 s is about twenty missed opportunities.
+//
+// It was 5 s, and a 7.7 s bus stall was enough to lose an RF restore. Losing one
+// leaves the panel holding a stale zone state until that sensor next transmits,
+// which for a physical device is on its own schedule -- there is no synthetic
+// heartbeat to fall back on, and there should not be: fabricating supervision
+// for a real sensor would stop the panel ever noticing a dead battery.
+inline constexpr int64_t kDeviceMsgMaxWaitUs = 20LL * 1000 * 1000;
 inline constexpr uint16_t kRfDirectQueueDepth   = 8;   // CC1101 → HA fast path
 
 // --- FreeRTOS task stack sizes (bytes) --------------------------------------
@@ -178,6 +194,15 @@ inline constexpr int64_t  kDedupeLongRangeWindowUs = 2'500'000;
 // serial are suppressed for this long so the panel's later FB echo can't
 // overwrite the authoritative direct-path state.
 inline constexpr int64_t  kDirectSuppressUs        = 3'000'000LL;
+
+// Minimum spacing between AUI zone-fault queries.
+//
+// The panel rebroadcasts a fault every second or two for as long as one is
+// present.  Answering every broadcast keeps the single outgoing bus slot busy
+// almost continuously, which starves the expander/RF relay that requestF1()
+// needs -- and a relayed message is dropped after 5 s without an F1 window.
+// The fault list does not change fast enough for the traffic to be worth it.
+inline constexpr int64_t kAuiZoneQueryMinIntervalUs = 15LL * 1000 * 1000;
 
 // --- RSSI cache --------------------------------------------------------------
 // Number of (serial, rssi) entries retained for use by the rf_messages text
