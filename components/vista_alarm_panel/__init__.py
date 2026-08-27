@@ -178,6 +178,19 @@ async def to_code(config):
     esp32.add_idf_sdkconfig_option("CONFIG_FREERTOS_HZ", 1000)
     esp32.add_idf_sdkconfig_option("CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD", True)
 
+    # Place the UART ISR in IRAM so it keeps running while the flash cache is
+    # disabled.  Any SPI flash write -- an NVS commit from the preferences
+    # component or safe_mode's boot-counter reset, both of which happen a few
+    # seconds into every boot -- masks every interrupt handler that lives in
+    # flash.  With the UART ISR among them, no UART_DATA events are posted for
+    # the duration, the in-progress frame read times out, and the bytes surface
+    # afterwards as a desynchronised stream.
+    #
+    # This is not optional: init_uart() passes ESP_INTR_FLAG_IRAM to
+    # uart_driver_install(), which rejects the call unless this is set.  The two
+    # are deliberately coupled here rather than left to the user's YAML.
+    esp32.add_idf_sdkconfig_option("CONFIG_UART_ISR_IN_IRAM", True)
+
     var = cg.new_Pvariable(config[CONF_ID],config[CONF_KEYPAD1],config[CONF_RXPIN],config[CONF_TXPIN],config[CONF_UART1],config[CONF_MONITORPIN],config[CONF_UART2])
     
     cg.add(var.set_accessCode(config[CONF_ACCESSCODE]))

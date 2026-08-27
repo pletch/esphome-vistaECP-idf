@@ -332,7 +332,16 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
         .flags               = {}
     };
 
-    const int intr_alloc_flags = 0;
+    // ESP_INTR_FLAG_IRAM keeps the UART ISR resident in IRAM so it still runs
+    // while the flash cache is disabled by an SPI flash write.  Without it the
+    // handler is masked for the whole of an NVS commit -- tens of milliseconds,
+    // or better than ten byte times at 4800 baud -- during which no UART events
+    // are posted and an in-progress frame read times out and returns short.
+    //
+    // Requires CONFIG_UART_ISR_IN_IRAM; uart_driver_install() returns
+    // ESP_ERR_INVALID_ARG otherwise.  The component's __init__.py sets that
+    // sdkconfig option, so the two cannot drift apart.
+    const int intr_alloc_flags = ESP_INTR_FLAG_IRAM;
 
     // RX-only mode: install without a TX buffer or event queue.
     // Full duplex mode: install with an event queue so the task can react to
