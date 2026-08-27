@@ -50,4 +50,4 @@ int toInt(const std::string &s, int base);
 // Return true if the first 'len' bytes of a1 and a2 are identical.
 // Equivalent to memcmp(a1, a2, len) == 0 but avoids a dependency on <string.h>
 // at call sites that only need equality (not ordering).
-bool areEqual(char *a1, char *a2, uint8_t len);
+bool areEqual(const char *a1, const char *a2, uint8_t len);

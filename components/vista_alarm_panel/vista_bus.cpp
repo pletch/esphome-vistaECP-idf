@@ -315,10 +315,11 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin) 
   // RX-only mode: install without a TX buffer or event queue.
   // Full duplex mode: install with an event queue so the task can react to
   // UART_DATA and UART_BREAK events from the ISR.
-  if (static_cast<int>(tx_pin) == -1)
+  if (static_cast<int>(tx_pin) == -1) {
     ESP_ERROR_CHECK(uart_driver_install(u_n, kRXBufSize + 8, 0, 0, nullptr, intr_alloc_flags));
-  else
+  } else {
     ESP_ERROR_CHECK(uart_driver_install(u_n, kRXBufSize + 8, 0, kUartEventQueueDepth, &uartevtQueue, intr_alloc_flags));
+  }
 
   ESP_ERROR_CHECK(uart_param_config(u_n, &uart_config));
   ESP_ERROR_CHECK(uart_set_pin(u_n, tx_pin, rx_pin, -1, -1));
@@ -424,7 +425,7 @@ void VistaBus::rx_tx_task(void *args) {
   (void) gpio_install_isr_service(0);  // no-op if already installed
 
   SendPacket pkt_to_send;
-  while (1) {
+  while (true) {
     // --- Device message / F1 poll handling ---
     // If there is a pending device message (expander fault or RF sensor
     // event) and the bus is idle, send an F1 poll to the target device.
@@ -499,23 +500,39 @@ void VistaBus::rx_tx_task(void *args) {
       // Route the received command byte to the appropriate handler.
       // Each 0xFx value corresponds to a specific panel message type
       // defined by the Ademco ECP protocol.
-      if (buf[0] == 0xF2)
-        vprotocol->dispatchF2();  // keypad poll
-      else if (buf[0] == 0xF6)
-        vprotocol->dispatchF6(pkt_to_send);  // status / command packet
-      else if (buf[0] == 0xF7)
-        vprotocol->dispatchF7();  // long-range radio message
-      else if (buf[0] == 0xF8)
-        vprotocol->dispatchF8();  // zone-expander poll
-      else if (buf[0] == 0xF9)
-        vprotocol->dispatchF9();  // RF receiver poll
-      else if (buf[0] == 0xFA && vprotocol->is_2400)
-        vprotocol->dispatchFA();  // 2400-series extended status
-      else if (buf[0] == 0xFB && vprotocol->is_2400)
-        vprotocol->dispatchFB();  // 2400-series extended data
-      else if (vprotocol->legacy_protocol && vprotocol->is_2400)
-        vprotocol->dispatch_legacyStatusPacket(buf[0]);  // SE-series status
-      else if (buf[0] == 0) {
+      if (buf[0] == 0xF2) {
+        {
+          vprotocol->dispatchF2();  // keypad poll
+        }
+      } else if (buf[0] == 0xF6) {
+        {
+          vprotocol->dispatchF6(pkt_to_send);  // status / command packet
+        }
+      } else if (buf[0] == 0xF7) {
+        {
+          vprotocol->dispatchF7();  // long-range radio message
+        }
+      } else if (buf[0] == 0xF8) {
+        {
+          vprotocol->dispatchF8();  // zone-expander poll
+        }
+      } else if (buf[0] == 0xF9) {
+        {
+          vprotocol->dispatchF9();  // RF receiver poll
+        }
+      } else if (buf[0] == 0xFA && vprotocol->is_2400) {
+        {
+          vprotocol->dispatchFA();  // 2400-series extended status
+        }
+      } else if (buf[0] == 0xFB && vprotocol->is_2400) {
+        {
+          vprotocol->dispatchFB();  // 2400-series extended data
+        }
+      } else if (vprotocol->legacy_protocol && vprotocol->is_2400) {
+        {
+          vprotocol->dispatch_legacyStatusPacket(buf[0]);  // SE-series status
+        }
+      } else if (buf[0] == 0) {
         // Single zero byte — discard silently.
       } else {
 #ifdef DEBUG_LOG
@@ -555,7 +572,7 @@ void VistaBus::monitor_rx_task(void *args) {
   uint8_t buf[1];
   uint32_t val = 0;  // shift register accumulating up to 3 header bytes
 
-  while (1) {
+  while (true) {
     if (this->stop_requested)
       break;
 
@@ -679,10 +696,11 @@ void VistaBus::requestF1(uint8_t address) {
 // DeviceMsg so the rx_tx_task will request an F1 poll slot.
 void VistaBus::setZoneStatusBit(uint8_t zone, bool open) {
   uint8_t address = 0;
-  if (!vprotocol->legacy_protocol)
+  if (!vprotocol->legacy_protocol) {
     address = getExpanderAddress(zone);
-  else
+  } else {
     address = 1;  // legacy SE protocol uses a fixed expander address
+  }
 
   EmulatedExpander *expander = getExpander(address);
   if (expander != nullptr) {
@@ -730,10 +748,11 @@ void VistaBus::sendRFmsg(uint32_t serial, uint8_t msg) {
 // in either case, marking the zone as enrolled.
 void VistaBus::add_emulated_expander(uint8_t zone) {
   uint8_t address = 0;
-  if (!vprotocol->legacy_protocol)
+  if (!vprotocol->legacy_protocol) {
     address = getExpanderAddress(zone);
-  else
+  } else {
     address = 1;
+  }
 
   const uint8_t bit = getZoneBit(zone, vprotocol->legacy_protocol);
 

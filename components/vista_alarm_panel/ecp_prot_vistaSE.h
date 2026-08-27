@@ -76,8 +76,9 @@ class VistaSE : public ProtocolBase<VistaSE> {
         }
         xQueueReceive(this->vistabus_.sendQueue, &pkt, 0);
         break;
-      } else
+      } else {
         break;
+      }
     }
   }
 
@@ -162,12 +163,14 @@ class VistaSE : public ProtocolBase<VistaSE> {
                 // Retry up to twice if the bus is not acknowledged.
                 if (xTaskNotifyWait(0, 0xFFFFFFFF, nullptr, 0) != pdTRUE) {
                   keypad_write_SE(this->vistabus_.uart_num, pkt_to_send.payload);
-                  if (xTaskNotifyWait(0, 0xFFFFFFFF, nullptr, 0) != pdTRUE)
+                  if (xTaskNotifyWait(0, 0xFFFFFFFF, nullptr, 0) != pdTRUE) {
                     keypad_write_SE(this->vistabus_.uart_num, pkt_to_send.payload);
-                  else
+                  } else {
                     data_written = false;
-                } else
+                  }
+                } else {
                   data_written = false;
+                }
 
                 if (data_written)
                   this->req_to_send = false;
@@ -383,8 +386,9 @@ class VistaSE : public ProtocolBase<VistaSE> {
       if (vistabus_.EXPemulation)
         this->quick_decodeFA(received_packet.payload);
       received_packet.source = 0xFA;
-    } else
+    } else {
       received_packet.source = 0xCF;
+    }
 
     xQueueSend(vistabus_.receiveQueue, &received_packet, pdMS_TO_TICKS(0));
   }
@@ -405,22 +409,23 @@ class VistaSE : public ProtocolBase<VistaSE> {
   int keypad_write_SE(uart_port_t uart_n, const char *character) {
     char outbuffer[2];
     memset(outbuffer, '\0', sizeof(outbuffer));
-    if (character[0] >= 0x30 && character[0] <= 0x39)
+    if (character[0] >= 0x30 && character[0] <= 0x39) {
       outbuffer[0] = (character[0] - 0x30);
-    else if (character[0] == 0x23)
+    } else if (character[0] == 0x23) {
       outbuffer[0] = 0x0B;
-    else if (character[0] == 0x2A)
+    } else if (character[0] == 0x2A) {
       outbuffer[0] = 0x0A;
-    else if (character[0] == 0x46)
+    } else if (character[0] == 0x46) {
       outbuffer[0] = 0x0C;
-    else if (character[0] == 0x4D)
+    } else if (character[0] == 0x4D) {
       outbuffer[0] = 0x0D;
-    else if (character[0] == 0x50)
+    } else if (character[0] == 0x50) {
       outbuffer[0] = 0x0E;
-    else if (character[0] == 0x47)
+    } else if (character[0] == 0x47) {
       outbuffer[0] = 0x0F;
-    else if (character[0] >= 0x41 && character[0] <= 0x44)
+    } else if (character[0] >= 0x41 && character[0] <= 0x44) {
       outbuffer[0] = (character[0] - 0x25);
+    }
     uart_tx_chars(uart_n, outbuffer, 1);
     return uart_wait_tx_done(uart_n, pdMS_TO_TICKS(10));
   }

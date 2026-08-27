@@ -21,8 +21,8 @@
 
 // Forward-declare sensor interfaces to avoid pulling in the full ESPHome
 // component tree into every translation unit that includes this header.
-namespace esphome {
-namespace alarm_panel {
+
+namespace esphome::alarm_panel {
 class vistaECPBinarySensor;
 class vistaECPTextSensor;
 
@@ -287,9 +287,10 @@ class ZoneManager {
   // and not emulated).  Used to decide whether the CC1101 packet-absence
   // watchdog should be active — pointless if no physical sensors exist.
   bool has_physical_rf_zones() const {
-    for (const auto &z : zones_)
+    for (const auto &z : zones_) {
       if (z.active && z.rfserial != 0 && !z.emulated)
         return true;
+    }
     return false;
   }
 
@@ -357,5 +358,4 @@ class ZoneManager {
   std::string previous_zone_status_;
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

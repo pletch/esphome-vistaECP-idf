@@ -13,8 +13,7 @@
 #include <cstdio>
 #include <cstdlib>  // abs()
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 static constexpr const char *TAG = "vista-aui";
 
 // ---------------------------------------------------------------------------
@@ -168,10 +167,11 @@ void AUIManager::on_f2_packet(const char *payload, int size, ZoneManager &zones,
   }
 
   // Data length depends on whether the last header byte was 0xEC.
-  if (static_cast<uint8_t>(payload[n - 1]) == 0xEC)
+  if (static_cast<uint8_t>(payload[n - 1]) == 0xEC) {
     data_len = payload[1] - sum + 11;
-  else
+  } else {
     data_len = payload[1] - sum - 7;
+  }
 
   // A zero-length data section is not malformed and must not short-
   // circuit the sum dispatch below.  The panel answers a clock set with
@@ -443,15 +443,15 @@ void AUIManager::process_zone_faults(const char *list, ZoneManager &zones) {
   // Build bitmasks from the decoded zone list.
   for (uint8_t i = 0; i < zone_ct; i++) {
     const uint8_t z = zone_buf[i];
-    if (z >= 1 && z <= 32)
+    if (z >= 1 && z <= 32) {
       mask[0] |= (1u << (z - 1));
-    else if (z >= 33 && z <= 64)
+    } else if (z >= 33 && z <= 64) {
       mask[1] |= (1u << (z - 33));
-    else if (z >= 65 && z <= 96)
+    } else if (z >= 65 && z <= 96) {
       mask[2] |= (1u << (z - 65));
-    else if (z >= 97 && z <= 128)
+    } else if (z >= 97 && z <= 128) {
       mask[3] |= (1u << (z - 97));
-    else {
+    } else {
       ESP_LOGW(TAG, "Zone %d out of supported range (1–128); skipped.", z);
     }
   }
@@ -560,5 +560,4 @@ void AUIManager::on_f2_packet_with_bus(const char *payload, int size, ZoneManage
   on_f2_packet(payload, size, zones, rtc, bus);
 }
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

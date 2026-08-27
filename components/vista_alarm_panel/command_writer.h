@@ -14,8 +14,7 @@
 #include <string>
 #include <cstdint>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 // -----------------------------------------------------------------------
 // CommandWriter
 //
@@ -185,5 +184,4 @@ class CommandWriter {
   bool quick_arm_{false};
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

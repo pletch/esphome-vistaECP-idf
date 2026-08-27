@@ -18,8 +18,7 @@
 #include <cstring>
 #include <cinttypes>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 static constexpr const char *TAG = "vista-zone";
 
 // kDirectSuppressUs is defined centrally in constants.h.
@@ -171,16 +170,18 @@ void ZoneManager::register_zone(vistaECPBinarySensor *sensor, uint8_t partition,
   zones_.push_back(z);
 
   if (rf_serial == 0) {
-    if (emulated)
+    if (emulated) {
       ESP_LOGI(TAG, "Registered emulated hardwired zone %d", zone_number);
-    else
+    } else {
       ESP_LOGI(TAG, "Registered hardwired zone %d", zone_number);
+    }
   } else {
-    if (emulated)
+    if (emulated) {
       ESP_LOGI(TAG, "Registered emulated wireless zone %d  rfserial:%" PRIu32 "  rfloop:%d", zone_number, rf_serial,
                rf_loop);
-    else
+    } else {
       ESP_LOGI(TAG, "Registered wireless zone %d  rfserial:%" PRIu32 "  rfloop:%d", zone_number, rf_serial, rf_loop);
+    }
   }
 }
 
@@ -814,10 +815,11 @@ std::string ZoneManager::build_zone_status_string_locked() const {
       continue;
 
     auto append_seg = [&](const char *prefix) {
-      if (!msg.empty())
+      if (!msg.empty()) {
         snprintf(seg, sizeof(seg), ",%s:%d", prefix, z.zone);
-      else
+      } else {
         snprintf(seg, sizeof(seg), "%s:%d", prefix, z.zone);
+      }
       msg += seg;
     };
 
@@ -836,5 +838,4 @@ std::string ZoneManager::build_zone_status_string_locked() const {
   return msg;
 }
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

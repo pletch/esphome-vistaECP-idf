@@ -28,8 +28,7 @@
 #include <string>
 #include <sys/time.h>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 static constexpr const char *TAG = "vista-pkt";
 
 // ---------------------------------------------------------------------------
@@ -109,10 +108,11 @@ void PacketDispatcher::dispatch_one() {
       // RF receiver zone packet — empty return signals checksum failure.
       if (cfg_.zones != nullptr) {
         std::string serial = cfg_.zones->on_rf_zone_packet(payload, size);
-        if (serial.empty())
+        if (serial.empty()) {
           note_chksum_failure("RF zone packet");
-        else if (cfg_.rf_sensor != nullptr)
+        } else if (cfg_.rf_sensor != nullptr) {
           cfg_.rf_sensor->process(serial);
+        }
       }
     }
   }
@@ -335,12 +335,13 @@ void PacketDispatcher::handle_lrr_packet(const char *payload, int size) {
 
   // Qualifier suffix.
   const char *qual_str;
-  if (c < 400)
+  if (c < 400) {
     qual_str = (qual == 3) ? " is Cleared" : "";
-  else if (c == 570)
+  } else if (c == 570) {
     qual_str = (qual == 1) ? " is Active" : " is Cleared";
-  else
+  } else {
     qual_str = (qual == 1) ? " is Restored" : "";
+  }
 
   const char *lrr_str = lrr_msg_lookup(c);
 
@@ -349,11 +350,12 @@ void PacketDispatcher::handle_lrr_packet(const char *payload, int size) {
   const std::string zn = std::to_string(data);
 
   char msg[100];
-  if (partition)
+  if (partition) {
     snprintf(msg, sizeof(msg), "CID_%d%03d: %s %s %s%s, Partition %d", qual, c, &lrr_str[1], uf, zn.c_str(), qual_str,
              partition);
-  else
+  } else {
     snprintf(msg, sizeof(msg), "CID_%d%03d: %s %s %s%s", qual, c, &lrr_str[1], uf, zn.c_str(), qual_str);
+  }
 
   if (cfg_.lrr_sensor != nullptr)
     cfg_.lrr_sensor->process(msg);
@@ -428,10 +430,11 @@ void PacketDispatcher::print_packet(const char *cbuf, int type, int src, int len
   snprintf(time_str + tlen, sizeof(time_str) - tlen, ".%03ld", tv_now.tv_usec / 1000);
 
   char s2[48];
-  if (type == 0)
+  if (type == 0) {
     snprintf(s2, sizeof(s2), "(PANEL-->%s) [%s]", device, time_str);
-  else
+  } else {
     snprintf(s2, sizeof(s2), "(%s-->PANEL) [%s]", device, time_str);
+  }
 
   bool abbr = false;
 #ifndef DEBUG_LOG
@@ -452,11 +455,11 @@ void PacketDispatcher::print_packet(const char *cbuf, int type, int src, int len
     pos += static_cast<size_t>(snprintf(hex + pos, sizeof(hex) - pos, "..."));
   hex[pos] = '\0';
 
-  if (is_chksum_fail)
+  if (is_chksum_fail) {
     ESP_LOGE(TAG, "%s %s", s2, hex);
-  else
+  } else {
     ESP_LOGD(TAG, "%s %s", s2, hex);
+  }
 }
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

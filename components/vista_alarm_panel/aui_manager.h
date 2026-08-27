@@ -15,8 +15,7 @@
 #include "esphome/components/time/real_time_clock.h"  // time::RealTimeClock, ESPTime
 #include <cstdint>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 // -----------------------------------------------------------------------
 // AUIManager
 //
@@ -176,5 +175,4 @@ class AUIManager {
   AUIRequest request_;  // pending flag, issue timestamp
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

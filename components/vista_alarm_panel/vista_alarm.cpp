@@ -32,8 +32,7 @@
 #include <cinttypes>
 #include <cstring>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 
 // ---------------------------------------------------------------------------
 // OTAGuard — suspends flash-touching tasks during OTA cache-off windows.
@@ -81,11 +80,9 @@ struct VistaESPHome::OTAGuard : public ota::OTAGlobalStateListener {
   }
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 // ---------------------------------------------------------------------------
 // Construction
 //
@@ -353,5 +350,4 @@ void VistaESPHome::rf_direct_task(void * /*args*/) {
 }
 #endif  // CC1101_RECEIVER
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

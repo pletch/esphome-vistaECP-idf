@@ -13,8 +13,7 @@
 #include <cstring>
 #include <cstdio>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 static constexpr const char *TAG = "vista-cmd";
 
 // ---------------------------------------------------------------------------
@@ -103,21 +102,24 @@ bool CommandWriter::send_keys(const char *data, int size, int partition_id, uint
       continue;
     }
     unsigned char c = static_cast<unsigned char>(data[i]);
-    if (c >= 0x20 && c < 0x7F)
+    if (c >= 0x20 && c < 0x7F) {
       pos += snprintf(keylog + pos, sizeof(keylog) - pos, "%c ", c);
-    else
+    } else {
       pos += snprintf(keylog + pos, sizeof(keylog) - pos, "0x%02X ", c);
+    }
   }
-  if (pos > 0)
+  if (pos > 0) {
     keylog[pos - 1] = '\0';  // trim trailing space
-  else
+  } else {
     keylog[0] = '\0';
+  }
 
   const bool ok = bus_.write(data, size, addr, seq);
-  if (ok)
+  if (ok) {
     ESP_LOGI(TAG, "Bus write partition %d (addr 0x%02X): [%s] (%d byte(s))", partition_id, addr, keylog, size);
-  else
+  } else {
     ESP_LOGE(TAG, "Bus write failed partition %d — send queue full. Keys: [%s]", partition_id, keylog);
+  }
   return ok;
 }
 
@@ -339,5 +341,4 @@ bool CommandWriter::keypress(const std::string &keys, int partition_id, const st
   return send_keys(keys.c_str(), len, partition_id, addr, seq);
 }
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

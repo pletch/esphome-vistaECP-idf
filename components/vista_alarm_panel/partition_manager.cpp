@@ -15,8 +15,7 @@
 #include <cstring>
 #include <string>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 static constexpr const char *TAG = "vista-partition";
 
 // ---------------------------------------------------------------------------
@@ -61,16 +60,17 @@ void PartitionManager::register_text_sensor(vistaECPTextSensor *sensor, uint8_t 
 
   const size_t idx = static_cast<size_t>(found);
 
-  if (strcmp(type, "SYSTEM_STATUS") == 0)
+  if (strcmp(type, "SYSTEM_STATUS") == 0) {
     text_sensors_[idx].system_status = sensor;
-  else if (strcmp(type, "LINE1") == 0)
+  } else if (strcmp(type, "LINE1") == 0) {
     text_sensors_[idx].line1 = sensor;
-  else if (strcmp(type, "LINE2") == 0)
+  } else if (strcmp(type, "LINE2") == 0) {
     text_sensors_[idx].line2 = sensor;
-  else if (strcmp(type, "BEEPS") == 0)
+  } else if (strcmp(type, "BEEPS") == 0) {
     text_sensors_[idx].beeps = sensor;
-  else
+  } else {
     ESP_LOGW(TAG, "Unknown text sensor type '%s' for partition %d.", type, partition_number);
+  }
 
   ESP_LOGI(TAG, "Registered text sensor '%s' for partition %d.", type, partition_number);
 }
@@ -85,30 +85,31 @@ void PartitionManager::register_status_sensor(vistaECPBinarySensor *sensor, uint
 
   const size_t idx = static_cast<size_t>(found);
 
-  if (strcmp(type, "READY") == 0)
+  if (strcmp(type, "READY") == 0) {
     status_sensors_[idx].rdy = sensor;
-  else if (strcmp(type, "TROUBLE") == 0)
+  } else if (strcmp(type, "TROUBLE") == 0) {
     status_sensors_[idx].trbl = sensor;
-  else if (strcmp(type, "BYPASS") == 0)
+  } else if (strcmp(type, "BYPASS") == 0) {
     status_sensors_[idx].byp = sensor;
-  else if (strcmp(type, "ARMED_AWAY") == 0)
+  } else if (strcmp(type, "ARMED_AWAY") == 0) {
     status_sensors_[idx].arma = sensor;
-  else if (strcmp(type, "ARMED_STAY") == 0)
+  } else if (strcmp(type, "ARMED_STAY") == 0) {
     status_sensors_[idx].arms = sensor;
-  else if (strcmp(type, "ARMED_INSTANT") == 0)
+  } else if (strcmp(type, "ARMED_INSTANT") == 0) {
     status_sensors_[idx].armi = sensor;
-  else if (strcmp(type, "ARMED_NIGHT") == 0)
+  } else if (strcmp(type, "ARMED_NIGHT") == 0) {
     status_sensors_[idx].armn = sensor;
-  else if (strcmp(type, "ARMED") == 0)
+  } else if (strcmp(type, "ARMED") == 0) {
     status_sensors_[idx].arm = sensor;
-  else if (strcmp(type, "CHIME") == 0)
+  } else if (strcmp(type, "CHIME") == 0) {
     status_sensors_[idx].chm = sensor;
-  else if (strcmp(type, "ALARM") == 0)
+  } else if (strcmp(type, "ALARM") == 0) {
     status_sensors_[idx].alm = sensor;
-  else if (strcmp(type, "FIRE") == 0)
+  } else if (strcmp(type, "FIRE") == 0) {
     status_sensors_[idx].fire = sensor;
-  else
+  } else {
     ESP_LOGW(TAG, "Unknown status sensor type '%s' for partition %d.", type, partition_number);
+  }
 
   ESP_LOGI(TAG, "Registered status sensor '%s' for partition %d.", type, partition_number);
 }
@@ -136,9 +137,9 @@ void PartitionManager::publish_initial_states() {
 // Sequence tracking
 // ---------------------------------------------------------------------------
 
-void PartitionManager::on_keypad_ack(uint8_t raw_addr) {
+void PartitionManager::on_keypad_ack(uint8_t raw_f6_addr_byte) {
   // The raw F6 address byte encodes the keypad in the lower nibble.
-  const uint8_t kp_addr = (raw_addr & 0x0F) | 0x10;
+  const uint8_t kp_addr = (raw_f6_addr_byte & 0x0F) | 0x10;
   for (auto &p : partitions_) {
     if (kp_addr == p.assigned_keypad) {
       p.keypad_sequence += 0x40;
@@ -303,10 +304,11 @@ LightStates PartitionManager::decode_light_states(const StatusFlags &flags) cons
     if (flags.night) {
       s.night = true;
       s.stay = true;
-    } else if (flags.armed_away)
+    } else if (flags.armed_away) {
       s.away = true;
-    else
+    } else {
       s.stay = true;
+    }
   }
 
   // Trouble is a derived flag: no AC, or battery issue, or device check.
@@ -460,5 +462,4 @@ void PartitionManager::tick_battery_decay(int64_t ttl) {
     current_bat_state_ = false;
 }
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

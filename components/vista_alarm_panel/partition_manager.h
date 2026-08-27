@@ -20,8 +20,8 @@
 // Forward-declare ESPHome sensor base interfaces so this header does not
 // pull in the full ESPHome component tree. Callers that actually register
 // sensors will include vistaalarm.h (which defines the concrete types).
-namespace esphome {
-namespace alarm_panel {
+
+namespace esphome::alarm_panel {
 class vistaECPBinarySensor;
 class vistaECPTextSensor;
 
@@ -224,5 +224,4 @@ class PartitionManager {
   bool last_program_mode_{false};
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

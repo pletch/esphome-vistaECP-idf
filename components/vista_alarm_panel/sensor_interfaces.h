@@ -11,8 +11,7 @@
 
 #include <string>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 class vistaECPBinarySensor {
  public:
   virtual void process(bool triggered) = 0;
@@ -25,5 +24,4 @@ class vistaECPTextSensor {
   virtual ~vistaECPTextSensor() = default;
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

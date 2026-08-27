@@ -36,8 +36,7 @@
 #include <string>
 #include <cstdint>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 // Sensor interface base classes are defined in sensor_interfaces.h so
 // that translation units which call ->process() can include that header
 // without pulling in the full ESPHome component tree.
@@ -155,14 +154,15 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   void register_text_sensor(vistaECPTextSensor *sensor, uint8_t partition_number, const char *type) {
     // LRR and RF message sensors are not partition-specific; intercept
     // them here and store locally for PacketDispatcher::Config.
-    if (strcmp(type, "LRR_MESSAGES") == 0)
+    if (strcmp(type, "LRR_MESSAGES") == 0) {
       lrr_sensor_ = sensor;
-    else if (strcmp(type, "RF_MESSAGES") == 0)
+    } else if (strcmp(type, "RF_MESSAGES") == 0) {
       rf_sensor_ = sensor;
-    else if (strcmp(type, "ZONE_STATUS") == 0)
+    } else if (strcmp(type, "ZONE_STATUS") == 0) {
       zones_.register_zone_status_sensor(sensor);
-    else
+    } else {
       partitions_.register_text_sensor(sensor, partition_number, type);
+    }
   }
 
   void set_chksum_fail_sensor(text_sensor::TextSensor *s) { chksum_fail_sensor_ = s; }
@@ -230,6 +230,11 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
                            /*in_program_mode=*/false, this);
   }
 
+  // std::string must be taken by value here: esphome's to_service_arg_type<> is
+  // specialised for std::string but not for const std::string &, and it is
+  // declared without a generic definition, so a reference would compile and
+  // then fail to link.
+  // NOLINTNEXTLINE(performance-unnecessary-value-param)
   void svc_alarm_keypress(std::string keys) {
     if (not_ready("alarm_keypress"))
       return;
@@ -238,6 +243,11 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
     cmd_.keypress(keys, default_partition_);
   }
 
+  // std::string must be taken by value here: esphome's to_service_arg_type<> is
+  // specialised for std::string but not for const std::string &, and it is
+  // declared without a generic definition, so a reference would compile and
+  // then fail to link.
+  // NOLINTNEXTLINE(performance-unnecessary-value-param)
   void svc_alarm_keypress_partition(std::string keys, int32_t partition) {
     if (not_ready("alarm_keypress_partition"))
       return;
@@ -246,6 +256,11 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
     cmd_.keypress(keys, static_cast<int>(partition));
   }
 
+  // std::string must be taken by value here: esphome's to_service_arg_type<> is
+  // specialised for std::string but not for const std::string &, and it is
+  // declared without a generic definition, so a reference would compile and
+  // then fail to link.
+  // NOLINTNEXTLINE(performance-unnecessary-value-param)
   void svc_alarm_disarm(std::string code, int32_t partition) {
     if (not_ready("alarm_disarm"))
       return;
@@ -271,12 +286,22 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
     cmd_.arm_away(static_cast<int>(partition));
   }
 
+  // std::string must be taken by value here: esphome's to_service_arg_type<> is
+  // specialised for std::string but not for const std::string &, and it is
+  // declared without a generic definition, so a reference would compile and
+  // then fail to link.
+  // NOLINTNEXTLINE(performance-unnecessary-value-param)
   void svc_alarm_trigger_panic(std::string code, int32_t partition) {
     if (not_ready("alarm_trigger_panic"))
       return;
     cmd_.trigger_panic(static_cast<int>(partition), code);
   }
 
+  // std::string must be taken by value here: esphome's to_service_arg_type<> is
+  // specialised for std::string but not for const std::string &, and it is
+  // declared without a generic definition, so a reference would compile and
+  // then fail to link.
+  // NOLINTNEXTLINE(performance-unnecessary-value-param)
   void svc_alarm_trigger_fire(std::string code, int32_t partition) {
     if (not_ready("alarm_trigger_fire"))
       return;
@@ -382,5 +407,4 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   static constexpr const char *TAG = "vista-alarm";
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

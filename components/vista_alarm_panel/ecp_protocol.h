@@ -78,7 +78,7 @@ class VistaECP {
   // Encode a SendPacket into ECP wire format and write it to the UART.
   // Prepends the sequence number and length byte, translates ASCII key codes
   // to ECP numeric values (if type==1), and appends a two's-complement checksum.
-  int keypad_write(const uart_port_t uart_n, const SendPacket &pkt_to_send);
+  int keypad_write(uart_port_t uart_n, const SendPacket &pkt_to_send);
 
   // Drain the UART event queue into rxbuf, reading at most 'len' bytes.
   // Handles UART_DATA and UART_BREAK events; ignores other event types.

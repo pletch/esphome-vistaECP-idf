@@ -21,8 +21,7 @@
 #include "esphome/components/text_sensor/text_sensor.h"
 #include <cstdint>
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 class vistaECPTextSensor;
 
 // -----------------------------------------------------------------------
@@ -142,5 +141,4 @@ class PacketDispatcher {
   char legacy_cmd_buffer_[48]{};
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel

@@ -321,22 +321,23 @@ int VistaECP::keypad_write(const uart_port_t uart_n, const SendPacket &pkt_to_se
       outbuffer[i] = pkt_to_send.payload[i - 2];
     } else  // translate from ASCII keypad characters to ECP codes
     {
-      if (pkt_to_send.payload[i - 2] >= 0x30 && pkt_to_send.payload[i - 2] <= 0x39)
+      if (pkt_to_send.payload[i - 2] >= 0x30 && pkt_to_send.payload[i - 2] <= 0x39) {
         outbuffer[i] = (pkt_to_send.payload[i - 2] - 0x30);  // '0'–'9' → 0–9
-      else if (pkt_to_send.payload[i - 2] == 0x23)
+      } else if (pkt_to_send.payload[i - 2] == 0x23) {
         outbuffer[i] = 0x0B;  // '#'
-      else if (pkt_to_send.payload[i - 2] == 0x2A)
+      } else if (pkt_to_send.payload[i - 2] == 0x2A) {
         outbuffer[i] = 0x0A;  // '*'
-      else if (pkt_to_send.payload[i - 2] == 0x46)
+      } else if (pkt_to_send.payload[i - 2] == 0x46) {
         outbuffer[i] = 0x0C;  // 'F' — function key
-      else if (pkt_to_send.payload[i - 2] == 0x4D)
+      } else if (pkt_to_send.payload[i - 2] == 0x4D) {
         outbuffer[i] = 0x0D;  // 'M'
-      else if (pkt_to_send.payload[i - 2] == 0x50)
+      } else if (pkt_to_send.payload[i - 2] == 0x50) {
         outbuffer[i] = 0x0E;  // 'P'
-      else if (pkt_to_send.payload[i - 2] == 0x47)
+      } else if (pkt_to_send.payload[i - 2] == 0x47) {
         outbuffer[i] = 0x0F;  // 'G'
-      else if (pkt_to_send.payload[i - 2] >= 0x41 && pkt_to_send.payload[i - 2] <= 0x44)
+      } else if (pkt_to_send.payload[i - 2] >= 0x41 && pkt_to_send.payload[i - 2] <= 0x44) {
         outbuffer[i] = (pkt_to_send.payload[i - 2] - 0x25);  // 'A'–'D' → 0x1C–0x1F
+      }
     }
     chksum += outbuffer[i];
   }
@@ -418,10 +419,11 @@ void VistaECP::dispatchF6(const SendPacket &pkt_to_send) {
 
   // Classify the source address: primary keypad vs. expansion device.
   if (received_packet.payload[1] == 1 || received_packet.payload[1] == 2 || received_packet.payload[1] == 5 ||
-      received_packet.payload[1] == 6)
+      received_packet.payload[1] == 6) {
     received_packet.source = 0xF2;  // primary keypad address range
-  else
+  } else {
     received_packet.source = 0xF6;
+  }
 
   xQueueSend(vistabus_.receiveQueue, &received_packet, pdMS_TO_TICKS(20));
 
@@ -596,8 +598,9 @@ void VistaECP::dispatchF9() {
       // has a very short ACK window that cannot wait for the receive queue.
       if (vistabus_.LRRemulation)
         this->quick_decodeF9(received_packet.payload);
-    } else
+    } else {
       received_packet.source = 0xCF;
+    }
 
     xQueueSend(vistabus_.receiveQueue, &received_packet, pdMS_TO_TICKS(0));
 
@@ -856,10 +859,11 @@ void VistaECP::dispatch_extF6(uint32_t val, uint8_t header) {
 
   // Classify source the same way as the primary F6 handler.
   if (static_cast<uint8_t>(val) == 1 || static_cast<uint8_t>(val) == 2 || static_cast<uint8_t>(val) == 5 ||
-      static_cast<uint8_t>(val) == 6)
+      static_cast<uint8_t>(val) == 6) {
     rcvd_extPkt.source = 0xF2;
-  else
+  } else {
     rcvd_extPkt.source = 0xF6;
+  }
 
   xQueueSend(vistabus_.receiveQueue, &rcvd_extPkt, pdMS_TO_TICKS(0));
 }

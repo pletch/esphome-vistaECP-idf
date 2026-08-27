@@ -612,12 +612,13 @@ inline const char *lrr_msg_lookup(int statusCode) {
   int lo = 0, hi = LRR_TABLE_SIZE - 1;
   while (lo <= hi) {
     int mid = lo + (hi - lo) / 2;
-    if (lrr_lookup_table[mid].code == statusCode)
+    if (lrr_lookup_table[mid].code == statusCode) {
       return lrr_msg_values[lrr_lookup_table[mid].idx];
-    else if (lrr_lookup_table[mid].code < statusCode)
+    } else if (lrr_lookup_table[mid].code < statusCode) {
       lo = mid + 1;
-    else
+    } else {
       hi = mid - 1;
+    }
   }
   return lrr_msg_values[LRR_MSG_UNKNOWN_IDX];
 }

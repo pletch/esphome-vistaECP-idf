@@ -13,6 +13,8 @@
 #include "vista_bus.h"
 
 template<typename ProtocolType> class ProtocolBase : public VistaECP {
+  ProtocolBase() = default;
+
  public:
   using VistaECP::VistaECP;
   void check_send_Q(SendPacket &pkt) { static_cast<ProtocolType *>(this)->check_send_Q_impl(pkt); }
@@ -30,4 +32,5 @@ template<typename ProtocolType> class ProtocolBase : public VistaECP {
   void dispatchFA() { static_cast<ProtocolType *>(this)->dispatchFA_impl(); }
 
  private:
+  friend ProtocolType;
 };

@@ -81,7 +81,7 @@ int toInt(const std::string &s, int base) {
 
 // Return true if the first 'len' bytes of a1 and a2 are identical.
 // Short-circuits on the first mismatch for efficiency.
-bool areEqual(char *a1, char *a2, uint8_t len) {
+bool areEqual(const char *a1, const char *a2, uint8_t len) {
   for (int x = 0; x < len; x++) {
     if (a1[x] != a2[x])
       return false;

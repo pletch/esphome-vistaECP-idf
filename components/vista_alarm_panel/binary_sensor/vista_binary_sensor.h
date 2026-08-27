@@ -12,8 +12,7 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "../vista_alarm.h"
 
-namespace esphome {
-namespace alarm_panel {
+namespace esphome::alarm_panel {
 
 class VistaBinarySensor : public binary_sensor::BinarySensor,
                           public vistaECPBinarySensor,
@@ -24,5 +23,4 @@ class VistaBinarySensor : public binary_sensor::BinarySensor,
  protected:
 };
 
-}  // namespace alarm_panel
-}  // namespace esphome
+}  // namespace esphome::alarm_panel
