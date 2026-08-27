@@ -185,15 +185,48 @@ public:
         return bytes;
     }
 
-    // Block on the external UART until one byte arrives, then load the task-
-    // notification value from rx_tx_task into val.  The notification carries the
-    // leading packet-type byte so the monitor task can select the right dispatcher.
+    // Wait for rx_tx_task to say what the panel just asked for, then read the
+    // addressed device's reply off the green wire.
+    //
+    // Notification first, mirroring VistaSE::monitor_task_sync_impl.  The previous
+    // order was inverted -- read a byte, then go looking for the context it
+    // belonged to -- and a byte whose notification had already been overwritten
+    // cost the full wait before being dispatched blind.  Once this task fell
+    // behind, every stale byte still in the driver's ring paid that price in turn,
+    // so the backlog drained slower than a busy bus refilled it.  That is the
+    // green-wire desync seen after a boot-time stall: a long run of single bytes
+    // logged one per timeout period, and a length byte read from the middle of a
+    // frame large enough to trip the get_packet() capacity clamp.
+    //
+    // Nothing is lost by waiting for the notification first.  The green-wire UART
+    // buffers whatever arrives regardless, so the notification governs only *when*
+    // this task drains, never *whether* it does.  A notification carrying no
+    // recognised header still falls through to a read, exactly as the SE path
+    // does: the notification is a clock, not a filter.
+    //
+    // Costs one green byte per notification for traffic that matches no header
+    // (dispatchDebug).  Notifications arrive several times a second from the F6 /
+    // F8 / F9 / FA / FB dispatchers, so a backlog still clears far faster than the
+    // one-byte-per-timeout crawl it replaces.
     int monitor_task_sync_impl(uint8_t *buf, uint32_t &val)
     {
-        int bytes = uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1, portMAX_DELAY);
-        if (val == 0)
-            xTaskNotifyWait(0, 0xFFFFFFFF, &val, pdMS_TO_TICKS(400));
-        return bytes;
+        // Bounded rather than portMAX_DELAY: monitor_rx_task can only observe
+        // stop_requested between calls, and VistaBus::stop() can no longer wake
+        // this task with a green-wire byte now that it parks on a notification
+        // instead of a read.  On timeout val is left at zero and no byte is
+        // returned, so the caller simply loops.
+        constexpr uint32_t kSyncNotifyWaitMs = 500;
+
+        // Same 20 ms the SE path allows: the reply follows the poll immediately,
+        // and the byte is usually already buffered by the time we are woken.
+        constexpr uint32_t kSyncReadWaitMs = 20;
+
+        if (xTaskNotifyWait(0xFFFFFFFF, 0xFFFFFFFF, &val,
+                            pdMS_TO_TICKS(kSyncNotifyWaitMs)) != pdPASS)
+            return 0;
+
+        return uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1,
+                               pdMS_TO_TICKS(kSyncReadWaitMs));
     }
 
     // Respond to a 0xFA expander poll in-line for timing.

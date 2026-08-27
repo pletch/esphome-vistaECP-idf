@@ -130,13 +130,20 @@ bool VistaBus::stop()
 {
     this->stop_requested = true;
 
-    // monitor_rx_task is parked in uart_read_bytes on ext_uart_num.  The ECP
-    // bus wires tx_pin (uart_num's output) and monitor_pin (ext_uart_num's
-    // input) to the same shared green wire, so a byte written on uart_num is
-    // received by ext_uart_num and unblocks the monitor read.
+    // Wake monitor_rx_task so it can observe stop_requested.  Where it is parked
+    // depends on the protocol: the SE handler blocks on a task notification, and
+    // the Vista20P handler now does the same, while both fall back to a read on
+    // ext_uart_num.  Notify it directly and also write a byte on uart_num -- the
+    // ECP bus wires tx_pin (uart_num's output) and monitor_pin (ext_uart_num's
+    // input) to the same shared green wire, so the write unblocks a parked read.
+    // Either path is enough on its own; sending both keeps this independent of
+    // which protocol handler is compiled in.
     char tmp[1] = {static_cast<char>(0xFF)};
     while (monitor_rx_task_Handle != nullptr)
     {
+        TaskHandle_t mon = monitor_rx_task_Handle;
+        if (mon != nullptr)
+            xTaskNotify(mon, 0, eSetValueWithOverwrite);
         uart_write_bytes(this->uart_num, tmp, 1);
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -603,8 +610,16 @@ void VistaBus::rx_tx_task(void *args)
 // configured in RX-only mode.  Expansion modules and RF receivers transmit
 // their responses on this wire.  Data arrives as 1–3 byte sequences; the
 // first byte(s) identify the message type and the final byte carries the
-// payload.  The accumulated value 'val' shifts in received bytes and is
-// compared against known header patterns to route each message.
+// payload.
+//
+// 'val' is NOT a shift register over received bytes, despite how the header
+// tests below read.  It is the context word rx_tx_task hands over by task
+// notification when it dispatches a yellow-wire poll -- 0xF6 << 8 | address,
+// 0xFB << 16 | address << 8 | type, and so on.  buf[0] carries the green-wire
+// byte, separately.  The tests match on val's upper bytes to decide which
+// dispatcher owns the reply; each dispatcher then drains the rest of that
+// message from ext_uart_num itself, which is why one byte per notification is
+// enough to keep pace.
 void VistaBus::monitor_rx_task(void *args)
 {
     uint8_t  buf[1];
