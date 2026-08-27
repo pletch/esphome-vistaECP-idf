@@ -458,16 +458,27 @@ void VistaECP::dispatchF6(const SendPacket &pkt_to_send)
         data[rxBytes] = 0;
         this->keypad_write(vistabus_.uart_num, pkt_to_send);
 
-        // Wait for the panel to echo our sequence number as confirmation.
+        // uart_write_bytes() returns once the frame is queued, not once it is on
+        // the wire.  The panel cannot echo anything until our transmission has
+        // finished clocking out, so that has to be waited for separately -- a
+        // single combined timeout has to cover both, and sizing it for the echo
+        // alone expires before we have even stopped talking.  A SendPacket
+        // payload is up to 24 bytes, so a wire frame runs to 27 bytes, and at
+        // 4800 baud 8E2 (12 bits per byte, 2.5 ms) that is 67.5 ms of
+        // transmission before the panel gets its turn.
+        constexpr uint32_t kWriteTxDoneWaitMs = 80;
+        uart_wait_tx_done(vistabus_.uart_num, pdMS_TO_TICKS(kWriteTxDoneWaitMs));
+
+        // Now wait for the panel to echo our sequence number as confirmation.
         //
-        // Keep this short.  It blocks rx_tx_task, which is what drains the UART
-        // event queue, so the wait is bounded by how much traffic that queue can
-        // absorb meanwhile -- see kUartEventQueueDepth.  It was 100 ms, longer
-        // than the queue could hold, which made a missing echo cost dropped
-        // events and a truncated read on the frame that followed.  The panel
-        // echoes promptly when it echoes at all; waiting longer cannot produce a
-        // byte that is not coming.
-        constexpr uint32_t kSequenceEchoWaitMs = 20;
+        // Measured from the end of our transmission rather than the start of it,
+        // so this only has to cover the panel's turnaround.  Splitting the two
+        // also keeps the total proportional to the frame actually sent: a 9-byte
+        // AUI write clears its TX wait in about 22 ms instead of reserving the
+        // worst case.  Both halves block rx_tx_task, which is what drains the
+        // UART event queue, so the total still wants to stay inside what that
+        // queue can absorb -- see kUartEventQueueDepth.
+        constexpr uint32_t kSequenceEchoWaitMs = 30;
         rxBytes = this->get_packet_event(&received_packet, data, 0, 1,
                                           vistabus_.uart_num,
                                           pdMS_TO_TICKS(kSequenceEchoWaitMs),
