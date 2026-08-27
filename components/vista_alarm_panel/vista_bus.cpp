@@ -100,6 +100,17 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum, int moni
 
     // The primary RX/TX task runs at the highest possible FreeRTOS priority so
     // it can respond to panel poll cycles without being pre-empted.
+    //
+    // Deliberately NOT pinned.  Pinning it to core 1 was tried and made frame
+    // corruption dramatically worse: the UART driver's interrupt is installed by
+    // init_uart() above, which runs on the caller's core (core 0), so pinning the
+    // consumer to core 1 put a cross-core wakeup on the path of every single UART
+    // event.  Leaving the task unpinned lets the scheduler keep it with its
+    // interrupt.  Do not "optimise" this without measuring frame failure rate.
+    // Capture the register image of each ECP line rate now, while nothing is
+    // time-critical, so the preamble handler can switch rates with two stores.
+    cache_baud_registers();
+
     xTaskCreate(rx_tx_task_start, "uart_rx_tx_task", kUartRxTxTaskStackSize,
                 (void *)this, configMAX_PRIORITIES - 1, &this->rx_tx_task_Handle);
 
@@ -272,15 +283,25 @@ void VistaBus::capture_pulse_pattern(gpio_num_t rx_pin)
 // receive failed (blocking path should not return false unless reset).
 bool VistaBus::read_packet(char *data, int &len, int &type, int &src, bool with_delay)
 {
-    ReceivedPacket pkt;
+    ReceivedPacket pkt{};
     const bool result = with_delay
         ? xQueueReceive(this->receiveQueue, &pkt, portMAX_DELAY) == pdPASS
         : xQueueReceive(this->receiveQueue, &pkt, 0)             == pdPASS;
 
     if (result)
     {
-        memcpy(data, pkt.payload, static_cast<size_t>(pkt.size));
-        len  = pkt.size;
+        // Clamp defensively: pkt.size is an int written by a dozen dispatch
+        // handlers, and a negative or oversized value here would become an
+        // unbounded write into the caller's buffer.  Callers pass a buffer at
+        // least as large as ReceivedPacket::payload.
+        int n = pkt.size;
+        if (n < 0)
+            n = 0;
+        if (n > static_cast<int>(sizeof(pkt.payload)))
+            n = static_cast<int>(sizeof(pkt.payload));
+
+        memcpy(data, pkt.payload, static_cast<size_t>(n));
+        len  = n;
         type = pkt.type;
         src  = pkt.source;
         return true;
@@ -347,6 +368,61 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
         ESP_ERROR_CHECK(uart_set_line_inverse(u_n, UART_SIGNAL_RXD_INV | UART_SIGNAL_TXD_INV));
         ESP_ERROR_CHECK(uart_enable_tx_intr(u_n, 1, 0));
     }
+}
+
+// Snapshot the UART clock registers for both ECP line rates.
+//
+// uart_set_baudrate() is called once per rate and the resulting register image
+// read straight back out, so the cache carries whatever clock source and
+// prescaler the driver chose without this code having to reproduce -- or stay
+// in step with -- the divider arithmetic in uart_ll_set_baudrate().
+//
+// Leaves the port at kEcpBaudStandard, which is where init_uart() put it and
+// where the bus rests between FA/FB preambles.
+//
+// CAUTION: the cached divider is only valid for the UART source clock in effect
+// when it was captured.  uart_set_baudrate() re-derives the divider from the
+// live clock frequency on every call; set_baud_fast() cannot, because skipping
+// that lookup is the point.  This is safe today only because the build fixes
+// the CPU at 240 MHz with CONFIG_PM_ENABLE off, so APB -- and therefore the
+// UART source clock -- never moves.  If dynamic frequency scaling is ever
+// enabled, re-run this after any clock change or drop back to
+// uart_set_baudrate(), or the 2400-baud preamble will be sampled at the wrong
+// rate.
+void VistaBus::cache_baud_registers()
+{
+    if (uart_set_baudrate(this->uart_num, kEcpBaudLegacy) != ESP_OK)
+    {
+        ESP_LOGW(TAG, "could not set %u baud; fast rate switching disabled",
+                 static_cast<unsigned>(kEcpBaudLegacy));
+        uart_set_baudrate(this->uart_num, kEcpBaudStandard);
+        return;
+    }
+    this->baud_regs_legacy.clkdiv = REG_READ(UART_CLKDIV_REG(this->uart_num));
+#ifdef UART_CLK_CONF_REG
+    this->baud_regs_legacy.clk_conf = REG_READ(UART_CLK_CONF_REG(this->uart_num));
+#endif
+
+    if (uart_set_baudrate(this->uart_num, kEcpBaudStandard) != ESP_OK)
+    {
+        ESP_LOGW(TAG, "could not restore %u baud; fast rate switching disabled",
+                 static_cast<unsigned>(kEcpBaudStandard));
+        return;
+    }
+    this->baud_regs_standard.clkdiv = REG_READ(UART_CLKDIV_REG(this->uart_num));
+#ifdef UART_CLK_CONF_REG
+    this->baud_regs_standard.clk_conf = REG_READ(UART_CLK_CONF_REG(this->uart_num));
+#endif
+
+    this->baud_regs_valid = true;
+    ESP_LOGD(TAG, "cached ECP baud registers: %u clkdiv=%08lX clk_conf=%08lX / "
+                  "%u clkdiv=%08lX clk_conf=%08lX",
+             static_cast<unsigned>(kEcpBaudLegacy),
+             static_cast<unsigned long>(this->baud_regs_legacy.clkdiv),
+             static_cast<unsigned long>(this->baud_regs_legacy.clk_conf),
+             static_cast<unsigned>(kEcpBaudStandard),
+             static_cast<unsigned long>(this->baud_regs_standard.clkdiv),
+             static_cast<unsigned long>(this->baud_regs_standard.clk_conf));
 }
 
 
@@ -636,11 +712,12 @@ VistaBus::EmulatedExpander *VistaBus::getExpander(uint8_t address)
 // available bus window; the target device responds with its state.
 void VistaBus::requestF1(uint8_t address)
 {
-    SendPacket pkt;
+    SendPacket pkt{};
     pkt.type           = 2;
     pkt.keypadaddress  = address;
     pkt.payload[0]     = 0;
     pkt.size           = 0;
+    pkt.sequence       = 0;   // type-2 pulse carries no sequence; set it explicitly
     xQueueSend(sendQueue, &pkt, 0);
 }
 

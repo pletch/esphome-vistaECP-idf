@@ -87,9 +87,15 @@ public:
     int handle_UART_events_impl(const SendPacket &pkt_to_send, uint8_t *buf)
     {
         int bytes = 0;
-        uart_event_t event;
-        xQueueReceive(this->vistabus_.uartevtQueue, (void *)&event,
-                      pdMS_TO_TICKS(kPulseCyclePeriod));
+        uart_event_t event{};
+        // The receive can time out (the panel's poll cycle is longer than some
+        // pulse periods).  Bail out rather than switching on an event that was
+        // never written: 'event' would hold stack garbage, which can match
+        // UART_BREAK and run the whole break-handling path on nothing.
+        if (xQueueReceive(this->vistabus_.uartevtQueue, (void *)&event,
+                          pdMS_TO_TICKS(kPulseCyclePeriod)) != pdPASS)
+            return 0;
+
         switch (event.type)
         {
             case UART_DATA:
@@ -127,11 +133,37 @@ public:
                                 uart_read_bytes_event(this->vistabus_.uart_num, buf, 1,
                                                       pdMS_TO_TICKS(4),
                                                       this->vistabus_.uartevtQueue); // flush leading zero
-                                uart_set_baudrate(this->vistabus_.uart_num, kEcpBaudLegacy);
-                                bytes = uart_read_bytes_event(this->vistabus_.uart_num, buf, 1,
-                                                              pdMS_TO_TICKS(10),
-                                                              this->vistabus_.uartevtQueue);
-                                uart_set_baudrate(this->vistabus_.uart_num, kEcpBaudStandard);
+                                this->vistabus_.set_baud_fast(false);
+
+                                // Byte 0 of the frame arrives at 2400; bytes 1-4 at
+                                // 4800.  The divider has to be back at 4800 before
+                                // the panel clocks out byte 1 — about 208 us of
+                                // margin — so the restore happens the moment the
+                                // UART_DATA event lands, ahead of actually draining
+                                // the byte.  The byte was fully sampled and copied
+                                // into the driver's ring buffer before the event was
+                                // posted, so reading it after the divider changes is
+                                // safe; holding 2400 across the read only widened the
+                                // window for nothing.
+                                uart_event_t pre_evt{};
+                                bytes = 0;
+
+                                while (xQueueReceive(this->vistabus_.uartevtQueue,
+                                                     (void *)&pre_evt, pdMS_TO_TICKS(10)) == pdPASS)
+                                {
+                                    // BREAK and error events are not the preamble
+                                    // byte; keep waiting for the one that is.
+                                    if (pre_evt.type != UART_DATA)
+                                        continue;
+
+                                    this->vistabus_.set_baud_fast(true);
+                                    bytes = uart_read_bytes(this->vistabus_.uart_num, buf, 1, 0);
+                                    break;
+                                }
+
+                                if (bytes <= 0)
+                                    this->vistabus_.set_baud_fast(true);
+
                                 this->is_2400 = true;
                             }
                         }
@@ -199,15 +231,28 @@ public:
                 if (type == 0xF1)
                 {
                     // Zone-state request: consume one pending DeviceMsg and reply.
-                    DeviceMsg expMsg;
-                    xQueueReceive(vistabus_.deviceMsgQueue, &expMsg, pdMS_TO_TICKS(25));
-                    lcbuf[0] = address;
-                    lcbuf[1] = exp_sequence;
-                    uint8_t z = expMsg.source & 0x07;
-                    lcbuf[2] = z ? 0 : 0x01;
-                    lcbuf[3] = (z << 5) ^ (0x10 * expMsg.msg);
-                    lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
-                    uart_write_bytes(vistabus_.uart_num, lcbuf, 5);
+                    //
+                    // Blocking wait: the panel must be given time to respond
+                    // within this exchange.  In normal operation it returns
+                    // immediately — this is the grant for a nudge we requested,
+                    // and rx_tx_task only nudges when the queue is already
+                    // non-empty (see the deviceMsgQueue notes in vista_bus.h).
+                    //
+                    // Only reply if a message was actually dequeued: on a timeout,
+                    // DeviceMsg's member initialisers would otherwise produce a
+                    // well-formed but meaningless zone-0 / no-fault frame.
+                    DeviceMsg expMsg{};
+                    if (xQueueReceive(vistabus_.deviceMsgQueue, &expMsg,
+                                      pdMS_TO_TICKS(25)) == pdPASS)
+                    {
+                        lcbuf[0] = address;
+                        lcbuf[1] = exp_sequence;
+                        uint8_t z = expMsg.source & 0x07;
+                        lcbuf[2] = z ? 0 : 0x01;
+                        lcbuf[3] = (z << 5) ^ (0x10 * expMsg.msg);
+                        lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
+                        uart_write_bytes(vistabus_.uart_num, lcbuf, 5);
+                    }
                 }
                 else if (type == 0xF7)
                 {
@@ -229,7 +274,7 @@ public:
     void dispatchFA_impl()
     {
         uint8_t data[kFAMessageLength + 1];
-        ReceivedPacket received_packet;
+        ReceivedPacket received_packet{};
         received_packet.type       = 0;
         received_packet.payload[0] = 0xFA;
         uint8_t length             = kFAMessageLength;
@@ -237,7 +282,7 @@ public:
         int  rxBytes = this->get_packet_event(&received_packet, data, 1, length - 1,
                                               vistabus_.uart_num,
                                               pdMS_TO_TICKS(kUartDelay),
-                                              vistabus_.uartevtQueue);
+                                              vistabus_.uartevtQueue, sizeof(data));
         bool chk = valid_chksum(received_packet.payload, 0, rxBytes + 1);
         if (chk)
         {

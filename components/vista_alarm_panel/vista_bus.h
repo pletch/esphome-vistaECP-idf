@@ -31,12 +31,14 @@ Date: 2-Feb-2025
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "hal/uart_ll.h"
+#include "soc/uart_reg.h"
 #include <vector>
 #include <memory>
 #include "esphome/core/log.h"
 #include "esphome/core/defines.h"
 #include "helper_structs.h"
 #include "helper_funcs.h"
+#include "constants.h"
 
 // Select the ECP protocol implementation at compile time.
 // Vista20P handles modern 20P-series panels; VistaSE handles older SE-series panels.
@@ -117,6 +119,26 @@ public:
     // sendQueue     – commands queued by the application for transmission.
     // receiveQueue  – decoded packets delivered to the application via read_packet().
     // deviceMsgQueue– pending expander / RF device notifications waiting for an F1 poll slot.
+    //                 Carries two message families distinguished by DeviceMsg::address:
+    //                   expander (setZoneStatusBit): address 7-11 (1 on legacy SE),
+    //                                                source = zone number
+    //                   RF       (sendRFmsg):        address = emulated RF receiver,
+    //                                                source = 20-bit sensor serial
+    //
+    //                 Consumers (quick_decodeFA / quick_decodeFB) take the head
+    //                 without inspecting its address, which is safe because the
+    //                 head is always the message the current exchange is for:
+    //                   - rx_tx_task only nudges when the queue is non-empty, and
+    //                     takes the nudge address from the peeked head.
+    //                   - Only one nudge is outstanding at a time (gated on
+    //                     !req_to_send), and mark_pulse asserts just that address.
+    //                   - The panel does not queue requests: it always answers a
+    //                     nudge with an FA/FB 0xF1 grant for that device, and only
+    //                     ever sends 0xF1 in response to one.  Supervision polls
+    //                     (FA 0xF7, FB 0x60/0x81/0x82) do not touch this queue.
+    //                   - Single-consumer: every dequeue happens on rx_tx_task.
+    //                 So no interleaving can put another device's message at the
+    //                 head mid-exchange, and address filtering is unnecessary.
     // rf_direct_queue – RfDirectMsg items posted by CC1101Receiver for the fast
     //                   direct-to-HA path; consumed by VistaESPHome::rf_direct_task().
     QueueHandle_t uartevtQueue;
@@ -133,6 +155,82 @@ public:
     uart_port_t uart_num;       // Primary UART (keypad RX+TX).
     uart_port_t ext_uart_num;   // Secondary (monitor) UART for expansion-bus traffic.
     gpio_num_t  rx_pin;         // Primary UART RX gpio.
+
+    // --- fast line-rate switching for the 2400-baud FA/FB preamble ---
+    //
+    // Byte 0 of an FA/FB frame is clocked at 2400 and bytes 1-4 at 4800, so the
+    // divider has to be back at 4800 before the panel starts byte 1.  That
+    // start bit follows byte 0's stop bits with only about one bit time
+    // (208 us) of slack, and uart_set_baudrate() spends a meaningful part of
+    // that budget: it queries the clock source and performs a 32-bit division
+    // on every call, with nothing stopping an interrupt landing in the middle.
+    // If the divider is still wrong when byte 1's start bit is sampled the
+    // receiver mis-qualifies the edge and the byte reads back shifted one bit
+    // position -- 0x02 comes out as 0x81 with a parity error but no framing
+    // error, which is exactly the corruption seen on the bus.
+    // Raw register images rather than named bit-fields: the divider lives in
+    // UART_CLKDIV_REG on every ESP32 variant, while the prescaler that some
+    // variants add sits in UART_CLK_CONF_REG and the struct field names for
+    // both differ between SoCs (clk_div on the original ESP32, clkdiv on the
+    // S3).  Copying whole registers sidesteps all of it.
+    struct BaudRegs
+    {
+        uint32_t clkdiv   {0};
+        uint32_t clk_conf {0};
+    };
+    BaudRegs baud_regs_legacy   {};   // kEcpBaudLegacy   (2400)
+    BaudRegs baud_regs_standard {};   // kEcpBaudStandard (4800)
+    bool     baud_regs_valid    {false};
+
+    // One image serves both UARTs.  The divider is a pure function of the target
+    // baud rate and the UART source clock, and init_uart() configures every port
+    // from the same uart_config_t with source_clk = UART_SCLK_DEFAULT -- so the
+    // register value captured on the primary port is byte-for-byte the value
+    // uart_set_baudrate() would compute for the monitor port.  If a port is ever
+    // given a different source_clk, this needs to become a per-port cache.
+
+    // Guards the register replay below.  The task already runs at
+    // configMAX_PRIORITIES - 1, so no other task can preempt it; interrupts are
+    // the only remaining source of delay, and a critical section is the only
+    // thing that masks those.
+    portMUX_TYPE baud_mux = portMUX_INITIALIZER_UNLOCKED;
+
+    // Capture the register image of each ECP line rate.  Called once from
+    // begin(), when nothing is time-critical.
+    void cache_baud_registers();
+
+    // Switch the primary UART between the two ECP line rates by replaying a
+    // cached register image: a pair of stores, short enough to sit inside a
+    // critical section so no interrupt can widen the window.
+    //
+    // Both images are captured from a live, correctly configured UART, so the
+    // clock-source selection they carry is by construction the one already in
+    // use and only the divider fields differ between them.  Snapshotting whole
+    // registers rather than recomputing the divider keeps this free of any
+    // assumption about field layout that an IDF bump could invalidate.
+    inline void set_baud_fast(uart_port_t port, bool standard)
+    {
+        if (!baud_regs_valid)
+        {
+            // Cache never populated (begin() not reached, or an unachievable
+            // rate).  Correctness first: fall back to the driver call.
+            uart_set_baudrate(port, standard ? kEcpBaudStandard : kEcpBaudLegacy);
+            return;
+        }
+
+        const BaudRegs &r = standard ? baud_regs_standard : baud_regs_legacy;
+
+        portENTER_CRITICAL(&baud_mux);
+        REG_WRITE(UART_CLKDIV_REG(port), r.clkdiv);
+#ifdef UART_CLK_CONF_REG
+        REG_WRITE(UART_CLK_CONF_REG(port), r.clk_conf);
+#endif
+        portEXIT_CRITICAL(&baud_mux);
+    }
+
+    // Convenience overload for the primary keypad UART, which is what almost
+    // every call site means.
+    inline void set_baud_fast(bool standard) { set_baud_fast(uart_num, standard); }
 
     bool LRRemulation;  // True when an LRR module is being emulated.
     bool EXPemulation;  // True when at least one zone-expander is being emulated.

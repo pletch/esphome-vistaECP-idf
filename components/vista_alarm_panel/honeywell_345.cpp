@@ -116,12 +116,18 @@ HoneywellPacket honeywell345_parse(const rmt_symbol_word_t *symbols, size_t num_
     }
     ESP_LOGV(TAG, "Processing %zu chips...", chip_count);
 
-    // Log raw chip bitstream for debugging (up to 256 chips)
-    size_t to_print = chip_count > 256 ? 256 : chip_count;
-    char raw_str[257];
-    for (size_t k = 0; k < to_print; k++) raw_str[k] = chips[k] ? '1' : '0';
-    raw_str[to_print] = '\0';
-    ESP_LOGV(TAG, "Raw chip bitstream: %s", raw_str);
+    // Log raw chip bitstream for debugging (up to 256 chips).
+    // ESP_LOGV compiles away below VERBOSE but the 256-iteration loop and the
+    // 257-byte stack buffer do not, so guard the whole block.
+#if defined(ESPHOME_LOG_LEVEL) && ESPHOME_LOG_LEVEL >= ESPHOME_LOG_LEVEL_VERBOSE
+    {
+        size_t to_print = chip_count > 256 ? 256 : chip_count;
+        char raw_str[257];
+        for (size_t k = 0; k < to_print; k++) raw_str[k] = chips[k] ? '1' : '0';
+        raw_str[to_print] = '\0';
+        ESP_LOGV(TAG, "Raw chip bitstream: %s", raw_str);
+    }
+#endif
 
     // Sliding window: try to decode Manchester from every possible chip offset.
     // We scan for the 'E' nibble (01010110) then validate the 96-chip payload following it.

@@ -44,6 +44,16 @@ namespace esphome
             }
         }
 
+        int PartitionManager::index_for_partition(uint8_t partition_id) const
+        {
+            for (size_t i = 0; i < partitions_.size(); i++)
+            {
+                if (partitions_[i].partition == partition_id)
+                    return static_cast<int>(i);
+            }
+            return -1;
+        }
+
         // ---------------------------------------------------------------------------
         // Sensor registration
         // ---------------------------------------------------------------------------
@@ -52,15 +62,16 @@ namespace esphome
                                                     uint8_t partition_number,
                                                     const char *type)
         {
-            // Guard: partition_number must be valid and non-zero.
-            if (partition_number == 0 || partition_number > partitions_.size())
+            // Resolve to the vector index rather than assuming partition_number - 1.
+            const int found = index_for_partition(partition_number);
+            if (found < 0)
             {
                 ESP_LOGE(TAG, "No partition %d configured. Aborting %s registration.",
                          partition_number, type);
                 return;
             }
 
-            const size_t idx = partition_number - 1;
+            const size_t idx = static_cast<size_t>(found);
 
             if (strcmp(type, "SYSTEM_STATUS") == 0)
                 text_sensors_[idx].system_status = sensor;
@@ -80,14 +91,15 @@ namespace esphome
                                                       uint8_t partition_number,
                                                       const char *type)
         {
-            if (partition_number == 0 || partition_number > partitions_.size())
+            const int found = index_for_partition(partition_number);
+            if (found < 0)
             {
                 ESP_LOGE(TAG, "No partition %d configured. Aborting %s registration.",
                          partition_number, type);
                 return;
             }
 
-            const size_t idx = partition_number - 1;
+            const size_t idx = static_cast<size_t>(found);
 
             if      (strcmp(type, "READY")        == 0) status_sensors_[idx].rdy  = sensor;
             else if (strcmp(type, "TROUBLE")      == 0) status_sensors_[idx].trbl = sensor;
@@ -231,19 +243,23 @@ namespace esphome
 
 
             // --- Zone state updates via ZoneManager ---
+            //
+            // All mutation goes through ZoneManager's own accessors, each of
+            // which takes zone_mutex_ internally.  Writing through a raw Zone*
+            // returned by get_zone() would leave half of these updates outside
+            // the lock that serialises zones_ against rf_direct_task.
+            const uint8_t zone_no = static_cast<uint8_t>(flags.zone);
+
             // Check status
             if (flags.check)
             {
-                zones.set_zone_check(flags.zone, true);
+                zones.set_zone_check(zone_no, true);
                 // Assign partition to zone if not yet known.
-                ZoneManager::Zone *zt = zones.get_zone(flags.zone);
-                if (zt != nullptr && !zt->partition && zt->active)
-                    zt->partition = part.partition;
+                zones.assign_partition(zone_no, part.partition);
                 // Refresh the TTL timestamp every cycle the zone is still reported
                 // checked — not just on the initial transition — so the zone does
                 // not expire while the panel is actively reporting it.
-                if (zt != nullptr)
-                    zt->time = now;
+                zones.touch_zone_time(zone_no);
             }
 
             // Fault status (only when no complicating flags are active)
@@ -252,26 +268,18 @@ namespace esphome
             if (!flags.system_flag && !flags.check && !flags.bypass
                     && !flags.alarm && !flags.program_mode && !armed)
             {
-                ZoneManager::Zone *zt = zones.get_zone(flags.zone);
-                if (zt != nullptr && zt->active)
-                {
-                    if (!zt->open)
-                        zones.set_zone_open(flags.zone, true);
-                    // Refresh the TTL timestamp every cycle the zone is still
-                    // reported faulted — not just on the initial transition.
-                    zt->time = now;
-                }
+                zones.set_zone_open(zone_no, true);
+                // Refresh the TTL timestamp every cycle the zone is still
+                // reported faulted — not just on the initial transition.
+                zones.touch_zone_time(zone_no);
             }
 
             // Bypass status
             if (!flags.system_flag && !flags.check && flags.bypass
                     && !flags.alarm && !armed)
             {
-                ZoneManager::Zone *zt = zones.get_zone(flags.zone);
-                if (zt != nullptr && !zt->bypass && zt->active)
-                    zones.set_zone_bypass(flags.zone, true);
-                if (zt != nullptr)
-                    zt->time = now;
+                zones.set_zone_bypass(zone_no, true);
+                zones.touch_zone_time(zone_no);
             }
 
             // --- Derive current light and system states ---
@@ -372,8 +380,11 @@ namespace esphome
 
         void PartitionManager::publish_system_state(size_t kpi, SysState state)
         {
-            vistaECPTextSensor *sensor =
-                text_sensors_[partitions_[kpi].partition - 1].system_status;
+            // kpi is already the vector index — see index_for_partition().
+            if (kpi >= text_sensors_.size())
+                return;
+
+            vistaECPTextSensor *sensor = text_sensors_[kpi].system_status;
             if (sensor == nullptr)
                 return;
 
@@ -403,8 +414,9 @@ namespace esphome
                                                     bool force,
                                                     bool include_armed_states)
         {
-            const uint8_t part_idx = partitions_[kpi].partition - 1;
-            StatusSensors &ss      = status_sensors_[part_idx];
+            if (kpi >= status_sensors_.size())
+                return;
+            StatusSensors &ss = status_sensors_[kpi];
 
             PUBLISH_BIN(ss.fire,  cur.fire,   prev.fire,   force);
             PUBLISH_BIN(ss.alm,   cur.alarm,  prev.alarm,  force);
@@ -436,8 +448,7 @@ namespace esphome
                                                     const StatusFlags &flags)
         {
             // Bounds-check the partition sensor index before use.
-            const uint8_t part_idx = partitions_[kpi].partition - 1;
-            if (part_idx >= text_sensors_.size())
+            if (kpi >= text_sensors_.size())
                 return;
 
             const uint8_t pos = flags.promptPos;
@@ -477,10 +488,10 @@ namespace esphome
                 }
             }
 
-            if (text_sensors_[part_idx].line1 != nullptr)
-                text_sensors_[part_idx].line1->process(p1);
-            if (text_sensors_[part_idx].line2 != nullptr)
-                text_sensors_[part_idx].line2->process(p2);
+            if (text_sensors_[kpi].line1 != nullptr)
+                text_sensors_[kpi].line1->process(p1);
+            if (text_sensors_[kpi].line2 != nullptr)
+                text_sensors_[kpi].line2->process(p2);
         }
 
         // ---------------------------------------------------------------------------

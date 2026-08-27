@@ -14,21 +14,25 @@
 #include "freertos/task.h"
 #include "helper_enums.h"
 
-struct ReceivedPacket  
+// Every member carries a default member initialiser so that a plain
+// `ReceivedPacket p;` is fully initialised.  'size' in particular is consumed
+// directly as a memcpy length by VistaBus::read_packet(), so an indeterminate
+// value there is an unbounded stack write.
+struct ReceivedPacket
 {
-    int type;           // 0 = yellow wire, 1 = green wire
+    int type {0};       // 0 = yellow wire, 1 = green wire
     int source {0};
-    char payload[48];
-    int size; 
+    char payload[48] {};
+    int size {0};
 };
 
-struct SendPacket  
+struct SendPacket
 {
     int type {-1};      // 0 = hex, 1 = text, 2 = no_ack_expected
-    char payload[24];
-    int keypadaddress;
-    int size;
-    char sequence;
+    char payload[24] {};
+    int keypadaddress {0};
+    int size {0};
+    char sequence {0};
 };
 
 struct GpioTaskArgs  
@@ -148,7 +152,9 @@ struct LightStates
 
 struct PartitionState
 {
-    SysState    previous_system_states;
+    // Must have an initialiser: add_partition() default-initialises Partition,
+    // and process_status_flags() compares against this on the very first F7.
+    SysState    previous_system_states {SysState::Unavailable};
     LightStates previous_light_states;
     int         last_beeps     {0};
     bool        refresh_status {false};

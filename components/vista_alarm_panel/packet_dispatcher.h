@@ -83,9 +83,17 @@ namespace esphome
             // -------------------------------------------------------------------
             StatusFlags decode_status_flags(const char *cbuf, int size);
 
+            // Maximum characters translate_prompt() will write to 'out', excluding
+            // the null terminator.  StatusFlags::prompt1/prompt2 are char[32], and
+            // a line of 16 extended characters expands to 32 UTF-8 bytes, so the
+            // output is capped at 31 to leave room for the terminator.
+            static constexpr size_t kPromptOutChars = 31;
+
             // Translate a 16-byte raw prompt line into a null-terminated UTF-8
-            // string in 'out' (17 bytes minimum).  'first_byte' allows the caller
-            // to override src[0] (used to strip the backlight bit from line 1).
+            // string in 'out' (kPromptOutChars + 1 bytes minimum).  'first_byte'
+            // allows the caller to override src[0] (used to strip the backlight
+            // bit from line 1).  Extended characters (>0x7F) expand to two bytes,
+            // so the result may be longer than 16 characters.
             static void translate_prompt(const char *src, char first_byte, char *out);
 
             // -------------------------------------------------------------------

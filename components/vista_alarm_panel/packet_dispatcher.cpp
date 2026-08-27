@@ -173,6 +173,15 @@ namespace esphome
         {
             StatusFlags flags;
 
+            // The layout below indexes up to cbuf[43] unconditionally.  Reject
+            // anything shorter rather than relying on the caller having zeroed a
+            // larger buffer first.
+            if (size < 44)
+            {
+                ESP_LOGW(TAG, "Status frame too short (%d bytes, need 44); ignoring.", size);
+                return flags;
+            }
+
             // Keypad activity bytes — used to resolve the active partition.
             flags.keypad[0] = cbuf[1];
             flags.keypad[1] = cbuf[2];
@@ -238,27 +247,38 @@ namespace esphome
         // via the panel's custom mapping (shift_extended_char).
         void PacketDispatcher::translate_prompt(const char *src, char first_byte, char *out)
         {
-            char tempbuf[18] = {};
-            memcpy(tempbuf, src, 16);
-            tempbuf[0] = first_byte;
+            char in[17] = {};
+            memcpy(in, src, 16);
+            in[0] = first_byte;
 
-            for (int i = 0; i < 18; i++)
+            // Two-cursor expansion: read from 'in', write to 'out'.  The previous
+            // in-place shifting version wrote past the end of its own buffer for
+            // any extended char, and silently dropped the last character on every
+            // expansion.  Here the output is bounded explicitly and the string is
+            // terminated at its real length.
+            size_t o = 0;
+            const size_t cap = kPromptOutChars;
+            for (size_t i = 0; i < 16 && o < cap; i++)
             {
-                if (!tempbuf[i])
+                const uint8_t c = static_cast<uint8_t>(in[i]);
+                if (c == 0)
                     break;
-                if (static_cast<uint8_t>(tempbuf[i]) > 0x7F)
+                if (c > 0x7F)
                 {
-                    tempbuf[i] = shift_extended_char(tempbuf[i]);
-                    char buf[32];
-                    memcpy(buf, &tempbuf[i+1], 32 - i - 1);
-                    tempbuf[i+1] = static_cast<char>(0x80 | (tempbuf[i] & 0x3F));
-                    tempbuf[i]   = static_cast<char>(0xC0 | ((tempbuf[i] >> 6) & 0x1F));
-                    memcpy(&tempbuf[i+2], buf, 32 - i - 2);
-                    i++;
+                    // Extended char: expand to its 2-byte UTF-8 form.  Stop rather
+                    // than emit a truncated (invalid) sequence if only one byte fits.
+                    const uint8_t u = static_cast<uint8_t>(shift_extended_char(in[i]));
+                    if (o + 2 > cap)
+                        break;
+                    out[o++] = static_cast<char>(0xC0 | ((u >> 6) & 0x1F));
+                    out[o++] = static_cast<char>(0x80 |  (u       & 0x3F));
+                }
+                else
+                {
+                    out[o++] = static_cast<char>(c);
                 }
             }
-            memcpy(out, tempbuf, 16);
-            out[16] = '\0';
+            out[o] = '\0';
         }
 
         // ---------------------------------------------------------------------------
@@ -400,22 +420,27 @@ namespace esphome
                 return;
 #endif
 
-            char s1[4];
-            std::string s;
-            char s2[48];
-            char device[5];
+            // NOTE: do not gate this on esp_log_level_get().  ESPHome #undefs the
+            // IDF ESP_LOGx macros and routes them through its own logger, gated on
+            // the compile-time ESPHOME_LOG_LEVEL above.  The IDF runtime level is
+            // unrelated and is left at CONFIG_LOG_DEFAULT_LEVEL_ERROR, so testing
+            // it here would suppress every packet line in every build.
+            const bool is_chksum_fail = (source == PacketType::ChksumFail);
+
+            // 8 bytes is the widest tag ("KPDL" plus margin for future additions).
+            char device[8];
             switch (source)
             {
-                case PacketType::Unspecified:    sprintf(device, "EXT");  break;
-                case PacketType::ChksumFail:     sprintf(device, "CHK");  break;
-                case PacketType::Expander:       sprintf(device, "EXP");  break;
-                case PacketType::RFReceiver:     sprintf(device, "RFR");  break;
-                case PacketType::AUI:            sprintf(device, "AUI");  break;
-                case PacketType::KeypadAck:      sprintf(device, "KPA");  break;
-                case PacketType::Keypad:         sprintf(device, "KPD");  break;
-                case PacketType::LegacyProtocol: sprintf(device, "KPDL"); break;
-                case PacketType::LongRangeRadio: sprintf(device, "LRR");  break;
-                default:                         sprintf(device, "   ");  break;
+                case PacketType::Unspecified:    snprintf(device, sizeof(device), "EXT");  break;
+                case PacketType::ChksumFail:     snprintf(device, sizeof(device), "CHK");  break;
+                case PacketType::Expander:       snprintf(device, sizeof(device), "EXP");  break;
+                case PacketType::RFReceiver:     snprintf(device, sizeof(device), "RFR");  break;
+                case PacketType::AUI:            snprintf(device, sizeof(device), "AUI");  break;
+                case PacketType::KeypadAck:      snprintf(device, sizeof(device), "KPA");  break;
+                case PacketType::Keypad:         snprintf(device, sizeof(device), "KPD");  break;
+                case PacketType::LegacyProtocol: snprintf(device, sizeof(device), "KPDL"); break;
+                case PacketType::LongRangeRadio: snprintf(device, sizeof(device), "LRR");  break;
+                default:                         snprintf(device, sizeof(device), "   ");  break;
             }
 
             struct timeval tv_now;
@@ -423,14 +448,15 @@ namespace esphome
             char time_str[16];
             struct tm timeinfo;
             localtime_r(&tv_now.tv_sec, &timeinfo);
-            strftime(time_str, sizeof(time_str), "%H:%M:%S", &timeinfo);
-            snprintf(time_str + strlen(time_str), sizeof(time_str) - strlen(time_str),
+            const size_t tlen = strftime(time_str, sizeof(time_str), "%H:%M:%S", &timeinfo);
+            snprintf(time_str + tlen, sizeof(time_str) - tlen,
                      ".%03ld", tv_now.tv_usec / 1000);
 
+            char s2[48];
             if (type == 0)
-                sprintf(s2, "(PANEL-->%s) [%s]", device, time_str);
+                snprintf(s2, sizeof(s2), "(PANEL-->%s) [%s]", device, time_str);
             else
-                sprintf(s2, "(%s-->PANEL) [%s]", device, time_str);
+                snprintf(s2, sizeof(s2), "(%s-->PANEL) [%s]", device, time_str);
 
             bool abbr = false;
 #ifndef DEBUG_LOG
@@ -440,18 +466,22 @@ namespace esphome
                 abbr = true;
             }
 #endif
-            for (int c = 0; c < len; c++)
-            {
-                sprintf(s1, "%02X ", static_cast<uint8_t>(cbuf[c]));
-                s += s1;
-            }
-            if (abbr)
-                s += "...";
+            // Fixed hex buffer instead of an appending std::string — removes the
+            // per-packet heap allocations from this task's 4 KB stack budget.
+            char hex[3 * 48 + 4];
+            size_t pos = 0;
+            if (len < 0) len = 0;
+            for (int c = 0; c < len && pos + 4 < sizeof(hex); c++)
+                pos += static_cast<size_t>(snprintf(hex + pos, sizeof(hex) - pos,
+                                                    "%02X ", static_cast<uint8_t>(cbuf[c])));
+            if (abbr && pos + 4 < sizeof(hex))
+                pos += static_cast<size_t>(snprintf(hex + pos, sizeof(hex) - pos, "..."));
+            hex[pos] = '\0';
 
-            if (source == PacketType::ChksumFail)
-                ESP_LOGE(TAG, "%s %s", s2, s.c_str());
+            if (is_chksum_fail)
+                ESP_LOGE(TAG, "%s %s", s2, hex);
             else
-                ESP_LOGD(TAG, "%s %s", s2, s.c_str());
+                ESP_LOGD(TAG, "%s %s", s2, hex);
         }
 
     } // namespace alarm_panel

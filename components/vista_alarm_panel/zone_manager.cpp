@@ -7,7 +7,6 @@
 // Licensed under the GNU Lesser General Public License v2.1.
 // See COPYING.LESSER in the project root for details.
 
-#define ESPHOME_LOG_LEVEL ESPHOME_LOG_LEVEL_DEBUG
 #include "esphome/core/log.h"
 #include "zone_manager.h"
 #include "sensor_interfaces.h"
@@ -17,6 +16,7 @@
 #include "esp_timer.h"
 #include <cstdio>
 #include <cstring>
+#include <cinttypes>
 
 namespace esphome
 {
@@ -95,6 +95,17 @@ namespace esphome
         // Text sensor format: [B|A|""][T|O|C][L|""]
         //   B = bypassed, A = alarm, T = trouble/check, O = open, C = closed, L = low battery
         // Binary sensor: true when zone is open OR in check/trouble state.
+        // Publishes unconditionally, on every call.  Do NOT add a "only publish on
+        // change" cache here: refresh() calls this for every active zone on every
+        // F7, and that periodic re-assertion is the resync heartbeat that lets a
+        // divergence between Home Assistant and this device self-correct within
+        // one F7 cycle.  Suppressing unchanged publishes means a divergence
+        // instead persists until the zone next actually changes state, which for
+        // a rarely-opened door can be days.  The cost it would save is small —
+        // the panel emits an F7 roughly every 10 s, so a 20-zone install is about
+        // 2 publishes/second, not the per-zone-per-250 ms rate it may appear to be.
+        // Compare PartitionManager's 300 s force_refresh, which exists for the
+        // same reason on the partition sensors.
         void ZoneManager::publish_zone(Zone *zt)
         {
             if (zt->text_sensor != nullptr)
@@ -112,6 +123,17 @@ namespace esphome
 
             if (zt->binary_sensor != nullptr)
                 zt->binary_sensor->process(zt->open || zt->check);
+        }
+
+        // Caller must hold zone_mutex_.
+        void ZoneManager::publish_zone_status_if_changed()
+        {
+            std::string status_msg = build_zone_status_string_locked();
+            if (status_msg == previous_zone_status_)
+                return;
+            if (zone_status_sensor_ != nullptr)
+                zone_status_sensor_->process(status_msg);
+            previous_zone_status_ = status_msg;
         }
 
         // ---------------------------------------------------------------------------
@@ -135,7 +157,7 @@ namespace esphome
                     z.rfserial      = rf_serial;
                     z.rfloop        = rf_loop;
                     z.emulated      = emulated;
-                    ESP_LOGI(TAG, "Updated binary sensor for zone %d  rfserial:%lu  rfloop:%d",
+                    ESP_LOGI(TAG, "Updated binary sensor for zone %d  rfserial:%" PRIu32 "  rfloop:%d",
                              z.zone, z.rfserial, z.rfloop);
                     return;
                 }
@@ -173,10 +195,10 @@ namespace esphome
             else
             {
                 if (emulated)
-                    ESP_LOGI(TAG, "Registered emulated wireless zone %d  rfserial:%lu  rfloop:%d",
+                    ESP_LOGI(TAG, "Registered emulated wireless zone %d  rfserial:%" PRIu32 "  rfloop:%d",
                              zone_number, rf_serial, rf_loop);
                 else
-                    ESP_LOGI(TAG, "Registered wireless zone %d  rfserial:%lu  rfloop:%d",
+                    ESP_LOGI(TAG, "Registered wireless zone %d  rfserial:%" PRIu32 "  rfloop:%d",
                              zone_number, rf_serial, rf_loop);
             }
         }
@@ -262,6 +284,22 @@ namespace esphome
             if (z->*field == value)
                 return nullptr;
             return z;
+        }
+
+        void ZoneManager::touch_zone_time(uint8_t zone_number)
+        {
+            ZoneMutexGuard guard(zone_mutex_);
+            Zone *z = get_zone(zone_number);
+            if (z != nullptr)
+                z->time = esp_timer_get_time();
+        }
+
+        void ZoneManager::assign_partition(uint8_t zone_number, uint8_t partition)
+        {
+            ZoneMutexGuard guard(zone_mutex_);
+            Zone *z = get_zone(zone_number);
+            if (z != nullptr && z->active && z->partition == 0)
+                z->partition = partition;
         }
 
         void ZoneManager::set_zone_open(uint8_t zone_number, bool open)
@@ -355,22 +393,28 @@ namespace esphome
 
             ZoneMutexGuard guard(zone_mutex_);
 
+            // payload is const char* (signed on Xtensa): read every byte through
+            // uint8_t before shifting.  payload[3] >> 5 on a byte of 0x80 would
+            // otherwise be -4 rather than 4.
             const uint8_t addr = static_cast<uint8_t>(payload[0]);
-            int z = payload[3] >> 5;
+            const uint8_t b2   = static_cast<uint8_t>(payload[2]);
+            const uint8_t b3   = static_cast<uint8_t>(payload[3]);
+
+            int z = (b3 >> 5) & 0x07;
 
             switch (addr)
             {
-                case 0x07: z +=  8 + (payload[2] << 3); break;
-                case 0x08: z += 16 + (payload[2] << 3); break;
-                case 0x09: z += 24 + (payload[2] << 3); break;
-                case 0x0A: z += 32 + (payload[2] << 3); break;
-                case 0x0B: z += 40 + (payload[2] << 3); break;
+                case 0x07: z +=  8 + (b2 << 3); break;
+                case 0x08: z += 16 + (b2 << 3); break;
+                case 0x09: z += 24 + (b2 << 3); break;
+                case 0x0A: z += 32 + (b2 << 3); break;
+                case 0x0B: z += 40 + (b2 << 3); break;
                 default:
                     ESP_LOGW(TAG, "FA packet: unrecognised expander address 0x%02X", addr);
                     return;
             }
 
-            const bool open = (static_cast<uint8_t>(payload[3]) >> 4) & 0x01;
+            const bool open = (b3 >> 4) & 0x01;
             Zone *zt = get_zone(static_cast<uint16_t>(z));
             if (zt != nullptr && zt->active)
             {
@@ -458,7 +502,7 @@ namespace esphome
             // The status byte encodes loop bits [7,6,5,4], lowbat [1], heartbeat [2,0].
             const uint8_t status_byte = static_cast<uint8_t>(payload[5]);
             char serial_str[20];
-            snprintf(serial_str, sizeof(serial_str), "%lu%04lu:0x%02X",
+            snprintf(serial_str, sizeof(serial_str), "%" PRIu32 "%04" PRIu32 ":0x%02X",
                      serial / 10000, serial % 10000, status_byte);
 
 #ifdef DEBUG_LOG
@@ -507,8 +551,8 @@ namespace esphome
                     // Direct path has authoritative state; reject the ECP update entirely
                     // so stale pre-event panel state cannot overwrite what was already
                     // sent to Home Assistant.
-                    ESP_LOGD(TAG, "ECP-path update suppressed for serial %lu (direct path active)",
-                             (unsigned long)serial);
+                    ESP_LOGD(TAG, "ECP-path update suppressed for serial %" PRIu32 " (direct path active)",
+                             serial);
                 }
                 else
                 {
@@ -581,10 +625,15 @@ namespace esphome
             zt->open             = open;
             zt->rflowbat         = lowbat;
 
-            ESP_LOGD(TAG, "RF direct: serial=%lu  open=%d  lowbat=%d  rssi=%d dBm",
-                     (unsigned long)serial, open, lowbat, rssi);
+            ESP_LOGD(TAG, "RF direct: serial=%" PRIu32 "  open=%d  lowbat=%d  rssi=%d dBm",
+                     serial, open, lowbat, rssi);
 
             publish_zone(zt);
+            // Keep the combined ZONE_STATUS sensor in step with the per-zone
+            // entities.  Without this it only updates inside refresh() on the
+            // next F7, so the two representations of the same state disagree in
+            // HA for up to a full poll cycle.  The mutex is already held.
+            publish_zone_status_if_changed();
         }
 
         // ---------------------------------------------------------------------------
@@ -615,6 +664,7 @@ namespace esphome
             ESP_LOGD(TAG, "Zone direct: zone=%d  fault=%d", zone_number, fault);
 
             publish_zone(z);
+            publish_zone_status_if_changed();   // mutex already held
         }
 
         // ---------------------------------------------------------------------------
@@ -626,24 +676,36 @@ namespace esphome
                                               bool fault,
                                               VistaBus &bus)
         {
-            const Zone *z = get_zone(zone_number);
-            if (z == nullptr)
+            // Reached from svc_set_zone_fault on the ESPHome main-loop task — a
+            // third task alongside rf_direct_task and processReceiveQueue — so
+            // the zones_ read below needs the mutex like every other accessor.
+            // Snapshot the fields under the lock and release it before touching
+            // the bus, so a blocking bus call never holds the zone lock.
+            uint32_t serial = 0;
+            uint8_t  loop   = 0;
             {
-                ESP_LOGW(TAG, "send_emulated_fault: zone %d not registered", zone_number);
-                return;
+                ZoneMutexGuard guard(zone_mutex_);
+                const Zone *z = get_zone(zone_number);
+                if (z == nullptr)
+                {
+                    ESP_LOGW(TAG, "send_emulated_fault: zone %d not registered", zone_number);
+                    return;
+                }
+                serial = z->rfserial;
+                loop   = z->rfloop;
             }
 
-            if (z->rfserial != 0)
+            if (serial != 0)
             {
-                const uint8_t mask = rfloop_to_mask(z->rfloop);
+                const uint8_t mask = rfloop_to_mask(loop);
                 // fault=true:  set the loop bit  (0x80 | mask)
                 // fault=false: clear the loop bit (0x80 & mask)
-                const uint8_t msg = fault 
+                const uint8_t msg = fault
                     ? static_cast<uint8_t>(0x80 | mask)
                     : static_cast<uint8_t>(0x80 & mask);
-                ESP_LOGI(TAG, "Emulated RF zone %d fault:%d  serial:%lu",
-                         zone_number, fault, z->rfserial);
-                bus.sendRFmsg(z->rfserial, msg);
+                ESP_LOGI(TAG, "Emulated RF zone %d fault:%d  serial:%" PRIu32,
+                         zone_number, fault, serial);
+                bus.sendRFmsg(serial, msg);
             }
             else
             {
@@ -708,12 +770,7 @@ namespace esphome
                 publish_zone(&z);
             }
 
-            // Build and publish combined zone status string only when it changed.
-            std::string status_msg = build_zone_status_string_locked();
-            if (status_msg != previous_zone_status_ && zone_status_sensor_ != nullptr)
-                zone_status_sensor_->process(status_msg);
-
-            previous_zone_status_ = status_msg;
+            publish_zone_status_if_changed();
         }
 
         // ---------------------------------------------------------------------------
@@ -782,7 +839,7 @@ namespace esphome
             // open state so the panel receives a fully-formed status byte.
             const uint8_t loop_bit = fault ? rfloop_to_mask(z->rfloop) : 0;
             const uint8_t msg = static_cast<uint8_t>(0x04 | loop_bit);
-            ESP_LOGI(TAG, "send_rf_heartbeat: zone %d fault:%d serial:%lu msg:0x%02X",
+            ESP_LOGI(TAG, "send_rf_heartbeat: zone %d fault:%d serial:%" PRIu32 " msg:0x%02X",
                      zone_number, fault, z->rfserial, msg);
             bus.sendRFmsg(z->rfserial, msg);
 

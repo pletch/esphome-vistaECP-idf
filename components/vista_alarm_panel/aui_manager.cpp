@@ -106,21 +106,37 @@ namespace esphome
 
         void AUIManager::on_f2_packet(const char *payload, int size,
                                       ZoneManager &zones,
-                                      time::RealTimeClock *rtc)
+                                      time::RealTimeClock *rtc,
+                                      VistaBus &bus)
         {
             if (device_.address == 0)
+                return;
+
+            // payload[1], [7] and [8] are read below before any other length
+            // check, so reject short frames up front.
+            //
+            // Silent by design: dispatchF6() tags every poll of primary keypad
+            // addresses 1/2/5/6 as source 0xF2 with size 2, and those arrive
+            // several times a second.  They are not AUI packets and never were —
+            // previously they fell through the sub-type tests below by reading
+            // zeros out of the caller's memset buffer.  Logging here would spam.
+            if (size < 9)
                 return;
 
             // Only handle the 0x5x sub-type (data response packets).
             if ((payload[7] & 0xF0) != 0x50)
             {
-                // 0x6x sub-type: zone-fault broadcast notification — trigger a query.
-                if ((payload[7] & 0xF0) == 0x60
-                        && payload[8] == 0x63
-                        && payload[1] == 0x16)
-                {
-                    on_zone_fault_broadcast(zones);  // issues AUIget_zone_faults internally
-                }
+                // 0x6x sub-type is the panel's zone-fault broadcast notification.
+                //
+                // Responding to it with get_zone_faults() is deliberately NOT
+                // done: that would make the component write a 21-byte AUI command
+                // to the panel that this firmware has never sent, at whatever rate
+                // the panel broadcasts (capped only by the 6 s request_.pending
+                // guard).  Whether the panel tolerates that, and how often the
+                // broadcast actually occurs, has not been validated against
+                // hardware.  Zone faults still arrive via the normal F7/FA/FB
+                // path, so nothing is lost by ignoring the notification.
+                (void)bus;
                 return;
             }
 
@@ -187,7 +203,7 @@ namespace esphome
 
             // Panel time response — compare with RTC and optionally correct.
             if (sum == 20 && target == device_.address)
-                handle_panel_time_response(f2data, data_len, rtc);
+                handle_panel_time_response(f2data, data_len, rtc, bus);
 
             // Zone fault list or all-clear — update ZoneManager and clear pending.
             if (sum == 23 || sum == 4)
@@ -195,25 +211,6 @@ namespace esphome
                 process_zone_faults(f2data, zones);
                 request_.pending = false;
             }
-        }
-
-        // ---------------------------------------------------------------------------
-        // Zone-fault broadcast notification handler
-        //
-        // Called when the panel broadcasts a zone-fault or zone-clear notification
-        // (F2 sub-type 0x6x).  Issues an AUI zone-fault query to get the full list.
-        // The bus write is conditional on no query already being pending.
-        // ---------------------------------------------------------------------------
-
-        void AUIManager::on_zone_fault_broadcast(ZoneManager &zones)
-        {
-            // zones is accepted for interface symmetry with on_f2_packet(); this
-            // method does not interact with zones directly — it only triggers a query
-            // whose response will arrive as a later F2 packet.
-            (void)zones;
-
-            if (device_.address == 0 || request_.pending)
-                return;
         }
 
         // ---------------------------------------------------------------------------
@@ -307,7 +304,8 @@ namespace esphome
 
         void AUIManager::handle_panel_time_response(const char *f2data,
                                                     uint8_t data_len,
-                                                    time::RealTimeClock *rtc)
+                                                    time::RealTimeClock *rtc,
+                                                    VistaBus &bus)
         {
             if (rtc == nullptr || data_len < 12)
                 return;
@@ -326,8 +324,10 @@ namespace esphome
             panel_time.second       =         10 * (f2data[10] - '0') + (f2data[11] - '0');
             panel_time.recalc_timestamp_local();
 
-            const int32_t delta = abs(static_cast<int32_t>(
-                                      rtc_time.timestamp - panel_time.timestamp));
+            // ESPTime::timestamp is 64-bit; truncating the difference to int32_t
+            // could wrap if the panel reports a wildly wrong year.
+            const int64_t delta = llabs(static_cast<int64_t>(rtc_time.timestamp)
+                                        - static_cast<int64_t>(panel_time.timestamp));
 
 #ifdef DEBUG_LOG
             char s[32];
@@ -335,17 +335,14 @@ namespace esphome
             ESP_LOGD(TAG, "Panel time: %s", s);
             rtc_time.strftime(s, sizeof(s), "%Y-%m-%d %H:%M:%S");
             ESP_LOGD(TAG, "RTC time:   %s", s);
-            ESP_LOGD(TAG, "Drift: %d s", delta);
+            ESP_LOGD(TAG, "Drift: %lld s", static_cast<long long>(delta));
 #endif
 
             if (clock_.auto_sync && delta > 60)
             {
-                ESP_LOGI(TAG, "Panel clock drift %ld s — will correct.", static_cast<long>(delta));
-                // Store the bus reference so set_panel_time can be called here.
-                // We receive the bus through on_f2_packet; pass it through the
-                // stored pointer set in on_f2_packet_with_bus() below.
-                if (pending_bus_ != nullptr)
-                    set_panel_time(*pending_bus_, false, rtc);
+                ESP_LOGI(TAG, "Panel clock drift %lld s — will correct.",
+                         static_cast<long long>(delta));
+                set_panel_time(bus, false, rtc);
             }
         }
 
@@ -459,24 +456,18 @@ namespace esphome
             // We check zones up to 128; unregistered zones are silently skipped
             // by ZoneManager::set_zone_open().
 
-            const int64_t now = esp_timer_get_time();
-
             for (uint8_t z = 1; z <= 128; z++)
             {
                 uint8_t  bank   = (z - 1) / 32;
                 uint8_t  bit    = (z - 1) % 32;
                 bool     faulted = (mask[bank] >> bit) & 0x01u;
 
-                ZoneManager::Zone *zt = zones.get_zone(z);
-                if (zt == nullptr)
-                    continue;
-
-                if (zt->open != faulted)
-                {
-                    if (faulted)
-                        zt->time = now;
-                    zones.set_zone_open(z, faulted);
-                }
+                // set_zone_open() is a no-op for unregistered, inactive, or
+                // already-matching zones, and stamps the timestamp itself.
+                // Going through it keeps every zones_ mutation under zone_mutex_.
+                if (faulted)
+                    zones.touch_zone_time(z);
+                zones.set_zone_open(z, faulted);
             }
         }
 
@@ -514,12 +505,7 @@ namespace esphome
 #endif
 
         // ---------------------------------------------------------------------------
-        // Bus-aware F2 entry point
-        //
-        // PacketDispatcher calls this overload which also carries the bus reference
-        // needed if set_panel_time() must be called in response to a time-response
-        // packet.  The bus pointer is stored temporarily for use by
-        // handle_panel_time_response() and cleared afterwards.
+        // Bus-aware F2 entry point — the only entry point PacketDispatcher uses.
         // ---------------------------------------------------------------------------
 
         void AUIManager::on_f2_packet_with_bus(const char *payload, int size,
@@ -527,20 +513,7 @@ namespace esphome
                                                time::RealTimeClock *rtc,
                                                VistaBus &bus)
         {
-            pending_bus_ = &bus;
-            on_f2_packet(payload, size, zones, rtc);
-            pending_bus_ = nullptr;
-        }
-
-        // ---------------------------------------------------------------------------
-        // Zone-fault query triggered by a broadcast notification (with bus access)
-        // ---------------------------------------------------------------------------
-
-        void AUIManager::on_zone_fault_broadcast_with_bus(ZoneManager &zones,
-                                                          VistaBus &bus)
-        {
-            (void)zones;
-            get_zone_faults(bus);
+            on_f2_packet(payload, size, zones, rtc, bus);
         }
 
     } // namespace alarm_panel

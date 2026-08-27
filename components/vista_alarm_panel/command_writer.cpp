@@ -30,29 +30,43 @@ namespace esphome
         // terminator — callers are responsible for their own buffer sizing) when a
         // valid 4-digit numeric code is available.  Returns false otherwise.
 
+        // Returns true if the first 4 characters of 'p' are all ASCII digits.
+        static bool is_four_digits(const char *p)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                if (p[i] < '0' || p[i] > '9')
+                    return false;
+            }
+            return true;
+        }
+
         bool CommandWriter::resolve_code(const std::string &supplied,
                                          char resolved_out[4]) const
         {
-            const std::string *effective = nullptr;
-
-            if (supplied.length() == 4 && isInt(supplied, 10))
-                effective = &supplied;
-            else if (access_code_ != nullptr)
+            // keypress() is reachable from two tasks — ESPHome service callbacks
+            // on the main loop, and the HITSTAR auto-acknowledge on
+            // processReceiveQueue.  The previous function-local
+            // `static std::string` meant one task could reassign (and reallocate)
+            // the buffer while the other held a pointer into it.  Copy straight
+            // out of the source instead; this also drops two std::string
+            // constructions per arm/disarm.
+            if (supplied.length() == 4 && is_four_digits(supplied.c_str()))
             {
-                static std::string stored_str; 
-                stored_str = access_code_;
-                if (stored_str.length() == 4 && isInt(stored_str, 10))
-                    effective = &stored_str;
+                memcpy(resolved_out, supplied.c_str(), 4);
+                return true;
             }
 
-            if (effective == nullptr)
+            if (access_code_ != nullptr
+                    && strlen(access_code_) == 4
+                    && is_four_digits(access_code_))
             {
-                ESP_LOGE(TAG, "No valid 4-digit numeric access code available.");
-                return false;
+                memcpy(resolved_out, access_code_, 4);
+                return true;
             }
 
-            memcpy(resolved_out, effective->c_str(), 4);
-            return true;
+            ESP_LOGE(TAG, "No valid 4-digit numeric access code available.");
+            return false;
         }
 
         // Look up keypad address and current sequence for a logical partition id.
@@ -93,10 +107,22 @@ namespace esphome
         {
             // Build a printable representation of the key bytes for the log.
             // Each byte is shown as its ASCII character if printable, else as hex.
+            //
+            // A payload built by send_code_plus_keys() begins with the 4-digit
+            // access code.  Mask those bytes: this line goes to the ESPHome
+            // dashboard, the HA log, and anywhere logs are shipped, so every
+            // disarm would otherwise publish the alarm code in plaintext.
+            const bool leading_code = size >= 4 && is_four_digits(data);
+
             char keylog[72]; // worst case: 24 bytes × 3 chars ("XX ") + null
             int  pos = 0;
             for (int i = 0; i < size && pos < (int)sizeof(keylog) - 4; i++)
             {
+                if (leading_code && i < 4)
+                {
+                    pos += snprintf(keylog + pos, sizeof(keylog) - pos, "* ");
+                    continue;
+                }
                 unsigned char c = static_cast<unsigned char>(data[i]);
                 if (c >= 0x20 && c < 0x7F)
                     pos += snprintf(keylog + pos, sizeof(keylog) - pos, "%c ", c);
@@ -104,6 +130,7 @@ namespace esphome
                     pos += snprintf(keylog + pos, sizeof(keylog) - pos, "0x%02X ", c);
             }
             if (pos > 0) keylog[pos - 1] = '\0'; // trim trailing space
+            else         keylog[0]       = '\0';
 
             const bool ok = bus_.write(data, size, addr, seq);
             if (ok)
@@ -126,6 +153,11 @@ namespace esphome
         {
             // Maximum payload the bus accepts is 24 bytes; a code+suffix is at most 7.
             char buf[24];
+            if (suffix_len < 0 || 4 + suffix_len > static_cast<int>(sizeof(buf)))
+            {
+                ESP_LOGE(TAG, "send_code_plus_keys: suffix length %d does not fit.", suffix_len);
+                return false;
+            }
             memcpy(buf, code, 4);
             memcpy(buf + 4, suffix, suffix_len);
             return send_keys(buf, 4 + suffix_len, partition_id, addr, seq);
@@ -306,7 +338,12 @@ namespace esphome
                                      int partition_id,
                                      const std::string &code)
         {
-            ESP_LOGI(TAG, "keypress: keys='%s' partition=%d", keys.c_str(), partition_id);
+            // Never log the key string itself, at any level — an arbitrary
+            // keypress can carry the access code, and this line reaches the
+            // ESPHome dashboard, the HA log, and anywhere logs are shipped.
+            // send_keys() logs a masked rendering once the payload is built.
+            ESP_LOGI(TAG, "keypress: %d key(s) for partition %d",
+                     static_cast<int>(keys.length()), partition_id);
 
             // Intercept single-character command strings that map to named operations.
             if (keys == "A") return arm_away    (partition_id, code);

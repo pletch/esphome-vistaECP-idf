@@ -64,15 +64,19 @@ public:
 
     // Read up to 'len' bytes from the UART event queue (blocking for up to 'timeout'
     // ms per byte), then append them to received_packet starting at 'start'.
+    // 'rxbuf_cap' is the capacity of rxbuf; 'len' is clamped to it so a panel-
+    // supplied length byte cannot overrun the caller's buffer.  Pass sizeof(rxbuf).
     // Returns the number of bytes actually read.
     int get_packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf,
                          int start, int len, uart_port_t uart_num, int timeout,
-                         QueueHandle_t queue);
+                         QueueHandle_t queue, int rxbuf_cap);
 
     // Blocking variant that calls uart_read_bytes() directly (no event queue).
     // Used when the UART event queue is not available (monitor port, extension decodes).
+    // 'rxbuf_cap' has the same meaning as in get_packet_event().
     int get_packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf,
-                   int start, int len, uart_port_t uart_num, int timeout);
+                   int start, int len, uart_port_t uart_num, int timeout,
+                   int rxbuf_cap);
 
     // Encode a SendPacket into ECP wire format and write it to the UART.
     // Prepends the sequence number and length byte, translates ASCII key codes
@@ -174,7 +178,9 @@ private:
     void quick_decodeF9(const char * cbuf);
 
     // Timing-sensitive inline response to an FB poll when RF emulation is active.
-    // Pulls the next pending RF message from deviceMsgQueue and encodes the reply.
+    // Pulls the pending RF message from deviceMsgQueue and encodes the reply.
+    // Non-blocking: the poll is the panel's grant for a nudge we requested, so
+    // the message is already queued.  See deviceMsgQueue notes in vista_bus.h.
     void quick_decodeFB(const char * cbuf);
 
     // Counter for consecutive F6 ACK misses after a pulse mark; reset on success.

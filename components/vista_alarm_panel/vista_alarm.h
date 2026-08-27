@@ -287,15 +287,16 @@ namespace esphome
             void svc_alarm_keypress(std::string keys)
             {
                 if (not_ready("alarm_keypress")) return;
-                ESP_LOGI(TAG, "svc_alarm_keypress: keys='%s'", keys.c_str());
+                // The keys may contain the access code; log length only.
+                ESP_LOGI(TAG, "svc_alarm_keypress: %d key(s)", static_cast<int>(keys.length()));
                 cmd_.keypress(keys, default_partition_);
             }
 
             void svc_alarm_keypress_partition(std::string keys, int32_t partition)
             {
                 if (not_ready("alarm_keypress_partition")) return;
-                ESP_LOGI(TAG, "svc_alarm_keypress_partition: keys='%s' partition=%d",
-                         keys.c_str(), static_cast<int>(partition));
+                ESP_LOGI(TAG, "svc_alarm_keypress_partition: %d key(s) partition=%d",
+                         static_cast<int>(keys.length()), static_cast<int>(partition));
                 cmd_.keypress(keys, static_cast<int>(partition));
             }
 

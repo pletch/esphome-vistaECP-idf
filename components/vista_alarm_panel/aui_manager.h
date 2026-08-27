@@ -48,16 +48,12 @@ namespace esphome
         //   1. Call set_device_address() and set_auto_sync() during setup.
         //   2. Call tick() each iteration of the receive task loop.
         //   3. Call on_f2_packet_with_bus() from PacketDispatcher when an F2
-        //      packet arrives.
-        //   4. Call on_zone_fault_broadcast_with_bus() from PacketDispatcher
-        //      when a zone-fault broadcast is detected (F2 sub-type 0x6x).
-        //   5. Optionally call request_time_sync() as an ESPHome service.
+        //      packet arrives.  Zone-fault broadcasts (F2 sub-type 0x6x) are
+        //      recognised and answered from inside that call.
+        //   4. Optionally call request_time_sync() as an ESPHome service.
         //
         // Thread safety:
         //   All methods must be called from the processReceiveQueue FreeRTOS task.
-        //   pending_bus_ is a call-scoped temporary; it is set and cleared within
-        //   a single call to on_f2_packet_with_bus() and is never accessed from
-        //   another context.
         // -----------------------------------------------------------------------
         class AUIManager
         {
@@ -108,12 +104,6 @@ namespace esphome
                                        time::RealTimeClock *rtc,
                                        VistaBus &bus);
 
-            // Called when the PacketDispatcher detects a zone-fault broadcast
-            // notification (F2 sub-type 0x6x, payload[7] & 0xF0 == 0x60).
-            // Issues a zone-fault query if no query is already pending.
-            void on_zone_fault_broadcast_with_bus(ZoneManager &zones,
-                                                  VistaBus &bus);
-
             // -------------------------------------------------------------------
             // Manual triggers — expose as ESPHome services via VistaESPHome
             // -------------------------------------------------------------------
@@ -155,24 +145,22 @@ namespace esphome
             // Packet sub-handlers
             // -------------------------------------------------------------------
 
-            // Interface-compatible overload used by PacketDispatcher when a bus
-            // reference is not needed.  Calls on_f2_packet_with_bus() indirectly
-            // via the pending_bus_ pointer mechanism.
+            // Body of the F2 handler.  The bus is threaded through explicitly
+            // rather than stashed in a member: the sub-handlers below need it to
+            // issue their follow-up writes, and a parameter keeps that dependency
+            // visible in the signature.
             void on_f2_packet(const char *payload, int size,
                               ZoneManager &zones,
-                              time::RealTimeClock *rtc);
-
-            // Called internally from on_f2_packet() when a zone-fault broadcast
-            // sub-type is detected.  Cannot issue a bus write without a bus
-            // reference; the real work is done by on_zone_fault_broadcast_with_bus().
-            void on_zone_fault_broadcast(ZoneManager &zones);
+                              time::RealTimeClock *rtc,
+                              VistaBus &bus);
 
             // Decode a panel-time response from an F2 data string and compare
             // with the RTC.  Calls set_panel_time() if drift > 60 s and
             // auto_sync is enabled.
             void handle_panel_time_response(const char *f2data,
                                             uint8_t data_len,
-                                            time::RealTimeClock *rtc);
+                                            time::RealTimeClock *rtc,
+                                            VistaBus &bus);
 
             // Parse a space-separated zone-number / range string into bitmasks
             // and update ZoneManager accordingly.
@@ -203,8 +191,6 @@ namespace esphome
             AUIDevice  device_;   // address, sequence1, sequence2
             PanelClock clock_;    // next_sync timestamp, auto_sync flag
             AUIRequest request_;  // pending flag, issue timestamp
-
-            VistaBus *pending_bus_ {nullptr};
         };
 
     } // namespace alarm_panel

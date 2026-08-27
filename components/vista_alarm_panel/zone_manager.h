@@ -158,6 +158,15 @@ namespace esphome
             //   set_zone_check(true) clears open and alarm.
             // -------------------------------------------------------------------
 
+            // Refresh a zone's last-activity timestamp (used to defer TTL expiry
+            // while the panel is still reporting the zone).  Takes zone_mutex_ —
+            // callers must not hold a raw Zone* across this call.
+            void touch_zone_time(uint8_t zone_number);
+
+            // Assign a zone's owning partition if it does not already have one.
+            // No-op for unregistered, inactive, or already-assigned zones.
+            void assign_partition(uint8_t zone_number, uint8_t partition);
+
             void set_zone_open  (uint8_t zone_number, bool open);
             void set_zone_bypass(uint8_t zone_number, bool bypass);
             void set_zone_alarm (uint8_t zone_number, bool alarm);
@@ -296,11 +305,16 @@ namespace esphome
 
             // Publish both the binary sensor (open || check) and the text sensor
             // (formatted state string) for a single zone.  Does nothing if both
-            // sensor pointers are null.
+            // sensor pointers are null.  Publishes unconditionally — see the
+            // note on the definition before adding any change-detection here.
             void publish_zone(Zone *zt);
 
             // Build the combined zone-status string.  Caller must hold zone_mutex_.
             std::string build_zone_status_string_locked() const;
+
+            // Publish the combined zone-status string if it differs from the last
+            // one sent.  Caller must hold zone_mutex_.
+            void publish_zone_status_if_changed();
 
             // Guard+lookup helper for set_zone_* methods.  Caller must hold
             // zone_mutex_.  Returns z only when the flag at 'field' needs to

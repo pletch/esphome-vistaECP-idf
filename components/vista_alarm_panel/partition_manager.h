@@ -39,7 +39,8 @@ namespace esphome
         //   3. Call register_*() for each sensor during ESPHome setup.
         //   4. Call process_status_flags() from PacketDispatcher on every F7
         //      (or assembled legacy SE equivalent).
-        //   5. Call tick_battery_decay() from the main sensor-refresh loop.
+        //   5. tick_battery_decay() is available for a sensor-refresh loop but is
+        //      intentionally not wired up — see its declaration below.
         // -----------------------------------------------------------------------
         class PartitionManager
         {
@@ -112,10 +113,13 @@ namespace esphome
             // Battery decay
             // -------------------------------------------------------------------
 
-            // Call from the main sensor-refresh loop (replacing the battery
-            // section formerly in VistaESPHome::refreshSensors).
             // Clears the low-battery flag once the event has aged past ttl
-            // microseconds and publishes the change to bat_sensor_.
+            // microseconds; the change reaches bat_sensor_ on the next
+            // publish_light_states() comparison.
+            //
+            // NOT currently called by anything — see the note in
+            // VistaESPHome::update().  Wiring it to the zone ttl would flap the
+            // sensor against the panel's rotating low-battery system message.
             void tick_battery_decay(int64_t ttl);
 
             // -------------------------------------------------------------------
@@ -198,6 +202,16 @@ namespace esphome
             // Format and publish the two keypad display lines, inserting a
             // cursor-position bracket if promptPos > 0.
             void update_display_lines(size_t kpi, const StatusFlags &flags);
+
+            // Resolve a logical partition id to its index in partitions_ (kpi).
+            // Returns -1 if no partition with that id is configured.
+            //
+            // The sensor vectors are indexed by kpi, NOT by (partition_id - 1):
+            // those two only coincide when partitions happen to be registered in
+            // the order 1, 2, 3, ….  A single-partition install using partition 2,
+            // or a two-partition install using 1 and 3, diverges — and the
+            // publish helpers indexed past the end of the vectors as a result.
+            int index_for_partition(uint8_t partition_id) const;
 
             // -------------------------------------------------------------------
             // Member data

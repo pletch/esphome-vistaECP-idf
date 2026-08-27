@@ -238,6 +238,16 @@ namespace esphome
 
         void VistaESPHome::update()
         {
+            // NOTE: PartitionManager::tick_battery_decay() is deliberately NOT
+            // called here.  Wiring it up would clear the low-battery flag 'ttl'
+            // after the last F7 that reported it (ttl defaults to 30 s), but the
+            // panel surfaces low battery as a rotating system message rather than
+            // a continuously-asserted flag, and F7 status frames arrive only
+            // every ~10 s — so the sensor would flap on and off with the message
+            // rotation.  Leaving it uncalled keeps the flag latched until reboot,
+            // which is the pre-existing behaviour.  Needs a dedicated timeout
+            // matched to the panel's message cadence, not the zone TTL.
+
             // Connection watchdog — log if no data has arrived in 30 seconds.
             if (!vistabus_.connected()
                     && (esp_timer_get_time() - last_connection_check) > 30LL * 1000 * 1000)
@@ -292,6 +302,13 @@ namespace esphome
 
         void VistaESPHome::stop()
         {
+            // Publish caller_task_ BEFORE stop_requested_.  vistabus_.stop() below
+            // blocks for several hundred ms, during which the receive task can
+            // observe stop_requested_, read a still-null caller_task_, and delete
+            // itself — leaving the handshake below to burn its full 2 s timeout.
+            if (processReceiveQHandle != nullptr)
+                caller_task_ = xTaskGetCurrentTaskHandle();
+
             stop_requested_ = true;
 
 #ifdef CC1101_RECEIVER
@@ -307,7 +324,6 @@ namespace esphome
 
             if (processReceiveQHandle != nullptr)
             {
-                caller_task_ = xTaskGetCurrentTaskHandle();
                 ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
                 processReceiveQHandle = nullptr;
             }

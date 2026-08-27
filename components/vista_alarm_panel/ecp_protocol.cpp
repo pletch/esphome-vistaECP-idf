@@ -80,6 +80,34 @@ int VistaECP::uart_read_bytes_event(uart_port_t uart_num, uint8_t * rxbuf, int l
     return bytes;
 }
 
+// Wait for the next rising edge that clocks a mark-pulse byte onto the bus.
+//
+// Returns false when no edge arrived: either xTaskNotifyWait() timed out, or the
+// transmit-window timer fired its sentinel.  Both cases used to be discarded and
+// the byte written regardless, which put it on a shared open-collector bus at a
+// moment the panel had not opened.  That is harmless for address < 8, where
+// bytes 1 and 2 are zero and skipped anyway, but a real collision for higher
+// addresses on panels that emit only one rising edge after the write window --
+// the 4140XMPT2 called out in mark_pulse() below is exactly such a panel.
+//
+// The notified value is the pin level sampled in gpio_isr_handler(), and it is
+// deliberately NOT used to filter further.  The interrupt is armed POSEDGE for
+// the whole of this sequence, so every GPIO notification here is already a
+// rising edge; treating a level that read back 0 (because the ISR sampled after
+// a short pulse had fallen again) as "no edge" would reject a genuine one.  Only
+// the timer sentinel, which is unambiguous, is rejected.
+static bool mark_pulse_edge_arrived(uint32_t timeout_ms)
+{
+    // Matches the value sent by VistaECP::timer_isr_handler().  Only the SE
+    // protocol arms that timer, but mark_pulse() is shared by both.
+    constexpr uint32_t kTxWindowTimerSentinel = 0xFFFFFFFF;
+
+    uint32_t notified = 0;
+    if (xTaskNotifyWait(0, 0xFFFFFFFF, &notified, pdMS_TO_TICKS(timeout_ms)) != pdPASS)
+        return false;
+    return notified != kTxWindowTimerSentinel;
+}
+
 // Send the ECP address pulse mark for 'address' on the given UART.
 //
 // The ECP addressing scheme encodes the keypad address as a one-hot bitmask
@@ -98,13 +126,15 @@ int VistaECP::uart_read_bytes_event(uart_port_t uart_num, uint8_t * rxbuf, int l
 // (active-low one-hot) is not valid ECP data and would produce parity errors.
 void VistaECP::mark_pulse(int uartNum, uint8_t address)
 {
+    const uart_port_t port = static_cast<uart_port_t>(uartNum);
+
     // Ensure any preceding uart_write_bytes() call (e.g. quick_decodeFB response)
     // has fully clocked out of the TX FIFO before we change the parity setting.
     // A parity change mid-transmission corrupts the remaining bytes in the FIFO,
     // causing the monitor UART to read them as 0xFF (parity-error substitution).
-    uart_wait_tx_done(static_cast<uart_port_t>(uartNum), pdMS_TO_TICKS(30));
+    uart_wait_tx_done(port, pdMS_TO_TICKS(30));
 
-    uart_set_parity(static_cast<uart_port_t>(uartNum), UART_PARITY_DISABLE);
+    uart_set_parity(port, UART_PARITY_DISABLE);
 
     char snd_data[3];
     if (address < 8)
@@ -129,24 +159,63 @@ void VistaECP::mark_pulse(int uartNum, uint8_t address)
         snd_data[2] = ~(0x01 << (address & 0x07));
     }
 
-    // Wait for the first rising edge (panel releases the bus after the 13 ms low),
-    // then send the first pulse byte.
-    xTaskNotifyWait(0, 0xFFFFFFFF, NULL, pdMS_TO_TICKS(8)); // first rising edge
-    uart_write_bytes(static_cast<uart_port_t>(uartNum), &snd_data[0], 1);
+    // Timeouts as originally tuned: a wider window for the panel to release the
+    // bus after the 13 ms low, then one edge period for each follow-on byte.
+    constexpr uint32_t kFirstEdgeWaitMs = 8;
+    constexpr uint32_t kNextEdgeWaitMs  = 4;
 
-    // Wait for the second rising edge and send the second byte (if needed).
-    // Note: older panels (e.g. 4140XMPT2) only produce one rising edge after
-    // the 13 ms low and will not trigger this second window.
-    xTaskNotifyWait(0, 0xFFFFFFFF, NULL, pdMS_TO_TICKS(4)); // second rising edge
-    if (snd_data[1] != 0)
-        uart_write_bytes(static_cast<uart_port_t>(uartNum), &snd_data[1], 1);
+    // Written as a lambda so every exit below shares the one parity-restore path
+    // at the bottom; an early return here must never leave parity disabled.
+    auto send_pulse_bytes = [&]()
+    {
+        // Wait for the first rising edge (panel releases the bus after the 13 ms
+        // low), then send the first pulse byte.  No edge means the panel never
+        // opened a window, so there is nothing to write into at all.
+        if (!mark_pulse_edge_arrived(kFirstEdgeWaitMs))
+        {
+            ESP_LOGD(TAG, "mark_pulse: no rising edge within %ums for address %u; "
+                          "pulse abandoned",
+                     static_cast<unsigned>(kFirstEdgeWaitMs),
+                     static_cast<unsigned>(address));
+            return;
+        }
+        uart_write_bytes(port, &snd_data[0], 1);
 
-    // Wait for the third rising edge and send the third byte (if needed).
-    xTaskNotifyWait(0, 0xFFFFFFFF, NULL, pdMS_TO_TICKS(4)); // third rising edge
-    if (snd_data[2] != 0)
-        uart_write_bytes(static_cast<uart_port_t>(uartNum), &snd_data[2], 1);
+        // Nothing further to send.  Returning now instead of blocking through two
+        // more edge windows matters for two reasons: this runs on the
+        // highest-priority task, which is not servicing UART events while it
+        // waits; and parity is a single frame-format setting governing RX as well
+        // as TX, so every millisecond spent here is a millisecond an inbound 8E2
+        // byte would be mis-framed.  This is the common case (address < 8).
+        if (snd_data[1] == 0 && snd_data[2] == 0)
+            return;
 
-    uart_set_parity(static_cast<uart_port_t>(uartNum), UART_PARITY_EVEN);
+        // Wait for the second rising edge and send the second byte (if needed).
+        // Note: older panels (e.g. 4140XMPT2) only produce one rising edge after
+        // the 13 ms low and will not trigger this second window.
+        if (!mark_pulse_edge_arrived(kNextEdgeWaitMs))
+            return;
+        if (snd_data[1] != 0)
+            uart_write_bytes(port, &snd_data[1], 1);
+
+        if (snd_data[2] == 0)
+            return;
+
+        // Wait for the third rising edge and send the third byte.
+        if (!mark_pulse_edge_arrived(kNextEdgeWaitMs))
+            return;
+        uart_write_bytes(port, &snd_data[2], 1);
+    };
+
+    send_pulse_bytes();
+
+    // Mirror of the guard at the top of this function, and for the same reason.
+    // Restoring parity while the last pulse byte is still in the TX FIFO changes
+    // the frame format mid-byte, corrupting a byte the hardware had already
+    // begun clocking out.
+    uart_wait_tx_done(port, pdMS_TO_TICKS(30));
+
+    uart_set_parity(port, UART_PARITY_EVEN);
 }
 
 // Copy rxBytes of rxbuf into received_packet->payload at offset 'start', clamped
@@ -173,12 +242,35 @@ static int store_packet_payload(struct ReceivedPacket * received_packet,
     return rxBytes;
 }
 
+// Clamp a requested read length to the capacity of the caller's rxbuf.
+//
+// Several call sites derive 'len' straight from a panel-supplied length byte
+// (dispatchF8, dispatchF9, dispatch_extF6).  store_packet_payload() clamps the
+// copy into ReceivedPacket::payload, but the UART read fills rxbuf *first* —
+// so without this the raw length byte overruns the caller's stack array.
+// The clamp lives here rather than at each call site so it cannot drift.
+static int clamp_read_len(int len, int rxbuf_cap, const char *who)
+{
+    if (len < 0)
+        len = 0;
+    if (len > rxbuf_cap)
+    {
+        ESP_LOGW("vista-ecp", "%s: requested length %d exceeds buffer capacity %d; clamping.",
+                 who, len, rxbuf_cap);
+        len = rxbuf_cap;
+    }
+    return len;
+}
+
 // Append up to 'len' bytes (event-queue driven) to received_packet starting at
 // offset 'start', then null-terminate the payload and update the size field.
+// 'rxbuf_cap' is the capacity of rxbuf in bytes; 'len' is clamped to it.
 // Returns the number of bytes read from the UART in this call.
 int VistaECP::get_packet_event(struct ReceivedPacket * received_packet, uint8_t * rxbuf,
-        int start, int len, uart_port_t uart_num, int timeout, QueueHandle_t queue)
+        int start, int len, uart_port_t uart_num, int timeout, QueueHandle_t queue,
+        int rxbuf_cap)
 {
+    len = clamp_read_len(len, rxbuf_cap, "get_packet_event");
     int rxBytes = uart_read_bytes_event(uart_num, rxbuf, len, timeout, queue);
     rxBytes = store_packet_payload(received_packet, rxbuf, start, rxBytes);
     return rxBytes;
@@ -188,8 +280,9 @@ int VistaECP::get_packet_event(struct ReceivedPacket * received_packet, uint8_t 
 // of the event queue.  Used for the monitor (RX-only) UART and extension decodes
 // where no event queue is wired up.
 int VistaECP::get_packet(struct ReceivedPacket * received_packet, uint8_t * rxbuf,
-        int start, int len, uart_port_t uart_num, int timeout)
+        int start, int len, uart_port_t uart_num, int timeout, int rxbuf_cap)
 {
+    len = clamp_read_len(len, rxbuf_cap, "get_packet");
     int rxBytes = uart_read_bytes(uart_num, rxbuf, len, timeout);
     rxBytes = store_packet_payload(received_packet, rxbuf, start, rxBytes);
     return rxBytes;
@@ -286,7 +379,7 @@ int VistaECP::keypad_write(const uart_port_t uart_n, const SendPacket &pkt_to_se
 void VistaECP::dispatchF2()
 {
     uint8_t data[kRXBufSize+1];
-    ReceivedPacket received_packet;
+    ReceivedPacket received_packet{};
     received_packet.type = 0;
     received_packet.payload[0] = 0xF2;
 
@@ -296,14 +389,14 @@ void VistaECP::dispatchF2()
     received_packet.payload[1] = data[0];
 
     // Read 'length' body bytes into the payload starting at offset 2.
+    // payload is char (signed): read the length byte through uint8_t so a value
+    // above 0x7F is not seen as negative.  get_packet_event clamps it to sizeof(data).
     rxBytes = this->get_packet_event(&received_packet, data, 2,
-                                      static_cast<int>(received_packet.payload[1]),
-                                      vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
+                                      static_cast<int>(static_cast<uint8_t>(received_packet.payload[1])),
+                                      vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue, sizeof(data));
 
-    if (valid_chksum(received_packet.payload, 0, rxBytes + 2))
-        received_packet.source = 0xF2;
-    else
-        received_packet.source = 0xCF; // checksum failure marker
+    const bool f2_ok = valid_chksum(received_packet.payload, 0, rxBytes + 2);
+    received_packet.source = f2_ok ? 0xF2 : 0xCF; // 0xCF = checksum failure marker
 
     xQueueSend(vistabus_.receiveQueue, &received_packet, pdMS_TO_TICKS(0));
 }
@@ -328,7 +421,7 @@ void VistaECP::dispatchF2()
 void VistaECP::dispatchF6(const SendPacket &pkt_to_send)
 {
     uint8_t data[4];
-    ReceivedPacket received_packet;
+    ReceivedPacket received_packet{};
     received_packet.type = 0;
     received_packet.payload[0] = 0xF6;
 
@@ -367,7 +460,7 @@ void VistaECP::dispatchF6(const SendPacket &pkt_to_send)
 
         // Wait for the panel to echo our sequence number as confirmation.
         rxBytes = this->get_packet_event(&received_packet, data, 0, 1,
-                                          vistabus_.uart_num, pdMS_TO_TICKS(100), vistabus_.uartevtQueue);
+                                          vistabus_.uart_num, pdMS_TO_TICKS(100), vistabus_.uartevtQueue, sizeof(data));
         if (rxBytes)
         {
             if (data[0] == pkt_to_send.sequence)
@@ -415,16 +508,14 @@ void VistaECP::dispatchF6(const SendPacket &pkt_to_send)
 void VistaECP::dispatchF7()
 {
     uint8_t data[kF7MessageLength-1];
-    ReceivedPacket received_packet;
+    ReceivedPacket received_packet{};
     received_packet.type = 0;
     received_packet.payload[0] = 0xF7;
 
     int rxBytes = this->get_packet_event(&received_packet, data, 1, kF7MessageLength - 1,
-                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
-    if (valid_chksum(received_packet.payload, 0, rxBytes + 1))
-        received_packet.source = 0xF7;
-    else
-        received_packet.source = 0xCF;
+                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue, sizeof(data));
+    const bool f7_ok = valid_chksum(received_packet.payload, 0, rxBytes + 1);
+    received_packet.source = f7_ok ? 0xF7 : 0xCF;
 
     xQueueSend(vistabus_.receiveQueue, &received_packet, 0);
 }
@@ -444,7 +535,7 @@ void VistaECP::dispatchF7()
 void VistaECP::dispatchF8()
 {
     uint8_t data[kRXBufSize+1];
-    ReceivedPacket received_packet;
+    ReceivedPacket received_packet{};
     received_packet.type = 0;
     received_packet.payload[0] = 0xF8;
     int rxBytes = 0;
@@ -456,7 +547,7 @@ void VistaECP::dispatchF8()
         // than the normal 4-byte parts used outside of program mode.
         received_packet.source = 0xDD;
         rxBytes = this->get_packet_event(&received_packet, data, 1, 32,
-                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
+                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue, sizeof(data));
     }
     else
     {
@@ -467,10 +558,11 @@ void VistaECP::dispatchF8()
         {
             received_packet.payload[1] = data[0]; // expander address
             received_packet.payload[2] = data[1]; // body length
-            rxBytes = this->get_packet_event(&received_packet, data, 3,
-                                              static_cast<int>(data[1]),
-                                              vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
-            if (valid_chksum(received_packet.payload, 0, rxBytes + 3))
+            const int want = static_cast<int>(data[1]);
+            rxBytes = this->get_packet_event(&received_packet, data, 3, want,
+                                              vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue, sizeof(data));
+            const bool f8_ok = valid_chksum(received_packet.payload, 0, rxBytes + 3);
+            if (f8_ok)
             {
                 // Forward to monitor task for expansion-bus correlation.
                 uint32_t val = 0xF8 << 8 | received_packet.payload[1];
@@ -495,7 +587,7 @@ void VistaECP::dispatchF8()
 void VistaECP::dispatchF9()
 {
     uint8_t data[kRXBufSize+1];
-    ReceivedPacket received_packet;
+    ReceivedPacket received_packet{};
     received_packet.type = 0;
     received_packet.payload[0] = 0xF9;
 
@@ -507,11 +599,12 @@ void VistaECP::dispatchF9()
         received_packet.payload[1] = data[0]; // RF receiver address
         received_packet.payload[2] = data[1]; // body length
 
-        rxBytes = this->get_packet_event(&received_packet, data, 3,
-                                          static_cast<int>(data[1]),
-                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
+        const int want = static_cast<int>(data[1]);
+        rxBytes = this->get_packet_event(&received_packet, data, 3, want,
+                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue, sizeof(data));
 
-        if (valid_chksum(received_packet.payload, 0, rxBytes + 3))
+        const bool f9_ok = valid_chksum(received_packet.payload, 0, rxBytes + 3);
+        if (f9_ok)
         {
             received_packet.source = 0xF9;
 
@@ -590,13 +683,14 @@ void VistaECP::quick_decodeF9(const char * cbuf)
 void VistaECP::dispatchFB()
 {
     uint8_t data[kFBMessageLength+1];
-    ReceivedPacket received_packet;
+    ReceivedPacket received_packet{};
     received_packet.type = 0;
     received_packet.payload[0] = 0xFB;
 
     int rxBytes = this->get_packet_event(&received_packet, data, 1, kFBMessageLength - 1,
-                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
-    if (valid_chksum(received_packet.payload, 0, rxBytes + 1))
+                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue, sizeof(data));
+    const bool fb_ok = valid_chksum(received_packet.payload, 0, rxBytes + 1);
+    if (fb_ok)
     {
         // Notify the monitor task with a summary of this FB packet.
         uint32_t val = 0xFB << 16 | received_packet.payload[1] << 8 | received_packet.payload[3];
@@ -622,7 +716,8 @@ void VistaECP::dispatchFB()
 // Timing-critical inline response for RF receiver emulation during an FB poll.
 //
 // type == 0xF1 (data request):
-//   Pull the next pending RF sensor message from deviceMsgQueue.
+//   Pull the pending RF sensor message from deviceMsgQueue — this poll is the
+//   panel's grant for a nudge we requested, so the head is that message.
 //   Build a 7-byte response containing the RF receiver address, a sequence
 //   number, the 20-bit RF serial packed into 3 bytes (high byte bit 7 set as
 //   valid-sensor flag, bits 3:0 = serial bits 19:16), the message byte, and
@@ -638,7 +733,17 @@ void VistaECP::quick_decodeFB(const char * cbuf)
     // 0xF1 - response to request, 0x80 - retry, 0x60 or 0x81 supervision, 0x82 supervision w/ type response
     if (type == 0xF1)
     {
-        DeviceMsg rfMsg;
+        // Blocking wait: the panel must be given time to respond within this
+        // exchange.  In normal operation the wait returns immediately — a 0xF1
+        // data request is the panel's grant for a nudge we requested, and
+        // rx_tx_task only nudges when the queue is already non-empty (see the
+        // deviceMsgQueue notes in vista_bus.h) — so the timeout is a margin,
+        // not a routine stall.
+        //
+        // Only reply if a message was actually dequeued: on a timeout, DeviceMsg's
+        // member initialisers would otherwise produce a well-formed but
+        // meaningless serial-0 / no-fault frame to the panel.
+        DeviceMsg rfMsg{};
         if (xQueueReceive(vistabus_.deviceMsgQueue, &rfMsg, pdMS_TO_TICKS(100)) == pdPASS)
         {
             uint8_t seq = cbuf[2];
@@ -675,15 +780,15 @@ void VistaECP::quick_decodeFB(const char * cbuf)
 void VistaECP::dispatch_legacyStatusPacket(uint8_t header)
 {
     uint8_t data[6];
-    ReceivedPacket received_packet;
+    ReceivedPacket received_packet{};
     received_packet.type = 0;
     received_packet.payload[0] = header;
 
-    uart_set_baudrate(vistabus_.uart_num, kEcpBaudLegacy);
+    vistabus_.set_baud_fast(false);
     int rxBytes = this->get_packet_event(&received_packet, data, 1, 4,
-                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue);
+                                          vistabus_.uart_num, pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue, sizeof(data));
     received_packet.source = 0xDD;
-    uart_set_baudrate(vistabus_.uart_num, kEcpBaudStandard);
+    vistabus_.set_baud_fast(true);
 
     xQueueSend(vistabus_.receiveQueue, &received_packet, 0);
 
@@ -699,7 +804,7 @@ void VistaECP::dispatch_legacyStatusPacket(uint8_t header)
 // type 0 = from the primary UART; type 1 = from the monitor (expansion-bus) UART.
 void VistaECP::dispatchDebug(uint8_t header, uint8_t type)
 {
-    ReceivedPacket received_packet;
+    ReceivedPacket received_packet{};
     received_packet.type = type;
     received_packet.payload[0] = header;
     received_packet.size = 1;
@@ -766,7 +871,7 @@ void VistaECP::track_write_attempts()
 void VistaECP::dispatch_extF6(uint32_t val, uint8_t header)
 {
     uint8_t data[48];
-    ReceivedPacket rcvd_extPkt;
+    ReceivedPacket rcvd_extPkt{};
     rcvd_extPkt.type = 1; // 1 = from monitor/expansion UART
     int rxBytes = 0;
     uint8_t n = 0;
@@ -785,8 +890,9 @@ void VistaECP::dispatch_extF6(uint32_t val, uint8_t header)
     rxBytes = uart_read_bytes(vistabus_.ext_uart_num, data, 1, pdMS_TO_TICKS(150));
     rcvd_extPkt.payload[1] = data[0]; // body length
 
-    this->get_packet(&rcvd_extPkt, data, 2, rcvd_extPkt.payload[1],
-                     vistabus_.ext_uart_num, pdMS_TO_TICKS(150));
+    this->get_packet(&rcvd_extPkt, data, 2,
+                     static_cast<int>(static_cast<uint8_t>(rcvd_extPkt.payload[1])),
+                     vistabus_.ext_uart_num, pdMS_TO_TICKS(150), sizeof(data));
 
     // Classify source the same way as the primary F6 handler.
     if (static_cast<uint8_t>(val) == 1 || static_cast<uint8_t>(val) == 2
@@ -803,7 +909,7 @@ void VistaECP::dispatch_extF6(uint32_t val, uint8_t header)
 void VistaECP::dispatch_extF8(uint32_t val, uint8_t header)
 {
     uint8_t data[2];
-    ReceivedPacket rcvd_extPkt;
+    ReceivedPacket rcvd_extPkt{};
     rcvd_extPkt.type = 1;
     int rxBytes = 0;
     uint8_t n = 0;
@@ -830,7 +936,7 @@ void VistaECP::dispatch_extF8(uint32_t val, uint8_t header)
 void VistaECP::dispatch_extF9(uint32_t val, uint8_t header)
 {
     uint8_t data[7];
-    ReceivedPacket rcvd_extPkt;
+    ReceivedPacket rcvd_extPkt{};
     rcvd_extPkt.type = 1;
     int rxBytes = 0;
     uint8_t n = 0;
@@ -850,7 +956,7 @@ void VistaECP::dispatch_extF9(uint32_t val, uint8_t header)
     if (static_cast<uint8_t>(val) == 0x53)
     {
         // Command 0x53: capture the 5-byte reply body and forward to the application.
-        this->get_packet(&rcvd_extPkt, data, 1, 5, vistabus_.ext_uart_num, pdMS_TO_TICKS(25));
+        this->get_packet(&rcvd_extPkt, data, 1, 5, vistabus_.ext_uart_num, pdMS_TO_TICKS(25), sizeof(data));
         xQueueSend(vistabus_.receiveQueue, &rcvd_extPkt, pdMS_TO_TICKS(0));
     }
 #ifdef DEBUG_LOG
@@ -878,7 +984,7 @@ void VistaECP::dispatch_extF9(uint32_t val, uint8_t header)
 void VistaECP::dispatch_extFA(uint32_t val, uint8_t header, bool legacy)
 {
     uint8_t data[7];
-    ReceivedPacket rcvd_extPkt;
+    ReceivedPacket rcvd_extPkt{};
     rcvd_extPkt.type = 1;
     int rxBytes = 0;
     data[0] = header;
@@ -915,7 +1021,7 @@ void VistaECP::dispatch_extFA(uint32_t val, uint8_t header, bool legacy)
 
         rcvd_extPkt.payload[0] = data[0];
         int res = this->get_packet(&rcvd_extPkt, data, 1, 3,
-                                    vistabus_.ext_uart_num, pdMS_TO_TICKS(kUartDelay));
+                                    vistabus_.ext_uart_num, pdMS_TO_TICKS(kUartDelay), sizeof(data));
         if (res > 0)
         {
             rcvd_extPkt.source = 0xFA;
@@ -933,7 +1039,7 @@ void VistaECP::dispatch_extFA(uint32_t val, uint8_t header, bool legacy)
         }
 
         rcvd_extPkt.payload[0] = data[0];
-        this->get_packet(&rcvd_extPkt, data, 1, 5, vistabus_.ext_uart_num, pdMS_TO_TICKS(50));
+        this->get_packet(&rcvd_extPkt, data, 1, 5, vistabus_.ext_uart_num, pdMS_TO_TICKS(50), sizeof(data));
         rcvd_extPkt.source = 0xFA;
         xQueueSend(vistabus_.receiveQueue, &rcvd_extPkt, pdMS_TO_TICKS(0));
     }
@@ -951,7 +1057,7 @@ void VistaECP::dispatch_extFA(uint32_t val, uint8_t header, bool legacy)
 void VistaECP::dispatch_extFB(uint32_t val, uint8_t header)
 {
     uint8_t data[kRFZoneMessageLength+1];
-    ReceivedPacket rcvd_extPkt;
+    ReceivedPacket rcvd_extPkt{};
     rcvd_extPkt.type = 1;
     int rxBytes = 0;
     uint8_t n = 0;
@@ -985,7 +1091,7 @@ void VistaECP::dispatch_extFB(uint32_t val, uint8_t header)
     {
         // Zone data: read the full RF zone message body.
         int res = this->get_packet(&rcvd_extPkt, data, 1, kRFZoneMessageLength - 1,
-                                    vistabus_.ext_uart_num, pdMS_TO_TICKS(kUartDelay));
+                                    vistabus_.ext_uart_num, pdMS_TO_TICKS(kUartDelay), sizeof(data));
         if (res > 0)
         {
             rcvd_extPkt.source = 0xFB;
@@ -994,7 +1100,7 @@ void VistaECP::dispatch_extFB(uint32_t val, uint8_t header)
     }
     else // Response to FB poll command — read 3-byte body.
     {
-        this->get_packet(&rcvd_extPkt, data, 1, 3, vistabus_.ext_uart_num, pdMS_TO_TICKS(kUartDelay));
+        this->get_packet(&rcvd_extPkt, data, 1, 3, vistabus_.ext_uart_num, pdMS_TO_TICKS(kUartDelay), sizeof(data));
         rcvd_extPkt.source = 0xFB;
         xQueueSend(vistabus_.receiveQueue, &rcvd_extPkt, pdMS_TO_TICKS(0));
     }
