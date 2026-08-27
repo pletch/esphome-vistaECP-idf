@@ -72,7 +72,7 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // -------------------------------------------------------------------
   // Construction
   // -------------------------------------------------------------------
-  VistaESPHome(char kpaddr, int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2);
+  VistaESPHome(int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2);
 
   // -------------------------------------------------------------------
   // Pre-setup configuration setters
@@ -353,7 +353,6 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // Configuration state set before setup()
   // -------------------------------------------------------------------
 
-  char keypad_addr1_{0};
   int rx_pin_{0};
   int tx_pin_{0};
   int uart1_{-1};

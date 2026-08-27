@@ -229,7 +229,6 @@ async def to_code(config):
 
     var = cg.new_Pvariable(
         config[CONF_ID],
-        config[CONF_KEYPAD1],
         config[CONF_RXPIN],
         config[CONF_TXPIN],
         config[CONF_UART1],

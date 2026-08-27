@@ -29,6 +29,7 @@
 #include "esphome/components/ota/ota_backend.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <cinttypes>
 #include <cstring>
 
 namespace esphome {
@@ -94,10 +95,9 @@ namespace alarm_panel {
 // declaration order regardless of the order written in the initialiser list.
 // ---------------------------------------------------------------------------
 
-VistaESPHome::VistaESPHome(char kpaddr, int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2)
+VistaESPHome::VistaESPHome(int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2)
     : cmd_(vistabus_, partitions_)  // holds refs — must come after both
       ,
-      keypad_addr1_(kpaddr),
       rx_pin_(receivePin),
       tx_pin_(transmitPin),
       uart1_(uartnum1),
@@ -109,7 +109,7 @@ VistaESPHome::VistaESPHome(char kpaddr, int receivePin, int transmitPin, int uar
 // ---------------------------------------------------------------------------
 
 void VistaESPHome::setup() {
-  ESP_LOGD(TAG, "Setup start — free heap: %lu", esp_get_free_heap_size());
+  ESP_LOGD(TAG, "Setup start — free heap: %" PRIu32, esp_get_free_heap_size());
 
   // ESPHome main-loop update interval (connection watchdog).
   set_update_interval(5000);
@@ -199,7 +199,7 @@ void VistaESPHome::setup() {
   // Bus task is running and emulation modes are configured; service
   // calls are now safe to honour.
   ready_ = true;
-  ESP_LOGD(TAG, "Setup complete — free heap: %lu", esp_get_free_heap_size());
+  ESP_LOGD(TAG, "Setup complete — free heap: %" PRIu32, esp_get_free_heap_size());
 }
 
 void VistaESPHome::update() {

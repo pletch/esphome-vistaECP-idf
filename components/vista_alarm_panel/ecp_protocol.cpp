@@ -20,9 +20,12 @@ VistaECP::VistaECP(VistaBus &vistabus) : vistabus_(vistabus) {}
 // Reads the current pin level and forwards it to the waiting FreeRTOS task
 // via xTaskNotifyFromISR().  mark_pulse() uses these notifications to time
 // each address-pulse byte with the panel's clock.
-// IRAM_ATTR ensures the function is placed in IRAM so it can execute even
-// when flash cache is disabled during a write.
-void IRAM_ATTR VistaECP::gpio_isr_handler(void *args) {
+// The IRAM_ATTR on the declaration in ecp_protocol.h places the function in
+// IRAM so it can execute even when flash cache is disabled during a write.
+// It belongs on the declaration only: ESP-IDF's IRAM_ATTR embeds __COUNTER__
+// in the section name, so repeating it here would name a second, different
+// section for the same function.
+void VistaECP::gpio_isr_handler(void *args) {
   GpioTaskArgs *taskargs = (GpioTaskArgs *) args;
   BaseType_t xHigherPriorityTaskWoken;
   xHigherPriorityTaskWoken = pdFALSE;
@@ -35,7 +38,7 @@ void IRAM_ATTR VistaECP::gpio_isr_handler(void *args) {
 // Timer ISR — fires when the transmit-window timer expires.
 // Sends 0xFFFFFFFF as a sentinel to unblock a task waiting in xTaskNotifyWait(),
 // signalling that the time window has elapsed regardless of any GPIO edges.
-void IRAM_ATTR VistaECP::timer_isr_handler(void *task_handle) {
+void VistaECP::timer_isr_handler(void *task_handle) {
   TaskHandle_t th = (TaskHandle_t) task_handle;
   BaseType_t xHigherPriorityTaskWoken;
   xHigherPriorityTaskWoken = pdFALSE;
