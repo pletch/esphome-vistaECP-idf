@@ -126,17 +126,45 @@ namespace esphome
             // Only handle the 0x5x sub-type (data response packets).
             if ((payload[7] & 0xF0) != 0x50)
             {
-                // 0x6x sub-type is the panel's zone-fault broadcast notification.
+                // 0x6x is the panel's zone-fault broadcast: notification that the
+                // fault list has changed.  It carries no fault data itself -- the
+                // list comes back only in response to a query -- so issue one and
+                // let the reply arrive as a later F2 (sum 23 for a fault list,
+                // sum 4 for all-clear, both handled at the bottom of this
+                // function).
                 //
-                // Responding to it with get_zone_faults() is deliberately NOT
-                // done: that would make the component write a 21-byte AUI command
-                // to the panel that this firmware has never sent, at whatever rate
-                // the panel broadcasts (capped only by the 6 s request_.pending
-                // guard).  Whether the panel tolerates that, and how often the
-                // broadcast actually occurs, has not been validated against
-                // hardware.  Zone faults still arrive via the normal F7/FA/FB
-                // path, so nothing is lost by ignoring the notification.
-                (void)bus;
+                // This is the only caller of get_zone_faults().  Without it the
+                // AUI zone path is inert and hardwired zone state falls back to
+                // F7, which reports one faulted zone at a time -- fast full-list
+                // closure status is the reason aui_addr exists at all.  The wiring
+                // was lost when this handling moved out of the monolith into the
+                // manager classes: the detection below survived, the call did not.
+                //
+                // payload[22] distinguishes fault (0x06) from fault-cleared
+                // (0x01).  Both are queried.  A cleared broadcast is answered with
+                // the sum-4 all-clear, and querying on both also matches what the
+                // panel has actually been seeing for as long as this worked: the
+                // original implementation omitted the braces around the 0x06 arm,
+                // so its query ran regardless of payload[22].
+                //
+                // get_zone_faults() self-throttles on request_.pending -- cleared
+                // by a response, or by tick() after 6 s -- so a burst of
+                // broadcasts still produces one query.
+                constexpr int kBroadcastTypeIndex = 22;
+                if ((payload[7] & 0xF0) == 0x60
+                        && static_cast<uint8_t>(payload[8]) == 0x63
+                        && static_cast<uint8_t>(payload[1]) == 0x16
+                        && size > kBroadcastTypeIndex)
+                {
+                    const uint8_t kind =
+                        static_cast<uint8_t>(payload[kBroadcastTypeIndex]);
+                    if (kind == 0x06 || kind == 0x01)
+                    {
+                        ESP_LOGD(TAG, "AUI zone-fault broadcast (%s); querying fault list.",
+                                 kind == 0x06 ? "fault" : "cleared");
+                        get_zone_faults(bus);
+                    }
+                }
                 return;
             }
 
@@ -163,7 +191,15 @@ namespace esphome
             else
                 data_len = payload[1] - sum - 7;
 
-            if (data_len == 0 || data_len > 40 || (size - static_cast<int>(data_len) - 1) < 0)
+            // A zero-length data section is a well-formed empty acknowledgement,
+            // not a malformed frame: the panel answers some writes -- a clock set,
+            // for one -- with a 0x5x response carrying only its header byte.
+            // There is nothing to decode and nothing wrong, so return quietly
+            // rather than warning on every one.
+            if (data_len == 0)
+                return;
+
+            if (data_len > 40 || (size - static_cast<int>(data_len) - 1) < 0)
             {
                 ESP_LOGW(TAG, "F2 packet has invalid data_len=%d (size=%d); ignoring.", data_len, size);
                 return;
