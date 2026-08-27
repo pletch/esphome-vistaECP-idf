@@ -140,15 +140,17 @@ namespace esphome
                 // was lost when this handling moved out of the monolith into the
                 // manager classes: the detection below survived, the call did not.
                 //
-                // payload[22] distinguishes fault (0x06) from fault-cleared
-                // (0x01).  Both are queried.  A cleared broadcast is answered with
-                // the sum-4 all-clear, and querying on both also matches what the
-                // panel has actually been seeing for as long as this worked: the
-                // original implementation omitted the braces around the 0x06 arm,
-                // so its query ran regardless of payload[22].
+                // payload[22] distinguishes fault (0x06) from all-clear (0x01),
+                // and the two are answered differently.
                 //
+                // 0x01 needs no query: "every zone is clear" is the complete
+                // answer, so apply it directly rather than spending a bus write
+                // asking the panel to repeat itself.  0xFE is the all-clear marker
+                // process_zone_faults() already documents.
+                //
+                // 0x06 carries no list, so the list has to be asked for.
                 // get_zone_faults() self-throttles on request_.pending -- cleared
-                // by a response, or by tick() after 6 s -- so a burst of
+                // by a response, or by tick() after 6 s -- so a burst of fault
                 // broadcasts still produces one query.
                 constexpr int kBroadcastTypeIndex = 22;
                 if ((payload[7] & 0xF0) == 0x60
@@ -158,10 +160,17 @@ namespace esphome
                 {
                     const uint8_t kind =
                         static_cast<uint8_t>(payload[kBroadcastTypeIndex]);
-                    if (kind == 0x06 || kind == 0x01)
+                    if (kind == 0x01)
                     {
-                        ESP_LOGD(TAG, "AUI zone-fault broadcast (%s); querying fault list.",
-                                 kind == 0x06 ? "fault" : "cleared");
+                        ESP_LOGD(TAG, "AUI zone-fault broadcast: all zones clear.");
+                        const char all_clear[2] = {static_cast<char>(0xFE), '\0'};
+                        process_zone_faults(all_clear, zones);
+                        // Any query still outstanding is moot now.
+                        request_.pending = false;
+                    }
+                    else if (kind == 0x06)
+                    {
+                        ESP_LOGD(TAG, "AUI zone-fault broadcast: fault; querying list.");
                         get_zone_faults(bus);
                     }
                 }
@@ -191,14 +200,15 @@ namespace esphome
             else
                 data_len = payload[1] - sum - 7;
 
-            // A zero-length data section is a well-formed empty acknowledgement,
-            // not a malformed frame: the panel answers some writes -- a clock set,
-            // for one -- with a 0x5x response carrying only its header byte.
-            // There is nothing to decode and nothing wrong, so return quietly
-            // rather than warning on every one.
-            if (data_len == 0)
-                return;
-
+            // A zero-length data section is not malformed and must not short-
+            // circuit the sum dispatch below.  The panel answers a clock set with
+            // a 0x5x response carrying only its header byte (sum 1, nothing to
+            // do), but the zone-fault all-clear arrives the same shape -- four
+            // 0xFE markers, sum 4, no list -- and that one has to reach
+            // process_zone_faults() to clear the zones and retire the pending
+            // request.  An empty list decodes to all-zero masks, which is exactly
+            // the all-clear.  Warning here instead is what left a query pending
+            // until tick() timed it out six seconds later.
             if (data_len > 40 || (size - static_cast<int>(data_len) - 1) < 0)
             {
                 ESP_LOGW(TAG, "F2 packet has invalid data_len=%d (size=%d); ignoring.", data_len, size);
