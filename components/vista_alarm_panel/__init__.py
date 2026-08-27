@@ -76,17 +76,20 @@ CC1101_PINS = [
 ]
 
 
+KEYPAD_ADDR_KEYS = [
+    CONF_KEYPAD1,
+    CONF_KEYPAD2,
+    CONF_KEYPAD3,
+    CONF_KEYPAD4,
+    CONF_KEYPAD5,
+    CONF_KEYPAD6,
+    CONF_KEYPAD7,
+    CONF_KEYPAD8,
+]
+
+
 def validate_keypads(config):
-    if (
-        config[CONF_KEYPAD1] == 0
-        and config[CONF_KEYPAD2] == 0
-        and config[CONF_KEYPAD3] == 0
-        and config[CONF_KEYPAD4] == 0
-        and config[CONF_KEYPAD5] == 0
-        and config[CONF_KEYPAD6] == 0
-        and config[CONF_KEYPAD7] == 0
-        and config[CONF_KEYPAD8] == 0
-    ):
+    if all(config[key] == 0 for key in KEYPAD_ADDR_KEYS):
         raise cv.Invalid(
             "All partition keypads assigned 0. At minimum one 'keypad_addr_#' must be defined in YAML and assigned a valid address"
         )

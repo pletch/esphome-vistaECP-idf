@@ -35,9 +35,10 @@ CONF_TYPE = "type"
 
 
 def _validate(value):
-    if value[CONF_TYPE] == "ZONE":
-        if CONF_ZONE not in value or CONF_PARTITION not in value:
-            raise cv.Invalid('type: "zone" requires both zone: and partition:')
+    if value[CONF_TYPE] == "ZONE" and (
+        CONF_ZONE not in value or CONF_PARTITION not in value
+    ):
+        raise cv.Invalid('type: "zone" requires both zone: and partition:')
     if value[CONF_TYPE] != "ZONE" and CONF_ZONE in value:
         raise cv.Invalid('zone: parameter only valid with type: "zone"')
     return value
@@ -64,5 +65,5 @@ async def to_code(config):
     if CONF_ZONE in config:
         cg.add(hub.register_zone_text(var, config[CONF_PARTITION], config[CONF_ZONE]))
     else:
-        partition = config[CONF_PARTITION] if CONF_PARTITION in config else 0
+        partition = config.get(CONF_PARTITION, 0)
         cg.add(hub.register_text_sensor(var, partition, config[CONF_TYPE]))

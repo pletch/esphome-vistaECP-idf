@@ -1,0 +1,9 @@
+# Revisions to skip when running git blame.
+#
+# Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub honours this file automatically.
+
+# Reformat the tree with ESPHome's lint rules
+ed993fd27bd67147d6562ad2a3bfeee1d536678f

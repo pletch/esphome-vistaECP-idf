@@ -1,33 +1,33 @@
 # Modified to work with https://github.com/Tim Pletcher/esphome-vistaECP-idf
 substitutions:
-  name: "vista-ecp-idf" # Unique network name, system name
+  name: "vista-ecp-idf"  # Unique network name, system name
   friendlyName: "Vista Alarm"  # Used as the friendly name of your application in HomeAssistant
   panelId: "VistaAlarm"        # Used as the service variable name.
   accesscode: !secret access_code
 
 vista_alarm_panel:
   id: $panelId
-  access_code: $accesscode # Only relevant if needed for arming and quickarm is not set
+  access_code: $accesscode  # Only relevant if needed for arming and quickarm is not set
 
   default_partition: "1"  # Set to system main partition
   debug_logging: "false"  # Enables additional bus activity logging and prints full ecp packet contents to the log.  Global esphome and vista-alarm
                           # component (if configured) logging level must be set to DEBUG or higher in logging component section
                           # to output all messages.
-  debug_pulsing: "false" # Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences
+  debug_pulsing: "false"  # Enables use of ESP32 RMT peripheral to capture and output pulse pattern for diagnostics.  Pulse pattern output to log commences
                          # 60 seconds after startup and continues indefinitely.  DO NOT enable for routine use of component!
-  legacy_protocol: "false" # Set to true if using an older panel such as the Vista-15SE or Vista20SE.
+  legacy_protocol: "false"  # Set to true if using an older panel such as the Vista-15SE or Vista20SE.
 
   # Assign a new virtual keypad address to each active partition using programs *190 - *196 (on Vista 15P/20P)
   # and enter it below. For older Vista 15SE/20SE, use address of 31. For unused partitions, use 0 as the
   # keypad address or comment out associated keypad_addr line.
-  keypad_addr_1: "20" #partition 1 virtual keypad. Comment out or set to 0 to disable
-  #keypad_addr_2: "0" #partition 2 virtual keypad. Comment out or set to 0 to disable
-  #keypad_addr_3: "0" #partition 3 virtual keypad. Comment out or set to 0 to disable
-  #keypad_addr_4: "0" #partition 4 virtual keypad. Comment out or set to 0 to disable
-  #keypad_addr_5: "0" #partition 5 virtual keypad. Comment out or set to 0 to disable
-  #keypad_addr_6: "0" #partition 6 virtual keypad. Comment out or set to 0 to disable
-  #keypad_addr_7: "0" #partition 7 virtual keypad. Comment out or set to 0 to disable
-  #keypad_addr_8: "0" #partition 8 virtual keypad. Comment out or set to 0 to disable
+  keypad_addr_1: "20"  # partition 1 virtual keypad. Comment out or set to 0 to disable
+  # keypad_addr_2: "0" #partition 2 virtual keypad. Comment out or set to 0 to disable
+  # keypad_addr_3: "0" #partition 3 virtual keypad. Comment out or set to 0 to disable
+  # keypad_addr_4: "0" #partition 4 virtual keypad. Comment out or set to 0 to disable
+  # keypad_addr_5: "0" #partition 5 virtual keypad. Comment out or set to 0 to disable
+  # keypad_addr_6: "0" #partition 6 virtual keypad. Comment out or set to 0 to disable
+  # keypad_addr_7: "0" #partition 7 virtual keypad. Comment out or set to 0 to disable
+  # keypad_addr_8: "0" #partition 8 virtual keypad. Comment out or set to 0 to disable
 
   # AUI address from program field *189 to use for faster zone closure status for zones directly
   # hardwired to the panel and to allow time sync of panel via manual Home Assistant service or via
@@ -37,26 +37,26 @@ vista_alarm_panel:
   # For Vista128,Vista250 commercial panels, ensure the address used is setup as an AUI keypad in program #93,
   # device programming. Omission of the parameter or a value of zero disables AUI handling.
   aui_addr: "0"
-  aui_auto_clock_sync: "false" # Automatically periodically sync panel clock using esphome clock time.
+  aui_auto_clock_sync: "false"  # Automatically periodically sync panel clock using esphome clock time.
                                # Useful for automatically pushing correct time to touchpad displays.
 
-  rx_pin: "21" # GPIO pin to use for data receive (yellow line)
-  tx_pin: "23" # GPIO pin to use for data transmit (green line)
-  uart_1: "1" # Hardware UART number to use for tx/rx.
+  rx_pin: "21"  # GPIO pin to use for data receive (yellow line)
+  tx_pin: "23"  # GPIO pin to use for data transmit (green line)
+  uart_1: "1"  # Hardware UART number to use for tx/rx.
 
-  monitor_pin: "22" # GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
-  uart_2: "2" # Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
+  monitor_pin: "22"  # GPIO pin to use for monitoring module traffic such as RF or Expanders . Set to -1 to disable.
+  uart_2: "2"  # Hardware UART number to use for monitoring module traffic via monitorpin.  Automatically disabled if monitorpin set to -1.
 
   ttl: "30"  # Time to live in seconds for hard-wired zone/fire status before expiring. Panel does not specifically send cleared messages for these.
   quickarm: "false"
 
-  lrr_supervisor: "false" # set to true if system doesn't have LRR monitoring supervisor to emulate one and retrieve monitoring status updates.
+  lrr_supervisor: "false"  # set to true if system doesn't have LRR monitoring supervisor to emulate one and retrieve monitoring status updates.
 
   # RF Receiver Emulation - emulates a Honeywell 5881ENH RF receiver on the ECP bus.
   # Required for both virtual software-defined RF zones AND for CC1101 hardware reception
   # from physical Honeywell 5800-series 345 MHz wireless sensors.
   # Do NOT enable if a physical RF receiver is already present -- Vista panels support only one.
-  rf_receiver_emulation: "false" # set to true to enable RF receiver emulation
+  rf_receiver_emulation: "false"  # set to true to enable RF receiver emulation
   rf_receiver_addr: "0"   # Only valid address on Vista 15/20 is 0
 
   # CC1101 Hardware RF Receiver - enables real-time OOK reception from physical
@@ -64,18 +64,18 @@ vista_alarm_panel:
   # Requires rf_receiver_emulation: true and all five SPI pins specified together.
   # GDO0 must be connected to an RMT-capable GPIO on the ESP32.
   # Automatically disabled at build time when debug_pulsing is enabled (both use RMT).
-  #cc1101_mosi_pin: "13"
-  #cc1101_miso_pin: "12"
-  #cc1101_sck_pin:  "14"
-  #cc1101_csn_pin:  "15"
-  #cc1101_gdo0_pin: "27"
+  # cc1101_mosi_pin: "13"
+  # cc1101_miso_pin: "12"
+  # cc1101_sck_pin:  "14"
+  # cc1101_csn_pin:  "15"
+  # cc1101_gdo0_pin: "27"
 
 # Location of alarm panel code.  You can use the github release version or
 # copy the code to directory "components" in your main esphome directory
 # see here for more info: https://esphome.io/components/external_components
 external_components:
   - source: github://Tim Pletcher/esphome-vistaECP-idf
-  #- source:  components #uncomment to use local directory
+    # - source:  components #uncomment to use local directory
     components: [vista_alarm_panel]
     refresh: 10min
 
@@ -153,77 +153,76 @@ api:
 #######################################################################
 
 binary_sensor:
-### zone sensors ###
-# open/close status for each zone
-#  - platform: vista_alarm_panel
-#    id: z8
-#    name: "Flood Sensor"
-#    partition: 1
-#    zone: 8
-#    device_class: moisture
+  ### zone sensors ###
+  # open/close status for each zone
+  #  - platform: vista_alarm_panel
+  #    id: z8
+  #    name: "Flood Sensor"
+  #    partition: 1
+  #    zone: 8
+  #    device_class: moisture
 
-# Physical RF zone: backed by a real Honeywell 5800-series sensor.
-# Received via CC1101 hardware receiver or a monitored physical 5881ENH.
-# rf_serial matches the 20-bit serial printed on the sensor (no leading zeros).
-#  - platform: vista_alarm_panel
-#    id: z9
-#    name: "Front Door"
-#    partition: 1
-#    zone: 9
-#    rf_serial: 231357
-#    rf_loop: 2
-#    device_class: door
+  # Physical RF zone: backed by a real Honeywell 5800-series sensor.
+  # Received via CC1101 hardware receiver or a monitored physical 5881ENH.
+  # rf_serial matches the 20-bit serial printed on the sensor (no leading zeros).
+  #  - platform: vista_alarm_panel
+  #    id: z9
+  #    name: "Front Door"
+  #    partition: 1
+  #    zone: 9
+  #    rf_serial: 231357
+  #    rf_loop: 2
+  #    device_class: door
 
-# Emulated hardwired zone via automatic expander board emulation.
-# Zone 33 enables emulated expander on address 10.
-#  - platform: vista_alarm_panel
-#    id: z33
-#    name: "Emulated hardwired zone"
-#    partition: 1
-#    zone: 33
-#    emulated: true
-#    device_class: door
+  # Emulated hardwired zone via automatic expander board emulation.
+  # Zone 33 enables emulated expander on address 10.
+  #  - platform: vista_alarm_panel
+  #    id: z33
+  #    name: "Emulated hardwired zone"
+  #    partition: 1
+  #    zone: 33
+  #    emulated: true
+  #    device_class: door
 
-# Emulated RF zone: software-only, no physical sensor.
-# Requires rf_receiver_emulation: true. State driven by set_zone_fault() or HA input.
-#  - platform: vista_alarm_panel
-#    id: z34
-#    name: "Emulated rf zone"
-#    partition: 1
-#    zone: 34
-#    rf_serial: 123456
-#    rf_loop: 1
-#    emulated: true
-#    device_class: motion
+  # Emulated RF zone: software-only, no physical sensor.
+  # Requires rf_receiver_emulation: true. State driven by set_zone_fault() or HA input.
+  #  - platform: vista_alarm_panel
+  #    id: z34
+  #    name: "Emulated rf zone"
+  #    partition: 1
+  #    zone: 34
+  #    rf_serial: 123456
+  #    rf_loop: 1
+  #    emulated: true
+  #    device_class: motion
 
-# Example showing attachment of a Home Assistant binary sensor to an emulated hardwired zone
-#  - platform: homeassistant
-#    name: "Binary Sensor From Home Assistant"
-#    entity_id: binary_sensor.example
-#    on_press:       #zone,on/off
-#      - lambda: |-
-#          $panelId->set_zone_fault(33,1);
-#    on_release:
-#      - lambda: |-
-#          $panelId->set_zone_fault(33,0);
+  # Example showing attachment of a Home Assistant binary sensor to an emulated hardwired zone
+  #  - platform: homeassistant
+  #    name: "Binary Sensor From Home Assistant"
+  #    entity_id: binary_sensor.example
+  #    on_press:       #zone,on/off
+  #      - lambda: |-
+  #          $panelId->set_zone_fault(33,1);
+  #    on_release:
+  #      - lambda: |-
+  #          $panelId->set_zone_fault(33,0);
 
+  #######################################################################
+  # Non-zone binary sensors should be specified with
+  # status_indicator parameter.  Valid options are
+  # [ready, trouble, bypass, armed_away, armed_instant, armed_night,
+  # chime, alarm, fire, ac_power, and battery]
+  # Partition specific indicators will require specifying partition:
+  ### non zone sensors ###
 
-#######################################################################
-# Non-zone binary sensors should be specified with
-# status_indicator parameter.  Valid options are
-# [ready, trouble, bypass, armed_away, armed_instant, armed_night,
-# chime, alarm, fire, ac_power, and battery]
-# Partition specific indicators will require specifying partition:
-### non zone sensors ###
-
-# partition ready status
+  # partition ready status
   - platform: vista_alarm_panel
     id: rdy_1
     name: "Ready"
     partition: 1
     status_indicator: "ready"
 
-# partition/panel trouble status
+  # partition/panel trouble status
   - platform: vista_alarm_panel
     id: trbl_1
     name: "Trouble"
@@ -231,36 +230,35 @@ binary_sensor:
     status_indicator: "trouble"
     device_class: problem
 
-# bypass zones active status
-#  - platform: vista_alarm_panel
-#    id: byp_1
-#    partition: 1
-#    status_indicator: "bypass"
-#    name: "Bypass Partition 1"
+  # bypass zones active status
+  #  - platform: vista_alarm_panel
+  #    id: byp_1
+  #    partition: 1
+  #    status_indicator: "bypass"
+  #    name: "Bypass Partition 1"
 
-# armed away status
-#  - platform: vista_alarm_panel
-#    name: "Away Partition 1"
-#    id: arma_1
-#    partition: 1
-#    status_indicator: "armed_away"
+  # armed away status
+  #  - platform: vista_alarm_panel
+  #    name: "Away Partition 1"
+  #    id: arma_1
+  #    partition: 1
+  #    status_indicator: "armed_away"
 
-# armed status
+  # armed status
   - platform: vista_alarm_panel
     id: arm_1
     partition: 1
     status_indicator: "armed"
     name: "Armed"
 
-
-# ac status
+  # ac status
   - platform: vista_alarm_panel
     id: ac
     name: "Power Status"
     status_indicator: "ac_power"
     device_class: plug
 
-# alarm status
+  # alarm status
   - platform: vista_alarm_panel
     id: alm_1
     name: "Alarm"
@@ -297,42 +295,42 @@ binary_sensor:
 # Text sensors with partition specific data will require specifying partition:
 #### text sensors ####
 text_sensor:
-#
-#  - platform: vista_alarm_panel
-#    name: "Kitchen Motion Txt"
-#    id: z13_txt
-#    type: "zone"
-#    zone: 13
-#    partition: 1
+  #
+  #  - platform: vista_alarm_panel
+  #    name: "Kitchen Motion Txt"
+  #    id: z13_txt
+  #    type: "zone"
+  #    zone: 13
+  #    partition: 1
 
-# system status messages
+  # system status messages
   - platform: vista_alarm_panel
     id: ss_1
     name: "System Status"
     icon: "mdi:shield"
     type: "system_status"
     partition: 1
-# sample filter to change "not_ready" status to "disarmed" for use in HA Alarm Panel
-#    filters:
-#      - lambda: |-
-#          if (x == "not_ready") x="disarmed";
-#          return x;
+  # sample filter to change "not_ready" status to "disarmed" for use in HA Alarm Panel
+  #    filters:
+  #      - lambda: |-
+  #          if (x == "not_ready") x="disarmed";
+  #          return x;
 
-# long range radio messages
+  # long range radio messages
   - platform: vista_alarm_panel
     id: lrr
     name: "Lrr Msg"
     type: "lrr_messages"
     icon: "mdi:alert-box"
 
-# RF zone messages
+  # RF zone messages
   - platform: vista_alarm_panel
     id: rf
     name: "RF Msg"
     type: "rf_messages"
     icon: "mdi:alert-box"
 
-# virtual lcd keypad line1 and line2 messages for each partition
+  # virtual lcd keypad line1 and line2 messages for each partition
   - platform: vista_alarm_panel
     name: "Line1"
     id: ln1_1
@@ -344,21 +342,21 @@ text_sensor:
     partition: 1
     type: "line2"
 
-# zone status messages bypas/open/alarm
+  # zone status messages bypas/open/alarm
   - platform: vista_alarm_panel
     name: "Zone Status"
     id: zs
     type: "zone_status"
 
-# system beeps
+  # system beeps
   - platform: vista_alarm_panel
     name: "Beeps"
     id: bp_1
     partition: 1
     type: "beeps"
 
-#optional cmd button example.  Send any keypad keys
-#button:
+# optional cmd button example.  Send any keypad keys
+# button:
 #    - platform: vista_alarm_panel
 #      name: Gate Button
 #      id: gate1
@@ -367,7 +365,7 @@ text_sensor:
 #        - lambda: |-
 #            $panelId->alarm_keypress_partition("${accesscode}#701",1);
 
- # end of panel sensor setup - no need to edit anything below.
+# end of panel sensor setup - no need to edit anything below.
 ##############################################################################
 
 switch:

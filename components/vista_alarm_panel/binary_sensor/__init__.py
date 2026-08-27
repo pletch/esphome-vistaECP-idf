@@ -47,13 +47,11 @@ CONF_EMULATED_ZONE = "emulated"
 
 
 def _validate(value):
-    if CONF_ZONE in value:
-        if (CONF_RFSERIAL in value and CONF_RFLOOP not in value) or (
-            CONF_RFLOOP in value and CONF_RFSERIAL not in value
-        ):
-            raise cv.Invalid(
-                "rf_serial: and rf_loop: must both be specified for RF Zone"
-            )
+    if CONF_ZONE in value and (
+        (CONF_RFSERIAL in value and CONF_RFLOOP not in value)
+        or (CONF_RFLOOP in value and CONF_RFSERIAL not in value)
+    ):
+        raise cv.Invalid("rf_serial: and rf_loop: must both be specified for RF Zone")
     if CONF_ZONE in value and CONF_STATUS_SENSOR in value:
         raise cv.Invalid(
             "Valid sensor config must include only one of either zone: or status_indicator:. Both are specified."
@@ -122,7 +120,7 @@ async def to_code(config):
                         False,
                     )
                 )
-        elif CONF_EMULATED_ZONE in config and config[CONF_EMULATED_ZONE] == True:
+        elif CONF_EMULATED_ZONE in config and config[CONF_EMULATED_ZONE]:
             cg.add(
                 hub.register_zone(
                     var, config[CONF_PARTITION], config[CONF_ZONE], 0, 0, True
