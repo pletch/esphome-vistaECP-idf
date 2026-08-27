@@ -34,7 +34,7 @@
 
 class VistaECP {
  public:
-  VistaECP(VistaBus &vistabus_);
+  VistaECP(VistaBus &vistabus);
 
   // --- Transmit state flags ---
   // pulse_mark_time  – esp_timer timestamp at which the last pulse mark was sent.
@@ -88,40 +88,40 @@ class VistaECP {
 
   // 0xF2 — Keypad poll.  Reads the length byte and full payload, validates the
   //        checksum, and enqueues a ReceivedPacket (source 0xF2 or 0xCF on error).
-  void dispatchF2();
+  void dispatch_f2();
 
   // 0xF6 — Keypad address ACK / poll response.
   //        If the ACK address matches our keypad address and req_to_send is set,
   //        transmits the pending payload via keypad_write() and waits for the
   //        panel's echo/ACK byte.  Otherwise drains the trailing bytes silently.
-  void dispatchF6(const SendPacket &pkt_to_send);
+  void dispatch_f6(const SendPacket &pkt_to_send);
 
   // 0xF7 — Long-Range Radio (LRR) packet.  Fixed-length frame; checksum validated.
-  void dispatchF7();
+  void dispatch_f7();
 
   // 0xF8 — Unknown purpose in normal mode.  In legacy program mode, carries status
   //        data as a single 33-byte packet rather than the 4-byte parts used otherwise.
   //        Reads the two-byte header (address + length), then the body, validates
   //        the checksum, and notifies the monitor task if active.
-  void dispatchF8();
+  void dispatch_f8();
 
   // 0xF9 — RF receiver poll.  Same header structure as F8.  When LRR emulation
   //        is enabled, quick_decodeF9() sends a hardware-timed response directly.
-  void dispatchF9();
+  void dispatch_f9();
 
   // 0xFB — RF receiver data / supervision packet (2400-series panels).
   //        When RF emulation is active, quick_decodeFB() replies inline to meet
   //        the panel's strict timing window.
-  void dispatchFB();
+  void dispatch_fb();
 
   // SE-series legacy status packet.  Temporarily switches the UART to 2400 baud
   // to collect the 4-byte body, then restores 4800 baud.  Sets legacy_programmode
   // from the data byte if applicable.
-  void dispatch_legacyStatusPacket(uint8_t header);
+  void dispatch_legacy_status_packet(uint8_t header);
 
   // Enqueue a single-byte debug packet so the application can log unknown headers.
   // 'type' distinguishes primary (0) vs. monitor (1) UART source.
-  void dispatchDebug(uint8_t header, uint8_t type);
+  void dispatch_debug(uint8_t header, uint8_t type);
 
   // Called every loop iteration from rx_tx_task.  Increments ack_failures if a
   // pulse mark was sent more than 1.2 s ago without receiving an F6 ACK.
@@ -134,20 +134,20 @@ class VistaECP {
   // 'header' is the most recently received byte (may need alignment correction).
 
   // 0xF6 extension: keypad-to-panel payload from an expander.
-  void dispatch_extF6(uint32_t val, uint8_t header);
+  void dispatch_ext_f6(uint32_t val, uint8_t header);
 
   // 0xF8 extension: unknown purpose (debug log only).
-  void dispatch_extF8(uint32_t val, uint8_t header);
+  void dispatch_ext_f8(uint32_t val, uint8_t header);
 
   // 0xF9 extension: RF receiver response read from the expansion bus.
-  void dispatch_extF9(uint32_t val, uint8_t header);
+  void dispatch_ext_f9(uint32_t val, uint8_t header);
 
   // 0xFA extension: zone-expander or RF data from 2400-series expansion bus.
   //                 'legacy' selects the address decode path.
-  void dispatch_extFA(uint32_t val, uint8_t header, bool legacy);
+  void dispatch_ext_fa(uint32_t val, uint8_t header, bool legacy);
 
   // 0xFB extension: RF zone message or poll response from expansion bus.
-  void dispatch_extFB(uint32_t val, uint8_t header);
+  void dispatch_ext_fb(uint32_t val, uint8_t header);
 
  protected:
   VistaBus &vistabus_;  // Back-reference to the owning bus for UART / queue access.
@@ -157,7 +157,7 @@ class VistaECP {
   // The pulse consists of 1–3 bytes whose bits encode the address as a one-hot
   // bitmask (active-low).  GPIO edge interrupts on the RX pin are used via
   // xTaskNotifyWait() to synchronise each byte with the panel's clock edges.
-  void mark_pulse(int uartNum, uint8_t address);
+  void mark_pulse_(int uart_num, uint8_t address);
 
   // GPIO ISR handler — fires on any edge of the RX pin.
   // Reads the current GPIO level and sends it to the waiting task via
@@ -171,14 +171,14 @@ class VistaECP {
  private:
   // Timing-sensitive inline response to an F9 poll when LRR emulation is active.
   // Must run synchronously (not via the receiveQueue) to meet the panel's ACK window.
-  void quick_decodeF9(const char *cbuf);
+  void quick_decode_f9_(const char *cbuf);
 
   // Timing-sensitive inline response to an FB poll when RF emulation is active.
   // Pulls the pending RF message from deviceMsgQueue and encodes the reply.
   // Non-blocking: the poll is the panel's grant for a nudge we requested, so
   // the message is already queued.  See deviceMsgQueue notes in vista_bus.h.
-  void quick_decodeFB(const char *cbuf);
+  void quick_decode_fb_(const char *cbuf);
 
   // Counter for consecutive F6 ACK misses after a pulse mark; reset on success.
-  uint8_t ack_failures = 0;
+  uint8_t ack_failures_ = 0;
 };

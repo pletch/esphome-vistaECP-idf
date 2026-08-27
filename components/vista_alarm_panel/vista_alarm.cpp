@@ -51,8 +51,8 @@ struct VistaESPHome::OTAGuard : public ota::OTAGlobalStateListener {
       // bus code when flash cache is disabled by the OTA writer.
       // taskYIELD() after each suspend lets the target task actually reach
       // its next scheduling point on the other core before we proceed.
-      if (owner->processReceiveQHandle) {
-        vTaskSuspend(owner->processReceiveQHandle);
+      if (owner->process_receive_q_handle_) {
+        vTaskSuspend(owner->process_receive_q_handle_);
         taskYIELD();
       }
 #ifdef CC1101_RECEIVER
@@ -68,8 +68,8 @@ struct VistaESPHome::OTAGuard : public ota::OTAGlobalStateListener {
     } else if (state == ota::OTA_COMPLETED || state == ota::OTA_ABORT || state == ota::OTA_ERROR) {
       ESP_LOGI("vista", "OTA end — resuming tasks");
       owner->vistabus_.resume_tasks();
-      if (owner->processReceiveQHandle)
-        vTaskResume(owner->processReceiveQHandle);
+      if (owner->process_receive_q_handle_)
+        vTaskResume(owner->process_receive_q_handle_);
 #ifdef CC1101_RECEIVER
       if (owner->cc1101_receiver_)
         owner->cc1101_receiver_->resume();
@@ -92,13 +92,13 @@ namespace esphome::alarm_panel {
 // declaration order regardless of the order written in the initialiser list.
 // ---------------------------------------------------------------------------
 
-VistaESPHome::VistaESPHome(int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2)
+VistaESPHome::VistaESPHome(int receive_pin, int transmit_pin, int uartnum1, int monitor_tx_pin, int uartnum2)
     : cmd_(vistabus_, partitions_)  // holds refs — must come after both
       ,
-      rx_pin_(receivePin),
-      tx_pin_(transmitPin),
+      rx_pin_(receive_pin),
+      tx_pin_(transmit_pin),
       uart1_(uartnum1),
-      monitor_pin_(monitorTxPin),
+      monitor_pin_(monitor_tx_pin),
       uart2_(uartnum2) {}
 
 // ---------------------------------------------------------------------------
@@ -112,17 +112,17 @@ void VistaESPHome::setup() {
   set_update_interval(5000);
 
   // --- Register ESPHome API services ---
-  register_service(&VistaESPHome::svc_set_panel_time, "set_panel_time", {});
-  register_service(&VistaESPHome::svc_alarm_keypress, "alarm_keypress", {"keys"});
-  register_service(&VistaESPHome::svc_alarm_keypress_partition, "alarm_keypress_partition", {"keys", "partition"});
-  register_service(&VistaESPHome::svc_alarm_disarm, "alarm_disarm", {"code", "partition"});
-  register_service(&VistaESPHome::svc_alarm_arm_home, "alarm_arm_home", {"partition"});
-  register_service(&VistaESPHome::svc_alarm_arm_night, "alarm_arm_night", {"partition"});
-  register_service(&VistaESPHome::svc_alarm_arm_away, "alarm_arm_away", {"partition"});
-  register_service(&VistaESPHome::svc_alarm_trigger_panic, "alarm_trigger_panic", {"code", "partition"});
-  register_service(&VistaESPHome::svc_alarm_trigger_fire, "alarm_trigger_fire", {"code", "partition"});
-  register_service(&VistaESPHome::svc_set_zone_fault, "set_zone_fault", {"zone", "fault"});
-  register_service(&VistaESPHome::svc_set_rf_zone_heartbeat, "set_rf_zone_heartbeat", {"zone", "fault"});
+  register_service(&VistaESPHome::svc_set_panel_time_, "set_panel_time", {});
+  register_service(&VistaESPHome::svc_alarm_keypress_, "alarm_keypress", {"keys"});
+  register_service(&VistaESPHome::svc_alarm_keypress_partition_, "alarm_keypress_partition", {"keys", "partition"});
+  register_service(&VistaESPHome::svc_alarm_disarm_, "alarm_disarm", {"code", "partition"});
+  register_service(&VistaESPHome::svc_alarm_arm_home_, "alarm_arm_home", {"partition"});
+  register_service(&VistaESPHome::svc_alarm_arm_night_, "alarm_arm_night", {"partition"});
+  register_service(&VistaESPHome::svc_alarm_arm_away_, "alarm_arm_away", {"partition"});
+  register_service(&VistaESPHome::svc_alarm_trigger_panic_, "alarm_trigger_panic", {"code", "partition"});
+  register_service(&VistaESPHome::svc_alarm_trigger_fire_, "alarm_trigger_fire", {"code", "partition"});
+  register_service(&VistaESPHome::svc_set_zone_fault_, "set_zone_fault", {"zone", "fault"});
+  register_service(&VistaESPHome::svc_set_rf_zone_heartbeat_, "set_rf_zone_heartbeat", {"zone", "fault"});
 
   // --- Publish initial sensor states ---
   partitions_.publish_initial_states();
@@ -134,9 +134,9 @@ void VistaESPHome::setup() {
     rf_sensor_->process(" ");
 
   // --- Configure VistaBus emulation modes ---
-  vistabus_.emulateLRR(lrr_supervisor_);
+  vistabus_.emulate_lrr(lrr_supervisor_);
   if (rfr_emulation_enabled_)
-    vistabus_.emulateRFR(rfr_emulation_addr_);
+    vistabus_.emulate_rfr(rfr_emulation_addr_);
 
 #ifdef CC1101_RECEIVER
   // Start the CC1101 hardware receiver after emulateRFR().  If begin()
@@ -153,7 +153,7 @@ void VistaESPHome::setup() {
     // Start the direct RF→HA task.  It blocks on rf_direct_queue and
     // calls ZoneManager::on_rf_direct() as soon as CC1101Receiver posts
     // a valid packet, bypassing the panel ECP round-trip.
-    xTaskCreate(rf_direct_task_start, "rf_direct", kRfDirectTaskStackSize, static_cast<void *>(this),
+    xTaskCreate(rf_direct_task_start, "rf_direct", K_RF_DIRECT_TASK_STACK_SIZE, static_cast<void *>(this),
                 8,  // priority 8: above cc1101_rx (5), below processReceiveQueue (10)
                 &rf_direct_task_handle_);
   }
@@ -186,13 +186,13 @@ void VistaESPHome::setup() {
   dispatcher_ = new PacketDispatcher(vistabus_, cfg);
 
   // --- Start receive task ---
-  xTaskCreate(processReceiveQueue_task_start, "pRQtask", kProcessRxTaskStackSize, static_cast<void *>(this), 10,
-              &processReceiveQHandle);
+  xTaskCreate(process_receive_queue_task_start, "pRQtask", K_PROCESS_RX_TASK_STACK_SIZE, static_cast<void *>(this), 10,
+              &process_receive_q_handle_);
 
   // --- Start VistaBus (must come after task creation) ---
   vistabus_.begin(uart1_, rx_pin_, tx_pin_, uart2_, monitor_pin_);
 
-  last_connection_check = esp_timer_get_time();
+  last_connection_check_ = esp_timer_get_time();
   // Bus task is running and emulation modes are configured; service
   // calls are now safe to honour.
   ready_ = true;
@@ -211,9 +211,9 @@ void VistaESPHome::update() {
   // matched to the panel's message cadence, not the zone TTL.
 
   // Connection watchdog — log if no data has arrived in 30 seconds.
-  if (!vistabus_.connected() && (esp_timer_get_time() - last_connection_check) > 30LL * 1000 * 1000) {
+  if (!vistabus_.connected() && (esp_timer_get_time() - last_connection_check_) > 30LL * 1000 * 1000) {
     ESP_LOGE(TAG, "Data timeout — is the panel connected?");
-    last_connection_check = esp_timer_get_time();
+    last_connection_check_ = esp_timer_get_time();
   }
 }
 
@@ -254,7 +254,7 @@ void VistaESPHome::stop() {
   // blocks for several hundred ms, during which the receive task can
   // observe stop_requested_, read a still-null caller_task_, and delete
   // itself — leaving the handshake below to burn its full 2 s timeout.
-  if (processReceiveQHandle != nullptr)
+  if (process_receive_q_handle_ != nullptr)
     caller_task_ = xTaskGetCurrentTaskHandle();
 
   stop_requested_ = true;
@@ -269,9 +269,9 @@ void VistaESPHome::stop() {
 
   vistabus_.stop();
 
-  if (processReceiveQHandle != nullptr) {
+  if (process_receive_q_handle_ != nullptr) {
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(2000));
-    processReceiveQHandle = nullptr;
+    process_receive_q_handle_ = nullptr;
   }
 
   delete dispatcher_;
@@ -287,12 +287,12 @@ void VistaESPHome::stop() {
 // RF heartbeat checks are driven each iteration around the receive loop.
 // ---------------------------------------------------------------------------
 
-void VistaESPHome::processReceiveQueue_task_start(void *args) {
+void VistaESPHome::process_receive_queue_task_start(void *args) {
   VistaESPHome *self = static_cast<VistaESPHome *>(args);
-  self->processReceiveQueue(args);
+  self->process_receive_queue_(args);
 }
 
-void VistaESPHome::processReceiveQueue(void * /*args*/) {
+void VistaESPHome::process_receive_queue_(void * /*args*/) {
   // Stagger initial RF heartbeat timers now that all zones are registered.
   if (rfr_emulation_enabled_)
     zones_.init_rf_heartbeat_timers();

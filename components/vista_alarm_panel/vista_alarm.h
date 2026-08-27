@@ -71,7 +71,7 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // -------------------------------------------------------------------
   // Construction
   // -------------------------------------------------------------------
-  VistaESPHome(int receivePin, int transmitPin, int uartnum1, int monitorTxPin, int uartnum2);
+  VistaESPHome(int receive_pin, int transmit_pin, int uartnum1, int monitor_tx_pin, int uartnum2);
 
   // -------------------------------------------------------------------
   // Pre-setup configuration setters
@@ -79,12 +79,12 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // All called by generated ESPHome code before setup().
   // -------------------------------------------------------------------
 
-  void set_accessCode(const char *ac) { cmd_.set_access_code(ac); }
-  void set_quickArm(bool qa) { cmd_.set_quick_arm(qa); }
+  void set_access_code(const char *ac) { cmd_.set_access_code(ac); }
+  void set_quick_arm(bool qa) { cmd_.set_quick_arm(qa); }
   void set_auiaddr(uint8_t addr) { aui_.set_device_address(addr); }
   void set_clocksync(bool cs) { aui_.set_auto_sync(cs); }
-  void set_lrrSupervisor(bool ls) { lrr_supervisor_ = ls; }
-  void set_defaultPartition(uint8_t dp) { default_partition_ = dp; }
+  void set_lrr_supervisor(bool ls) { lrr_supervisor_ = ls; }
+  void set_default_partition(uint8_t dp) { default_partition_ = dp; }
   void set_ttl(uint32_t t) { ttl_ = static_cast<int64_t>(t) * 1000 * 1000; }
   void set_debug(uint8_t db) { debug_ = db; }
 
@@ -93,9 +93,9 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // In the refactored design ZoneManager holds the mapping implicitly
   // through register_zone(); this setter is a no-op retained so that
   // generated code that calls it continues to compile.
-  void set_rfSerialLookup(const char * /*rf*/) {}
+  void set_rf_serial_lookup(const char * /*rf*/) {}
 
-  void set_rfrEmulation(bool rfr_emul, uint8_t rfr_addr) {
+  void set_rfr_emulation(bool rfr_emul, uint8_t rfr_addr) {
     rfr_emulation_enabled_ = rfr_emul;
     rfr_emulation_addr_ = rfr_addr;
   }
@@ -124,7 +124,7 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // Must be called before initialize_partition_sensors().
   // -------------------------------------------------------------------
 
-  void set_partitionKeypad(uint8_t partition_id, uint8_t keypad_addr) {
+  void set_partition_keypad(uint8_t partition_id, uint8_t keypad_addr) {
     partitions_.add_partition(partition_id, keypad_addr);
   }
 
@@ -138,20 +138,20 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // Forwarded to the appropriate collaborator.
   // -------------------------------------------------------------------
 
-  void register_zone(vistaECPBinarySensor *sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial,
+  void register_zone(VistaEcpBinarySensor *sensor, uint8_t partition_number, uint8_t zone_number, uint32_t rf_serial,
                      uint8_t rf_loop, bool emulated) {
     zones_.register_zone(sensor, partition_number, zone_number, rf_serial, rf_loop, emulated);
   }
 
-  void register_zone_text(vistaECPTextSensor *sensor, uint8_t partition_number, uint8_t zone_number) {
+  void register_zone_text(VistaEcpTextSensor *sensor, uint8_t partition_number, uint8_t zone_number) {
     zones_.register_zone_text(sensor, partition_number, zone_number);
   }
 
-  void register_status_sensor(vistaECPBinarySensor *sensor, uint8_t partition_number, const char *type) {
+  void register_status_sensor(VistaEcpBinarySensor *sensor, uint8_t partition_number, const char *type) {
     partitions_.register_status_sensor(sensor, partition_number, type);
   }
 
-  void register_text_sensor(vistaECPTextSensor *sensor, uint8_t partition_number, const char *type) {
+  void register_text_sensor(VistaEcpTextSensor *sensor, uint8_t partition_number, const char *type) {
     // LRR and RF message sensors are not partition-specific; intercept
     // them here and store locally for PacketDispatcher::Config.
     if (strcmp(type, "LRR_MESSAGES") == 0) {
@@ -167,9 +167,9 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
 
   void set_chksum_fail_sensor(text_sensor::TextSensor *s) { chksum_fail_sensor_ = s; }
 
-  void register_ac(vistaECPBinarySensor *sensor) { partitions_.register_ac(sensor); }
+  void register_ac(VistaEcpBinarySensor *sensor) { partitions_.register_ac(sensor); }
 
-  void register_bat(vistaECPBinarySensor *sensor) { partitions_.register_bat(sensor); }
+  void register_bat(VistaEcpBinarySensor *sensor) { partitions_.register_bat(sensor); }
 
   void register_expander(uint8_t zone) { vistabus_.add_emulated_expander(zone); }
 
@@ -197,9 +197,9 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // emulated zones without going through the HA service round-trip.
   // -------------------------------------------------------------------
 
-  void set_zone_fault(int32_t zone, bool fault) { svc_set_zone_fault(zone, fault); }
+  void set_zone_fault(int32_t zone, bool fault) { svc_set_zone_fault_(zone, fault); }
 
-  void set_rf_zone_heartbeat(int32_t zone, bool fault) { svc_set_rf_zone_heartbeat(zone, fault); }
+  void set_rf_zone_heartbeat(int32_t zone, bool fault) { svc_set_rf_zone_heartbeat_(zone, fault); }
 
  private:
   // -------------------------------------------------------------------
@@ -215,7 +215,7 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // draining sendQueue and the emulation modes are not configured, so
   // such early calls would be silently deferred or dropped.  Logging a
   // warning and returning makes the misuse visible instead of surprising.
-  bool not_ready(const char *what) const {
+  bool not_ready_(const char *what) const {
     if (!ready_) {
       ESP_LOGW(TAG, "%s called before setup complete — ignored", what);
       return true;
@@ -223,8 +223,8 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
     return false;
   }
 
-  void svc_set_panel_time() {
-    if (not_ready("set_panel_time"))
+  void svc_set_panel_time_() {
+    if (not_ready_("set_panel_time"))
       return;
     aui_.request_time_sync(vistabus_,
                            /*in_program_mode=*/false, this);
@@ -235,8 +235,8 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // declared without a generic definition, so a reference would compile and
   // then fail to link.
   // NOLINTNEXTLINE(performance-unnecessary-value-param)
-  void svc_alarm_keypress(std::string keys) {
-    if (not_ready("alarm_keypress"))
+  void svc_alarm_keypress_(std::string keys) {
+    if (not_ready_("alarm_keypress"))
       return;
     // The keys may contain the access code; log length only.
     ESP_LOGI(TAG, "svc_alarm_keypress: %d key(s)", static_cast<int>(keys.length()));
@@ -248,8 +248,8 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // declared without a generic definition, so a reference would compile and
   // then fail to link.
   // NOLINTNEXTLINE(performance-unnecessary-value-param)
-  void svc_alarm_keypress_partition(std::string keys, int32_t partition) {
-    if (not_ready("alarm_keypress_partition"))
+  void svc_alarm_keypress_partition_(std::string keys, int32_t partition) {
+    if (not_ready_("alarm_keypress_partition"))
       return;
     ESP_LOGI(TAG, "svc_alarm_keypress_partition: %d key(s) partition=%d", static_cast<int>(keys.length()),
              static_cast<int>(partition));
@@ -261,27 +261,27 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // declared without a generic definition, so a reference would compile and
   // then fail to link.
   // NOLINTNEXTLINE(performance-unnecessary-value-param)
-  void svc_alarm_disarm(std::string code, int32_t partition) {
-    if (not_ready("alarm_disarm"))
+  void svc_alarm_disarm_(std::string code, int32_t partition) {
+    if (not_ready_("alarm_disarm"))
       return;
     ESP_LOGI(TAG, "svc_alarm_disarm: partition=%d", static_cast<int>(partition));
     cmd_.disarm(static_cast<int>(partition), code);
   }
 
-  void svc_alarm_arm_home(int32_t partition) {
-    if (not_ready("alarm_arm_home"))
+  void svc_alarm_arm_home_(int32_t partition) {
+    if (not_ready_("alarm_arm_home"))
       return;
     cmd_.arm_stay(static_cast<int>(partition));
   }
 
-  void svc_alarm_arm_night(int32_t partition) {
-    if (not_ready("alarm_arm_night"))
+  void svc_alarm_arm_night_(int32_t partition) {
+    if (not_ready_("alarm_arm_night"))
       return;
     cmd_.arm_night(static_cast<int>(partition));
   }
 
-  void svc_alarm_arm_away(int32_t partition) {
-    if (not_ready("alarm_arm_away"))
+  void svc_alarm_arm_away_(int32_t partition) {
+    if (not_ready_("alarm_arm_away"))
       return;
     cmd_.arm_away(static_cast<int>(partition));
   }
@@ -291,8 +291,8 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // declared without a generic definition, so a reference would compile and
   // then fail to link.
   // NOLINTNEXTLINE(performance-unnecessary-value-param)
-  void svc_alarm_trigger_panic(std::string code, int32_t partition) {
-    if (not_ready("alarm_trigger_panic"))
+  void svc_alarm_trigger_panic_(std::string code, int32_t partition) {
+    if (not_ready_("alarm_trigger_panic"))
       return;
     cmd_.trigger_panic(static_cast<int>(partition), code);
   }
@@ -302,14 +302,14 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // declared without a generic definition, so a reference would compile and
   // then fail to link.
   // NOLINTNEXTLINE(performance-unnecessary-value-param)
-  void svc_alarm_trigger_fire(std::string code, int32_t partition) {
-    if (not_ready("alarm_trigger_fire"))
+  void svc_alarm_trigger_fire_(std::string code, int32_t partition) {
+    if (not_ready_("alarm_trigger_fire"))
       return;
     cmd_.trigger_fire(static_cast<int>(partition), code);
   }
 
-  void svc_set_zone_fault(int32_t zone, bool fault) {
-    if (not_ready("set_zone_fault"))
+  void svc_set_zone_fault_(int32_t zone, bool fault) {
+    if (not_ready_("set_zone_fault"))
       return;
     // Direct fast-path: publish to HA immediately without waiting for
     // the panel's ECP echo (FA expander or FB RF receiver packet).
@@ -322,8 +322,8 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // encoding the current fault state in the status byte alongside the
   // supervision bit.  Resets the internal heartbeat timer regardless of
   // whether external_heartbeat_mode is active.
-  void svc_set_rf_zone_heartbeat(int32_t zone, bool fault) {
-    if (not_ready("set_rf_zone_heartbeat"))
+  void svc_set_rf_zone_heartbeat_(int32_t zone, bool fault) {
+    if (not_ready_("set_rf_zone_heartbeat"))
       return;
     ESP_LOGI(TAG, "svc_set_rf_zone_heartbeat: zone=%d fault=%d", static_cast<int>(zone), fault);
     zones_.send_rf_heartbeat(static_cast<uint8_t>(zone), fault, vistabus_);
@@ -333,8 +333,8 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // Receive task
   // -------------------------------------------------------------------
 
-  void processReceiveQueue(void *args);
-  static void processReceiveQueue_task_start(void *args);
+  void process_receive_queue_(void *args);
+  static void process_receive_queue_task_start(void *args);
 
 #ifdef CC1101_RECEIVER
   // Dedicated task that drains rf_direct_queue and calls
@@ -370,8 +370,8 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // in setup() and may be set before setup() is called.
   // -------------------------------------------------------------------
 
-  vistaECPTextSensor *lrr_sensor_{nullptr};
-  vistaECPTextSensor *rf_sensor_{nullptr};
+  VistaEcpTextSensor *lrr_sensor_{nullptr};
+  VistaEcpTextSensor *rf_sensor_{nullptr};
   text_sensor::TextSensor *chksum_fail_sensor_{nullptr};
 
   // -------------------------------------------------------------------
@@ -394,8 +394,8 @@ class VistaESPHome : public api::CustomAPIDevice, public time::RealTimeClock {
   // Runtime state
   // -------------------------------------------------------------------
 
-  TaskHandle_t processReceiveQHandle{nullptr};
-  int64_t last_connection_check{0};
+  TaskHandle_t process_receive_q_handle_{nullptr};
+  int64_t last_connection_check_{0};
   volatile bool stop_requested_{false};
   TaskHandle_t caller_task_{nullptr};
   // Set true at the end of setup(); gates service calls (see not_ready()).

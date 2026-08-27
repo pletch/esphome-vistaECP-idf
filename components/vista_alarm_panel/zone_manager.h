@@ -12,7 +12,7 @@
 #include "vista_bus.h"       // VistaBus (needed for send_emulated_fault,
                              //           handle_rf_heartbeats)
 #include "helper_structs.h"  // LightStates (needed by refresh())
-#include "constants.h"       // kRFZoneMessageLength
+#include "constants.h"       // K_RF_ZONE_MESSAGE_LENGTH
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include <vector>
@@ -23,8 +23,8 @@
 // component tree into every translation unit that includes this header.
 
 namespace esphome::alarm_panel {
-class vistaECPBinarySensor;
-class vistaECPTextSensor;
+class VistaEcpBinarySensor;
+class VistaEcpTextSensor;
 
 // -----------------------------------------------------------------------
 // ZoneManager
@@ -81,8 +81,8 @@ class ZoneManager {
   // ensure sensors are published on every state change.
   // -------------------------------------------------------------------
   struct Zone {
-    vistaECPBinarySensor *binary_sensor{nullptr};
-    vistaECPTextSensor *text_sensor{nullptr};
+    VistaEcpBinarySensor *binary_sensor{nullptr};
+    VistaEcpTextSensor *text_sensor{nullptr};
 
     uint8_t zone{0};              // logical zone number (1-based)
     uint8_t partition{0};         // owning partition id
@@ -112,17 +112,17 @@ class ZoneManager {
   // If the zone already exists (e.g. previously registered by
   // register_zone_text()), the binary sensor and RF fields are updated
   // in place rather than creating a duplicate entry.
-  void register_zone(vistaECPBinarySensor *sensor, uint8_t partition, uint8_t zone_number, uint32_t rf_serial,
+  void register_zone(VistaEcpBinarySensor *sensor, uint8_t partition, uint8_t zone_number, uint32_t rf_serial,
                      uint8_t rf_loop, bool emulated);
 
   // Register or update a zone's text sensor.
   // If the zone already exists, only the text sensor pointer is updated.
-  void register_zone_text(vistaECPTextSensor *sensor, uint8_t partition, uint8_t zone_number);
+  void register_zone_text(VistaEcpTextSensor *sensor, uint8_t partition, uint8_t zone_number);
 
   // Register the combined zone-status text sensor that receives a
   // comma-separated summary string on every refresh() call.
   // Format: "OP:3,BY:7,CK:12" etc.  An empty string means all clear.
-  void register_zone_status_sensor(vistaECPTextSensor *sensor);
+  void register_zone_status_sensor(VistaEcpTextSensor *sensor);
 
   // -------------------------------------------------------------------
   // Lookup — non-const because callers may update fields via the pointer
@@ -183,7 +183,7 @@ class ZoneManager {
   // and publishes its sensors.
   void on_expander_zone_packet(const char *payload, int size);
 
-  // Decode a kRFZoneMessageLength-byte FB RF receiver packet (green-wire
+  // Decode a K_RF_ZONE_MESSAGE_LENGTH-byte FB RF receiver packet (green-wire
   // monitor, type==1, src==0xFB).  Validates the two's-complement
   // checksum, updates the matched zone's open and rflowbat state, and
   // publishes its sensors.
@@ -193,7 +193,7 @@ class ZoneManager {
   // empty string if the checksum failed or the packet was a heartbeat with
   // no zone-state component.
   //
-  // If on_rf_direct() updated this zone within the last kDirectSuppressUs,
+  // If on_rf_direct() updated this zone within the last K_DIRECT_SUPPRESS_US,
   // the state is still updated for consistency but the sensor publish is
   // skipped to prevent duplicate / flapping HA state changes.
   std::string on_rf_zone_packet(const char *payload, int size);
@@ -211,7 +211,7 @@ class ZoneManager {
   // when an emulated zone's fault state is changed via the Home Assistant
   // service.  Publishes the new open state immediately without waiting for
   // the panel's ECP echo (FA expander packet or FB RF receiver packet).
-  // The ECP-path publish is suppressed for kDirectSuppressUs afterwards to
+  // The ECP-path publish is suppressed for K_DIRECT_SUPPRESS_US afterwards to
   // prevent duplicate / flapping HA state changes.
   // Protected by zone_mutex_; safe to call from the ESPHome main loop task.
   void on_zone_direct(uint8_t zone_number, bool fault);
@@ -303,19 +303,19 @@ class ZoneManager {
   // (formatted state string) for a single zone.  Does nothing if both
   // sensor pointers are null.  Publishes unconditionally — see the
   // note on the definition before adding any change-detection here.
-  void publish_zone(Zone *zt);
+  void publish_zone_(Zone *zt);
 
   // Build the combined zone-status string.  Caller must hold zone_mutex_.
-  std::string build_zone_status_string_locked() const;
+  std::string build_zone_status_string_locked_() const;
 
   // Publish the combined zone-status string if it differs from the last
   // one sent.  Caller must hold zone_mutex_.
-  void publish_zone_status_if_changed();
+  void publish_zone_status_if_changed_();
 
   // Guard+lookup helper for set_zone_* methods.  Caller must hold
   // zone_mutex_.  Returns z only when the flag at 'field' needs to
   // change; returns nullptr on missing/inactive/unchanged zone.
-  Zone *zone_if_flag_differs(uint8_t zone_number, bool Zone::*field, bool value);
+  Zone *zone_if_flag_differs_(uint8_t zone_number, bool Zone::*field, bool value);
 
 #ifdef CC1101_RECEIVER
   // Small serial→RSSI cache populated by on_rf_direct() for every
@@ -326,7 +326,7 @@ class ZoneManager {
     uint32_t serial{0};
     int8_t rssi{0};
   };
-  RssiCacheEntry rssi_cache_[kRssiCacheSize]{};
+  RssiCacheEntry rssi_cache_[K_RSSI_CACHE_SIZE]{};
   uint8_t rssi_cache_idx_{0};
 
   void store_rssi(uint32_t serial, int8_t rssi);
@@ -351,7 +351,7 @@ class ZoneManager {
 
   // Combined zone-status text sensor — one sensor reports all zones.
   // Distinct from the per-zone text_sensor fields inside Zone.
-  vistaECPTextSensor *zone_status_sensor_{nullptr};
+  VistaEcpTextSensor *zone_status_sensor_{nullptr};
 
   // Previous value of the combined status string; used to suppress
   // redundant publishes when nothing has changed.

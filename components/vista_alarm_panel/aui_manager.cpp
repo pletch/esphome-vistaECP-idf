@@ -34,7 +34,9 @@ void AUIManager::set_auto_sync(bool enabled) { clock_.auto_sync = enabled; }
 // sequence2 cycles through 0x68–0x6F, wrapping from 0x6F back to 0x68.
 // ---------------------------------------------------------------------------
 
-void AUIManager::advance_sequence2() { device_.sequence2 = (device_.sequence2 == 0x6F) ? 0x68 : device_.sequence2 + 1; }
+void AUIManager::advance_sequence2_() {
+  device_.sequence2 = (device_.sequence2 == 0x6F) ? 0x68 : device_.sequence2 + 1;
+}
 
 // ---------------------------------------------------------------------------
 // Tick — called each iteration of the processReceiveQueue task loop
@@ -61,7 +63,7 @@ void AUIManager::tick(VistaBus &bus, bool in_program_mode, time::RealTimeClock *
 
   // Periodic panel clock synchronisation.
   if (clock_.auto_sync && now > clock_.next_sync) {
-    request_panel_time(bus, in_program_mode);
+    request_panel_time_(bus, in_program_mode);
     // Advance next sync by 6 hours regardless of whether the request
     // succeeded — avoids a tight retry loop if the panel is busy.
     clock_.next_sync += static_cast<int64_t>(6) * 60 * 60 * 1000 * 1000;
@@ -89,8 +91,8 @@ void AUIManager::tick(VistaBus &bus, bool in_program_mode, time::RealTimeClock *
 // rtc     — RealTimeClock used for panel-time comparison; may be nullptr
 // ---------------------------------------------------------------------------
 
-void AUIManager::on_f2_packet(const char *payload, int size, ZoneManager &zones, time::RealTimeClock *rtc,
-                              VistaBus &bus) {
+void AUIManager::on_f2_packet_(const char *payload, int size, ZoneManager &zones, time::RealTimeClock *rtc,
+                               VistaBus &bus) {
   if (device_.address == 0)
     return;
 
@@ -133,19 +135,19 @@ void AUIManager::on_f2_packet(const char *payload, int size, ZoneManager &zones,
     // get_zone_faults() self-throttles on request_.pending -- cleared
     // by a response, or by tick() after 6 s -- so a burst of fault
     // broadcasts still produces one query.
-    constexpr int kBroadcastTypeIndex = 22;
+    constexpr int k_broadcast_type_index = 22;
     if ((payload[7] & 0xF0) == 0x60 && static_cast<uint8_t>(payload[8]) == 0x63 &&
-        static_cast<uint8_t>(payload[1]) == 0x16 && size > kBroadcastTypeIndex) {
-      const uint8_t kind = static_cast<uint8_t>(payload[kBroadcastTypeIndex]);
+        static_cast<uint8_t>(payload[1]) == 0x16 && size > k_broadcast_type_index) {
+      const uint8_t kind = static_cast<uint8_t>(payload[k_broadcast_type_index]);
       if (kind == 0x01) {
         ESP_LOGD(TAG, "AUI zone-fault broadcast: all zones clear.");
         const char all_clear[2] = {static_cast<char>(0xFE), '\0'};
-        process_zone_faults(all_clear, zones);
+        process_zone_faults_(all_clear, zones);
         // Any query still outstanding is moot now.
         request_.pending = false;
       } else if (kind == 0x06) {
         ESP_LOGD(TAG, "AUI zone-fault broadcast: fault; querying list.");
-        get_zone_faults(bus);
+        get_zone_faults_(bus);
       }
     }
     return;
@@ -227,11 +229,11 @@ void AUIManager::on_f2_packet(const char *payload, int size, ZoneManager &zones,
 
   // Panel time response — compare with RTC and optionally correct.
   if (sum == 20 && target == device_.address)
-    handle_panel_time_response(f2data, data_len, rtc, bus);
+    handle_panel_time_response_(f2data, data_len, rtc, bus);
 
   // Zone fault list or all-clear — update ZoneManager and clear pending.
   if (sum == 23 || sum == 4) {
-    process_zone_faults(f2data, zones);
+    process_zone_faults_(f2data, zones);
     request_.pending = false;
   }
 }
@@ -241,28 +243,28 @@ void AUIManager::on_f2_packet(const char *payload, int size, ZoneManager &zones,
 // ---------------------------------------------------------------------------
 
 void AUIManager::request_time_sync(VistaBus &bus, bool in_program_mode, time::RealTimeClock *rtc) {
-  set_panel_time(bus, in_program_mode, rtc);
+  set_panel_time_(bus, in_program_mode, rtc);
 }
 
 // ---------------------------------------------------------------------------
 // Private — AUI bus writes
 // ---------------------------------------------------------------------------
 
-void AUIManager::request_panel_time(VistaBus &bus, bool in_program_mode) {
+void AUIManager::request_panel_time_(VistaBus &bus, bool in_program_mode) {
   if (in_program_mode || device_.address == 0)
     return;
 
   ESP_LOGD(TAG, "Requesting panel time...");
 
   char bytes[6] = {0, 0, 0x05, 0x02, 0x43, 0x43};
-  advance_sequence2();
+  advance_sequence2_();
   bytes[1] = static_cast<char>(device_.sequence2);
 
   bus.writedirect(bytes, 6, device_.address, device_.sequence1);
   device_.sequence1 += 0x40;
 }
 
-void AUIManager::set_panel_time(VistaBus &bus, bool in_program_mode, time::RealTimeClock *rtc) {
+void AUIManager::set_panel_time_(VistaBus &bus, bool in_program_mode, time::RealTimeClock *rtc) {
   if (in_program_mode || device_.address == 0 || rtc == nullptr)
     return;
 
@@ -276,7 +278,7 @@ void AUIManager::set_panel_time(VistaBus &bus, bool in_program_mode, time::RealT
 
   // Fixed AUI time-set command preamble; bytes[8..20] are filled below.
   char bytes[22] = {0, 0, 0x05, 0x02, 0x45, 0x43, 0xF5, 0xEC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  advance_sequence2();
+  advance_sequence2_();
   bytes[1] = static_cast<char>(device_.sequence2);
 
   // Format: YYMMDDHHmmssW  (13 ASCII chars + null = 14 bytes from bytes[8]).
@@ -288,7 +290,7 @@ void AUIManager::set_panel_time(VistaBus &bus, bool in_program_mode, time::RealT
   device_.sequence1 += 0x40;
 }
 
-void AUIManager::get_zone_faults(VistaBus &bus) {
+void AUIManager::get_zone_faults_(VistaBus &bus) {
   if (device_.address == 0 || request_.pending)
     return;
 
@@ -318,12 +320,12 @@ void AUIManager::get_zone_faults(VistaBus &bus) {
   // keeps the outgoing slot permanently busy for no benefit -- the
   // fault list does not change that fast.
   const int64_t now = esp_timer_get_time();
-  if (request_.last_sent != 0 && (now - request_.last_sent) < kAuiZoneQueryMinIntervalUs)
+  if (request_.last_sent != 0 && (now - request_.last_sent) < K_AUI_ZONE_QUERY_MIN_INTERVAL_US)
     return;
 
   char bytes[22] = {0,    0,    0x62, 0x31, 0x45, 0x49, 0xF5, 0x31, 0xFB, 0x45, 0x4A,
                     0xF5, 0x32, 0xFB, 0x45, 0x43, 0xF5, 0x31, 0xFB, 0x43, 0x6C};
-  advance_sequence2();
+  advance_sequence2_();
   bytes[1] = static_cast<char>(device_.sequence2);
 
   bus.writedirect(bytes, 21, device_.address, device_.sequence1);
@@ -339,8 +341,8 @@ void AUIManager::get_zone_faults(VistaBus &bus) {
 // Private — panel time response handler
 // ---------------------------------------------------------------------------
 
-void AUIManager::handle_panel_time_response(const char *f2data, uint8_t data_len, time::RealTimeClock *rtc,
-                                            VistaBus &bus) {
+void AUIManager::handle_panel_time_response_(const char *f2data, uint8_t data_len, time::RealTimeClock *rtc,
+                                             VistaBus &bus) {
   if (rtc == nullptr || data_len < 12)
     return;
 
@@ -373,7 +375,7 @@ void AUIManager::handle_panel_time_response(const char *f2data, uint8_t data_len
 
   if (clock_.auto_sync && delta > 60) {
     ESP_LOGI(TAG, "Panel clock drift %lld s — will correct.", static_cast<long long>(delta));
-    set_panel_time(bus, false, rtc);
+    set_panel_time_(bus, false, rtc);
   }
 }
 
@@ -385,12 +387,12 @@ void AUIManager::handle_panel_time_response(const char *f2data, uint8_t data_len
 // each registered zone's open state via ZoneManager.
 // ---------------------------------------------------------------------------
 
-void AUIManager::process_zone_faults(const char *list, ZoneManager &zones) {
+void AUIManager::process_zone_faults_(const char *list, ZoneManager &zones) {
   uint32_t mask[4] = {0, 0, 0, 0};  // masks for zones 1-32, 33-64, 65-96, 97-128
 
   // 0xFE as the first byte signals "no data" / all zones clear.
   if (static_cast<uint8_t>(list[0]) == 0xFE) {
-    apply_zone_fault_masks(mask, zones);
+    apply_zone_fault_masks_(mask, zones);
     return;
   }
 
@@ -456,12 +458,12 @@ void AUIManager::process_zone_faults(const char *list, ZoneManager &zones) {
     }
   }
 
-  apply_zone_fault_masks(mask, zones);
+  apply_zone_fault_masks_(mask, zones);
 }
 
 // Applies the four 32-bit zone bitmasks to ZoneManager, updating the open
 // state of each registered zone.  A bit set means the zone is faulted/open.
-void AUIManager::apply_zone_fault_masks(const uint32_t mask[4], ZoneManager &zones) {
+void AUIManager::apply_zone_fault_masks_(const uint32_t mask[4], ZoneManager &zones) {
   // We iterate through all zones known to ZoneManager and update each one
   // whose open state differs from what the mask says.  ZoneManager exposes
   // get_zone() by number, but we need to iterate all zones here.
@@ -557,7 +559,7 @@ void AUIManager::log_f2_type(uint8_t sum, uint8_t target, const char *f2data, ui
 
 void AUIManager::on_f2_packet_with_bus(const char *payload, int size, ZoneManager &zones, time::RealTimeClock *rtc,
                                        VistaBus &bus) {
-  on_f2_packet(payload, size, zones, rtc, bus);
+  on_f2_packet_(payload, size, zones, rtc, bus);
 }
 
 }  // namespace esphome::alarm_panel

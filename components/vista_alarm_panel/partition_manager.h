@@ -22,8 +22,8 @@
 // sensors will include vistaalarm.h (which defines the concrete types).
 
 namespace esphome::alarm_panel {
-class vistaECPBinarySensor;
-class vistaECPTextSensor;
+class VistaEcpBinarySensor;
+class VistaEcpTextSensor;
 
 // -----------------------------------------------------------------------
 // PartitionManager
@@ -61,18 +61,18 @@ class PartitionManager {
 
   // Text sensors per partition.
   // Valid type strings: "SYSTEM_STATUS", "LINE1", "LINE2", "BEEPS".
-  void register_text_sensor(vistaECPTextSensor *sensor, uint8_t partition_number, const char *type);
+  void register_text_sensor(VistaEcpTextSensor *sensor, uint8_t partition_number, const char *type);
 
   // Binary (on/off) sensors per partition.
   // Valid type strings: "READY", "TROUBLE", "BYPASS", "ARMED",
   //   "ARMED_AWAY", "ARMED_STAY", "ARMED_INSTANT", "ARMED_NIGHT",
   //   "CHIME", "ALARM", "FIRE".
-  void register_status_sensor(vistaECPBinarySensor *sensor, uint8_t partition_number, const char *type);
+  void register_status_sensor(VistaEcpBinarySensor *sensor, uint8_t partition_number, const char *type);
 
   // System-wide (non-partition) binary sensors for AC power and
   // low battery. These are registered once without a partition number.
-  void register_ac(vistaECPBinarySensor *sensor) { ac_sensor_ = sensor; }
-  void register_bat(vistaECPBinarySensor *sensor) { bat_sensor_ = sensor; }
+  void register_ac(VistaEcpBinarySensor *sensor) { ac_sensor_ = sensor; }
+  void register_bat(VistaEcpBinarySensor *sensor) { bat_sensor_ = sensor; }
 
   // -------------------------------------------------------------------
   // Core update path
@@ -141,24 +141,24 @@ class PartitionManager {
   // -------------------------------------------------------------------
 
   struct TextSensors {
-    vistaECPTextSensor *system_status{nullptr};
-    vistaECPTextSensor *line1{nullptr};
-    vistaECPTextSensor *line2{nullptr};
-    vistaECPTextSensor *beeps{nullptr};
+    VistaEcpTextSensor *system_status{nullptr};
+    VistaEcpTextSensor *line1{nullptr};
+    VistaEcpTextSensor *line2{nullptr};
+    VistaEcpTextSensor *beeps{nullptr};
   };
 
   struct StatusSensors {
-    vistaECPBinarySensor *rdy{nullptr};   // Ready
-    vistaECPBinarySensor *trbl{nullptr};  // Trouble
-    vistaECPBinarySensor *byp{nullptr};   // Bypass
-    vistaECPBinarySensor *arm{nullptr};   // Armed (any)
-    vistaECPBinarySensor *arma{nullptr};  // Armed Away
-    vistaECPBinarySensor *arms{nullptr};  // Armed Stay
-    vistaECPBinarySensor *armi{nullptr};  // Armed Instant
-    vistaECPBinarySensor *armn{nullptr};  // Armed Night
-    vistaECPBinarySensor *chm{nullptr};   // Chime
-    vistaECPBinarySensor *alm{nullptr};   // Alarm
-    vistaECPBinarySensor *fire{nullptr};  // Fire
+    VistaEcpBinarySensor *rdy{nullptr};   // Ready
+    VistaEcpBinarySensor *trbl{nullptr};  // Trouble
+    VistaEcpBinarySensor *byp{nullptr};   // Bypass
+    VistaEcpBinarySensor *arm{nullptr};   // Armed (any)
+    VistaEcpBinarySensor *arma{nullptr};  // Armed Away
+    VistaEcpBinarySensor *arms{nullptr};  // Armed Stay
+    VistaEcpBinarySensor *armi{nullptr};  // Armed Instant
+    VistaEcpBinarySensor *armn{nullptr};  // Armed Night
+    VistaEcpBinarySensor *chm{nullptr};   // Chime
+    VistaEcpBinarySensor *alm{nullptr};   // Alarm
+    VistaEcpBinarySensor *fire{nullptr};  // Fire
   };
 
   // -------------------------------------------------------------------
@@ -167,22 +167,22 @@ class PartitionManager {
 
   // Derive the full LightStates from a decoded StatusFlags packet.
   // Pure function — no side effects, safe to call from tests.
-  LightStates decode_light_states(const StatusFlags &flags) const;
+  LightStates decode_light_states_(const StatusFlags &flags) const;
 
   // Derive the SysState from already-decoded flags and lights.
   // Pure function — no side effects, safe to call from tests.
-  SysState decode_system_state(const StatusFlags &flags, const LightStates &lights) const;
+  SysState decode_system_state_(const StatusFlags &flags, const LightStates &lights) const;
 
   // Publish a system state string change to the system_status text sensor.
-  void publish_system_state(size_t kpi, SysState state);
+  void publish_system_state_(size_t kpi, SysState state);
 
   // Publish all binary light-state sensors that have changed.
-  void publish_light_states(size_t kpi, const LightStates &current, const LightStates &previous, bool force,
-                            bool include_armed_states);
+  void publish_light_states_(size_t kpi, const LightStates &current, const LightStates &previous, bool force,
+                             bool include_armed_states);
 
   // Format and publish the two keypad display lines, inserting a
   // cursor-position bracket if promptPos > 0.
-  void update_display_lines(size_t kpi, const StatusFlags &flags);
+  void update_display_lines_(size_t kpi, const StatusFlags &flags);
 
   // Resolve a logical partition id to its index in partitions_ (kpi).
   // Returns -1 if no partition with that id is configured.
@@ -192,7 +192,7 @@ class PartitionManager {
   // the order 1, 2, 3, ….  A single-partition install using partition 2,
   // or a two-partition install using 1 and 3, diverges — and the
   // publish helpers indexed past the end of the vectors as a result.
-  int index_for_partition(uint8_t partition_id) const;
+  int index_for_partition_(uint8_t partition_id) const;
 
   // -------------------------------------------------------------------
   // Member data
@@ -207,8 +207,8 @@ class PartitionManager {
   std::vector<StatusSensors> status_sensors_;
 
   // System-wide sensors (not per-partition).
-  vistaECPBinarySensor *ac_sensor_{nullptr};
-  vistaECPBinarySensor *bat_sensor_{nullptr};
+  VistaEcpBinarySensor *ac_sensor_{nullptr};
+  VistaEcpBinarySensor *bat_sensor_{nullptr};
 
   // Battery state is managed here rather than inside LightStates
   // because it has independent decay timing separate from the F7 cycle.

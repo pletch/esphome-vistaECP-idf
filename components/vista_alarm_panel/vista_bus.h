@@ -104,22 +104,22 @@ class VistaBus {
   bool read_packet(char *data, int &len, int &type, int &src, bool with_delay = false);
 
   // Enable / disable emulation of a Long-Range Radio (LRR) reporting module.
-  void emulateLRR(bool enabled);
+  void emulate_lrr(bool enabled);
 
   // Register a zone number so the bus driver will emulate the zone-expander
   // module that owns that zone.
   void add_emulated_expander(uint8_t zone);
 
   // Enable emulation of an RF receiver at the given keybus address.
-  void emulateRFR(uint8_t address);
+  void emulate_rfr(uint8_t address);
 
   // Set or clear the status bit (zone open/closed) for a zone on its emulated
   // expander and notify the panel via the deviceMsgQueue.
-  void setZoneStatusBit(uint8_t zone, bool open);
+  void set_zone_status_bit(uint8_t zone, bool open);
 
   // Forward an RF sensor message (identified by serial number and message
   // byte) to the panel through the emulated RF receiver.
-  void sendRFmsg(uint32_t serial, uint8_t msg);
+  void send_rf_msg(uint32_t serial, uint8_t msg);
 
   // True while an expander or RF message is queued for delivery to the panel.
   //
@@ -138,7 +138,7 @@ class VistaBus {
   //                 Carries two message families distinguished by DeviceMsg::address:
   //                   expander (setZoneStatusBit): address 7-11 (1 on legacy SE),
   //                                                source = zone number
-  //                   RF       (sendRFmsg):        address = emulated RF receiver,
+  //                   RF       (send_rf_msg):        address = emulated RF receiver,
   //                                                source = 20-bit sensor serial
   //
   //                 Consumers (quick_decodeFA / quick_decodeFB) take the head
@@ -219,11 +219,11 @@ class VistaBus {
   inline void set_baud_fast(uart_port_t port, bool standard) {
     if (!baud_fast_valid) {
       // Clock never resolved.  Correctness first: fall back to the driver.
-      uart_set_baudrate(port, standard ? kEcpBaudStandard : kEcpBaudLegacy);
+      uart_set_baudrate(port, standard ? K_ECP_BAUD_STANDARD : K_ECP_BAUD_LEGACY);
       return;
     }
 
-    const uint32_t baud = standard ? kEcpBaudStandard : kEcpBaudLegacy;
+    const uint32_t baud = standard ? K_ECP_BAUD_STANDARD : K_ECP_BAUD_LEGACY;
 
     portENTER_CRITICAL(&baud_mux);
     // HP_UART_SRC_CLK_ATOMIC() guards the shared clock controller on parts
@@ -259,7 +259,7 @@ class VistaBus {
 
   // Look up an emulated expander by its keybus address; returns nullptr if
   // no expander with that address has been registered.
-  EmulatedExpander *getExpander(uint8_t address);
+  EmulatedExpander *get_expander(uint8_t address);
 
   EmulatedRFReceiver emulated_rf_receiver;
 
@@ -269,16 +269,16 @@ class VistaBus {
 // with the VistaBus; ~VistaBus() is defined in vista_bus.cpp where the concrete
 // type is complete, so the unique_ptr can be deleted there.
 #ifndef LEGACY_SE_PROTOCOL
-  std::unique_ptr<Vista20P> vprotocol;
+  std::unique_ptr<Vista20P> vprotocol_;
 #else
-  std::unique_ptr<VistaSE> vprotocol;
+  std::unique_ptr<VistaSE> vprotocol_;
 #endif
 
   static constexpr const char *TAG = "vista-bus";
-  gpio_num_t tx_pin;       // Primary UART TX gpio.
-  gpio_num_t monitor_pin;  // RX-only gpio for the expansion-bus monitor UART.
-  bool panel_connected;    // Becomes false if no data arrives for 30 s.
-  bool stop_requested;     // Set by stop(); tasks exit their loops when true.
+  gpio_num_t tx_pin_;       // Primary UART TX gpio.
+  gpio_num_t monitor_pin_;  // RX-only gpio for the expansion-bus monitor UART.
+  bool panel_connected_;    // Becomes false if no data arrives for 30 s.
+  bool stop_requested_;     // Set by stop(); tasks exit their loops when true.
 
   // Static trampoline functions required by xTaskCreate (which takes a plain
   // function pointer).  Each casts the void* arg back to VistaBus* and
@@ -288,25 +288,25 @@ class VistaBus {
 
   // Primary task: processes UART events, dispatches received panel frames,
   // and sends queued keypad commands.  Runs at the highest FreeRTOS priority.
-  void rx_tx_task(void *args);
+  void rx_tx_task_(void *args);
 
   // Secondary task: reads expansion-bus traffic from the monitor UART and
   // dispatches it for RF / expander decoding.
-  void monitor_rx_task(void *args);
+  void monitor_rx_task_(void *args);
 
   // Build a type-2 (pulse-only) SendPacket for the given keybus address and
   // push it onto sendQueue.  Used to solicit an F1 response from a device.
-  void requestF1(uint8_t address);
+  void request_f1_(uint8_t address);
 
-  int64_t last_data_received = 0;  // esp_timer timestamp of last received byte.
-  int64_t request_F1_time = 0;     // Timestamp of last F1 poll request; rate-limits polls.
+  int64_t last_data_received_ = 0;  // esp_timer timestamp of last received byte.
+  int64_t request_f1_time_ = 0;     // Timestamp of last F1 poll request; rate-limits polls.
 
   // Debug helper (compiled only when DEBUG_PULSE is defined): uses the RMT
   // peripheral to capture and log the raw pulse widths on rx_pin.
-  void capture_pulse_pattern(gpio_num_t rx_pin);
+  void capture_pulse_pattern_(gpio_num_t rx_pin);
 
   // Configure an ESP-IDF UART driver for ECP-bus operation: 4800 baud, 8E2,
   // inverted RX (and TX if a tx_pin is provided).  When tx_pin == -1 the
   // port is installed in RX-only mode (no event queue).
-  void init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
+  void init_uart_(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin);
 };

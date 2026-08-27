@@ -38,7 +38,7 @@ class VistaSE : public ProtocolBase<VistaSE> {
   // Drain the send queue into pkt.  Because the SE protocol sends one character
   // per bus write window, multi-character payloads are split into individual
   // single-byte packets and re-queued so they are sent one per cycle.
-  void check_send_Q_impl(SendPacket &pkt) {
+  void check_send_q_impl(SendPacket &pkt) {
     while (uxQueueMessagesWaiting(this->vistabus_.sendQueue)) {
       if (!this->req_to_send) {
         xQueueReceive(this->vistabus_.sendQueue, &pkt, 0);
@@ -63,7 +63,7 @@ class VistaSE : public ProtocolBase<VistaSE> {
           next_char.sequence = pkt.sequence;
           next_char.size = 1;
           next_char.payload[0] = pkt.payload[i];
-          // The queue is only kSendQueueDepth deep: a multi-character
+          // The queue is only K_SEND_QUEUE_DEPTH deep: a multi-character
           // payload queued behind other traffic can be silently
           // truncated, which for an access code means a failed disarm.
           if (xQueueSend(this->vistabus_.sendQueue, &next_char, pdMS_TO_TICKS(0)) != pdPASS) {
@@ -92,14 +92,14 @@ class VistaSE : public ProtocolBase<VistaSE> {
   //             write a single 2400/5-bit character; restore UART config after.
   //         else: wait for a rising edge and measure ~6 ms for 2400 baud switch.
   //     timeout (no rising edge within 10 ms) → expander mark-pulse window.
-  int handle_UART_events_impl(const SendPacket &pkt_to_send, uint8_t *buf) {
+  int handle_uart_events_impl(const SendPacket &pkt_to_send, uint8_t *buf) {
     int bytes = 0;
     uart_event_t event{};
     // The receive can time out (the panel's poll cycle is longer than some
     // pulse periods).  Bail out rather than switching on an event that was
     // never written: 'event' would hold stack garbage, which can match
     // UART_BREAK and run the whole break-handling path on nothing.
-    if (xQueueReceive(this->vistabus_.uartevtQueue, (void *) &event, pdMS_TO_TICKS(kPulseCyclePeriod)) != pdPASS)
+    if (xQueueReceive(this->vistabus_.uartevtQueue, (void *) &event, pdMS_TO_TICKS(K_PULSE_CYCLE_PERIOD)) != pdPASS)
       return 0;
 
     switch (event.type) {
@@ -142,7 +142,7 @@ class VistaSE : public ProtocolBase<VistaSE> {
             if (high_time > 20000) {
               gpio_set_intr_type(this->vistabus_.rx_pin, GPIO_INTR_POSEDGE);
               if (this->req_to_send && pkt_to_send.type == 1 &&
-                  (high_time < kSEWriteWindowBelowUs || high_time > kSEWriteWindowAboveUs)) {
+                  (high_time < K_SE_WRITE_WINDOW_BELOW_US || high_time > K_SE_WRITE_WINDOW_ABOVE_US)) {
                 // High-time in the valid write window — send one character.
                 const esp_timer_create_args_t oneshot_timer_args = {.callback = &timer_isr_handler,
                                                                     .arg = (void *) this->vistabus_.rx_tx_task_Handle,
@@ -158,13 +158,13 @@ class VistaSE : public ProtocolBase<VistaSE> {
                 this->vistabus_.set_baud_fast(false);
                 uart_set_stop_bits(this->vistabus_.uart_num, UART_STOP_BITS_1);
                 uart_set_word_length(this->vistabus_.uart_num, UART_DATA_5_BITS);
-                keypad_write_SE(this->vistabus_.uart_num, pkt_to_send.payload);
+                keypad_write_se_(this->vistabus_.uart_num, pkt_to_send.payload);
 
                 // Retry up to twice if the bus is not acknowledged.
                 if (xTaskNotifyWait(0, 0xFFFFFFFF, nullptr, 0) != pdTRUE) {
-                  keypad_write_SE(this->vistabus_.uart_num, pkt_to_send.payload);
+                  keypad_write_se_(this->vistabus_.uart_num, pkt_to_send.payload);
                   if (xTaskNotifyWait(0, 0xFFFFFFFF, nullptr, 0) != pdTRUE) {
-                    keypad_write_SE(this->vistabus_.uart_num, pkt_to_send.payload);
+                    keypad_write_se_(this->vistabus_.uart_num, pkt_to_send.payload);
                   } else {
                     data_written = false;
                   }
@@ -183,7 +183,7 @@ class VistaSE : public ProtocolBase<VistaSE> {
                 esp_timer_delete(oneshot_timer);
               } else if (xTaskNotifyWait(0, 0xFFFFFFFF, nullptr, pdMS_TO_TICKS(10)) == pdPASS) {
                 int64_t end = esp_timer_get_time();
-                if (end - start > kBaudSwitchMarkMinUs && end - start < kBaudSwitchMarkMaxUs) {
+                if (end - start > K_BAUD_SWITCH_MARK_MIN_US && end - start < K_BAUD_SWITCH_MARK_MAX_US) {
                   // ~6 ms mark: panel transmitting a 2400 baud packet.
                   if (!this->legacy_programmode) {
                     uart_flush(this->vistabus_.uart_num);
@@ -235,7 +235,7 @@ class VistaSE : public ProtocolBase<VistaSE> {
                 }
               } else if (this->req_to_send && !this->pulse_marked && pkt_to_send.type == 2) {
                 // Expansion device pulse-mark window.
-                mark_pulse(this->vistabus_.uart_num, pkt_to_send.keypadaddress);
+                mark_pulse_(this->vistabus_.uart_num, pkt_to_send.keypadaddress);
                 this->pulse_marked = true;
                 this->pulse_mark_time = esp_timer_get_time();
               }
@@ -260,8 +260,8 @@ class VistaSE : public ProtocolBase<VistaSE> {
   // Other notifications → read one byte from the external UART at 4800 baud
   //   and return it for the caller to dispatch.
   int monitor_task_sync_impl(uint8_t *buf, uint32_t &val) {
-    ReceivedPacket rcvd_extPkt{};
-    rcvd_extPkt.type = 1;
+    ReceivedPacket rcvd_ext_pkt{};
+    rcvd_ext_pkt.type = 1;
     int bytes = 0;
 
     // Bounded rather than portMAX_DELAY, for two reasons.  monitor_rx_task can
@@ -278,8 +278,8 @@ class VistaSE : public ProtocolBase<VistaSE> {
     // each notification consumes exactly one message, a single stray offsets
     // every read after it by one exchange, and nothing else sheds it.
     //
-    // See kMonitorSyncNotifyWaitMs.  This mirrors the Vista20P path.
-    if (xTaskNotifyWait(0xFFFFFFFF, 0xFFFFFFFF, &val, pdMS_TO_TICKS(kMonitorSyncNotifyWaitMs)) != pdPASS) {
+    // See K_MONITOR_SYNC_NOTIFY_WAIT_MS.  This mirrors the Vista20P path.
+    if (xTaskNotifyWait(0xFFFFFFFF, 0xFFFFFFFF, &val, pdMS_TO_TICKS(K_MONITOR_SYNC_NOTIFY_WAIT_MS)) != pdPASS) {
       uart_flush(this->vistabus_.ext_uart_num);
       return 0;
     }
@@ -290,17 +290,17 @@ class VistaSE : public ProtocolBase<VistaSE> {
       uart_set_stop_bits(this->vistabus_.ext_uart_num, UART_STOP_BITS_1);
       uart_set_word_length(this->vistabus_.ext_uart_num, UART_DATA_5_BITS);
       buf[0] = 0;
-      memset(rcvd_extPkt.payload, '\0', sizeof(rcvd_extPkt.payload));
+      memset(rcvd_ext_pkt.payload, '\0', sizeof(rcvd_ext_pkt.payload));
 
       // Wait for the low-period-started notification before reading.
       xTaskNotifyWait(0xFFFFFFFF, 0, &val, portMAX_DELAY);
       if (static_cast<uint8_t>(val >> 8) == 0x12) {
-        rcvd_extPkt.source = 0xDD;  // VistaSE protocol keypad data
+        rcvd_ext_pkt.source = 0xDD;  // VistaSE protocol keypad data
         // Read into a local 3-byte buffer, not the caller's: monitor_rx_task
         // passes a 1-byte array (it only ever needs one dispatch byte back),
         // so reading 3 bytes into it overran its stack frame.
         uint8_t se_buf[3] = {};
-        bytes = this->get_packet(&rcvd_extPkt, se_buf, 0, 3, this->vistabus_.ext_uart_num, pdMS_TO_TICKS(8),
+        bytes = this->get_packet(&rcvd_ext_pkt, se_buf, 0, 3, this->vistabus_.ext_uart_num, pdMS_TO_TICKS(8),
                                  sizeof(se_buf));  // minimum 4 ms for data to arrive
       }
       uart_set_word_length(this->vistabus_.ext_uart_num, UART_DATA_8_BITS);
@@ -309,11 +309,11 @@ class VistaSE : public ProtocolBase<VistaSE> {
 
       if (bytes) {
         uart_flush(this->vistabus_.ext_uart_num);
-        xQueueSend(this->vistabus_.receiveQueue, &rcvd_extPkt, pdMS_TO_TICKS(0));
+        xQueueSend(this->vistabus_.receiveQueue, &rcvd_ext_pkt, pdMS_TO_TICKS(0));
         bytes = 0;
       }
     } else {
-      bytes = uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1, pdMS_TO_TICKS(kMonitorSyncReadWaitMs));
+      bytes = uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1, pdMS_TO_TICKS(K_MONITOR_SYNC_READ_WAIT_MS));
     }
     return bytes;
   }
@@ -324,8 +324,8 @@ class VistaSE : public ProtocolBase<VistaSE> {
   // Handled types:
   //   0xF1 — zone-state request: dequeue one DeviceMsg and reply with zone state.
   //   0xF7 — tamper/fault poll: reply with stored NO/NC fault bitmasks.
-  void quick_decodeFA_impl(const char *cbuf) {
-    VistaBus::EmulatedExpander *expander = vistabus_.getExpander(0x01);
+  void quick_decode_fa_impl(const char *cbuf) {
+    VistaBus::EmulatedExpander *expander = vistabus_.get_expander(0x01);
     char lcbuf[5];
     char type = cbuf[3];
     char exp_sequence = (cbuf[2] == 0x20 ? 0x35 : 0x30);
@@ -345,13 +345,13 @@ class VistaSE : public ProtocolBase<VistaSE> {
       // Only reply if a message was actually dequeued: on a timeout,
       // DeviceMsg's member initialisers would otherwise produce a
       // well-formed but meaningless zone-0 / no-fault frame.
-      DeviceMsg expMsg{};
-      if (xQueueReceive(vistabus_.deviceMsgQueue, &expMsg, pdMS_TO_TICKS(25)) == pdPASS) {
+      DeviceMsg exp_msg{};
+      if (xQueueReceive(vistabus_.deviceMsgQueue, &exp_msg, pdMS_TO_TICKS(25)) == pdPASS) {
         lcbuf[0] = 0x01;
         lcbuf[1] = exp_sequence;
-        uint8_t z = (expMsg.source - 1) & 0x07;
+        uint8_t z = (exp_msg.source - 1) & 0x07;
         lcbuf[2] = z ? 0 : 0x01;
-        lcbuf[3] = (z << 5) ^ (0x10 * expMsg.msg);
+        lcbuf[3] = (z << 5) ^ (0x10 * exp_msg.msg);
         lcbuf[4] = calc_chksum_two(lcbuf, 0, 4);
         uart_write_bytes(vistabus_.uart_num, lcbuf, 5);
       }
@@ -369,22 +369,22 @@ class VistaSE : public ProtocolBase<VistaSE> {
   // Read the remainder of a legacy 0xFA expander poll frame, validate the
   // two-byte checksum, notify the monitor task, and trigger an in-line expander
   // response if EXP emulation is active.  Always enqueues a ReceivedPacket.
-  void dispatchFA_impl() {
-    uint8_t data[kFALegacyMessageLength + 1];
+  void dispatch_fa_impl() {
+    uint8_t data[K_FA_LEGACY_MESSAGE_LENGTH + 1];
     ReceivedPacket received_packet{};
     received_packet.type = 0;
     received_packet.payload[0] = 0xFA;
-    uint8_t length = kFALegacyMessageLength;
+    uint8_t length = K_FA_LEGACY_MESSAGE_LENGTH;
 
-    int rxBytes = this->get_packet_event(&received_packet, data, 1, length - 1, vistabus_.uart_num,
-                                         pdMS_TO_TICKS(kUartDelay), vistabus_.uartevtQueue, sizeof(data));
-    bool chk = valid_chksum(received_packet.payload, 0, rxBytes + 1);
+    int rx_bytes = this->get_packet_event(&received_packet, data, 1, length - 1, vistabus_.uart_num,
+                                          pdMS_TO_TICKS(K_UART_DELAY), vistabus_.uartevtQueue, sizeof(data));
+    bool chk = valid_chksum(received_packet.payload, 0, rx_bytes + 1);
     if (chk) {
       uint32_t val = 0xFA << 16 | (received_packet.payload[1] << 8) | received_packet.payload[3];
       if (vistabus_.monitor_rx_task_Handle != nullptr)
         xTaskNotify(vistabus_.monitor_rx_task_Handle, val, eSetValueWithOverwrite);
       if (vistabus_.EXPemulation)
-        this->quick_decodeFA(received_packet.payload);
+        this->quick_decode_fa(received_packet.payload);
       received_packet.source = 0xFA;
     } else {
       received_packet.source = 0xCF;
@@ -406,7 +406,7 @@ class VistaSE : public ProtocolBase<VistaSE> {
   //   'P'      (0x50)       → 0x0E  (Partition)
   //   'G'      (0x47)       → 0x0F  (Go)
   //   'A'–'D'  (0x41–0x44) → 0x1C–0x1F
-  int keypad_write_SE(uart_port_t uart_n, const char *character) {
+  int keypad_write_se_(uart_port_t uart_n, const char *character) {
     char outbuffer[2];
     memset(outbuffer, '\0', sizeof(outbuffer));
     if (character[0] >= 0x30 && character[0] <= 0x39) {

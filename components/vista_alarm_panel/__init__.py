@@ -236,8 +236,8 @@ async def to_code(config):
         config[CONF_UART2],
     )
 
-    cg.add(var.set_accessCode(config[CONF_ACCESSCODE]))
-    cg.add(var.set_defaultPartition(config[CONF_DEFAULTPARTITION]))
+    cg.add(var.set_access_code(config[CONF_ACCESSCODE]))
+    cg.add(var.set_default_partition(config[CONF_DEFAULTPARTITION]))
     if config[CONF_DEBUGLOG]:
         cg.add_define("DEBUG_LOG")
     if config[CONF_DEBUGPULSE]:
@@ -246,29 +246,29 @@ async def to_code(config):
         cg.add_define("LEGACY_SE_PROTOCOL")
         _LOGGER.info("Enabling Legacy Protocol Option")
     if config[CONF_KEYPAD1] != 0:
-        cg.add(var.set_partitionKeypad(1, config[CONF_KEYPAD1]))
+        cg.add(var.set_partition_keypad(1, config[CONF_KEYPAD1]))
     if config[CONF_KEYPAD2] != 0:
-        cg.add(var.set_partitionKeypad(2, config[CONF_KEYPAD2]))
+        cg.add(var.set_partition_keypad(2, config[CONF_KEYPAD2]))
     if config[CONF_KEYPAD3] != 0:
-        cg.add(var.set_partitionKeypad(3, config[CONF_KEYPAD3]))
+        cg.add(var.set_partition_keypad(3, config[CONF_KEYPAD3]))
     if config[CONF_KEYPAD4] != 0:
-        cg.add(var.set_partitionKeypad(4, config[CONF_KEYPAD4]))
+        cg.add(var.set_partition_keypad(4, config[CONF_KEYPAD4]))
     if config[CONF_KEYPAD5] != 0:
-        cg.add(var.set_partitionKeypad(5, config[CONF_KEYPAD5]))
+        cg.add(var.set_partition_keypad(5, config[CONF_KEYPAD5]))
     if config[CONF_KEYPAD6] != 0:
-        cg.add(var.set_partitionKeypad(6, config[CONF_KEYPAD6]))
+        cg.add(var.set_partition_keypad(6, config[CONF_KEYPAD6]))
     if config[CONF_KEYPAD7] != 0:
-        cg.add(var.set_partitionKeypad(7, config[CONF_KEYPAD7]))
+        cg.add(var.set_partition_keypad(7, config[CONF_KEYPAD7]))
     if config[CONF_KEYPAD8] != 0:
-        cg.add(var.set_partitionKeypad(8, config[CONF_KEYPAD8]))
+        cg.add(var.set_partition_keypad(8, config[CONF_KEYPAD8]))
     cg.add(var.initialize_partition_sensors())
     cg.add(var.set_ttl(config[CONF_TTL]))
     if CONF_QUICKARM in config:
-        cg.add(var.set_quickArm(config[CONF_QUICKARM]))
+        cg.add(var.set_quick_arm(config[CONF_QUICKARM]))
     if CONF_LRR in config:
-        cg.add(var.set_lrrSupervisor(config[CONF_LRR]))
+        cg.add(var.set_lrr_supervisor(config[CONF_LRR]))
     if CONF_RFR in config:
-        cg.add(var.set_rfrEmulation(config[CONF_RFR], config[CONF_RFRADDR]))
+        cg.add(var.set_rfr_emulation(config[CONF_RFR], config[CONF_RFRADDR]))
     if CONF_CC1101_MOSI in config:
         if config[CONF_DEBUGPULSE]:
             # debug_pulsing uses the RMT peripheral — CC1101 reception is incompatible.

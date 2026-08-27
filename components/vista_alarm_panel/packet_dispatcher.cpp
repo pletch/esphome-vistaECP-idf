@@ -53,13 +53,13 @@ void PacketDispatcher::dispatch_one() {
   if (!bus_.read_packet(payload, size, type, src, true))
     return;
 
-  print_packet(payload, type, src, size);
+  print_packet_(payload, type, src, size);
 
   // Yellow-wire packets (type 0) are the primary panel-to-keypad stream.
   if (type == 0) {
     if (src == 0xF7) {
       // Standard status frame — decode and update partition/zone state.
-      StatusFlags flags = decode_status_flags(payload, size);
+      StatusFlags flags = decode_status_flags_(payload, size);
       ESP_LOGI(TAG, "Prompt: %s", flags.prompt1);
       ESP_LOGI(TAG, "Prompt: %s", flags.prompt2);
       ESP_LOGI(TAG, "Beeps: %d", flags.beeps);
@@ -71,8 +71,8 @@ void PacketDispatcher::dispatch_one() {
     } else if (src == 0xDD) {
       // Legacy Vista20 SE protocol: assemble multi-packet frame, then
       // treat the assembled buffer exactly like an F7 frame.
-      if (assemble_legacy_se(payload, size)) {
-        StatusFlags flags = decode_status_flags(legacy_cmd_buffer_, static_cast<int>(sizeof(legacy_cmd_buffer_)));
+      if (assemble_legacy_se_(payload, size)) {
+        StatusFlags flags = decode_status_flags_(legacy_cmd_buffer_, static_cast<int>(sizeof(legacy_cmd_buffer_)));
         ESP_LOGI(TAG, "Prompt: %s", flags.prompt1);
         ESP_LOGI(TAG, "Prompt: %s", flags.prompt2);
         ESP_LOGI(TAG, "Beeps: %d", flags.beeps);
@@ -88,28 +88,28 @@ void PacketDispatcher::dispatch_one() {
         cfg_.aui->on_f2_packet_with_bus(payload, size, *cfg_.zones, cfg_.rtc, bus_);
     } else if (src == 0xF9) {
       // LRR (Long-Range Radio) / Contact-ID event.
-      handle_lrr_packet(payload, size);
-    } else if (payload[0] != 0 && src == static_cast<int>(PacketType::KeypadAck)) {
+      handle_lrr_packet_(payload, size);
+    } else if (payload[0] != 0 && src == static_cast<int>(PacketType::KEYPAD_ACK)) {
       // F6 keypad-ACK: advance the outgoing sequence counter.
       if (cfg_.partitions != nullptr)
         cfg_.partitions->on_keypad_ack(static_cast<uint8_t>(payload[0]));
     } else if (src == 0xCF) {
       // 0xCF marks a checksum failure on the primary (yellow-wire) UART.
-      note_chksum_failure("primary bus");
+      note_chksum_failure_("primary bus");
     }
   }
   // Green-wire packets (type 1) come from expansion devices and RF receivers.
   else if (type == 1) {
-    if (src == 0xFA && size == kFALegacyMessageLength) {
+    if (src == 0xFA && size == K_FA_LEGACY_MESSAGE_LENGTH) {
       // Wired expansion module zone packet.
       if (cfg_.zones != nullptr)
         cfg_.zones->on_expander_zone_packet(payload, size);
-    } else if (src == 0xFB && size == kRFZoneMessageLength) {
+    } else if (src == 0xFB && size == K_RF_ZONE_MESSAGE_LENGTH) {
       // RF receiver zone packet — empty return signals checksum failure.
       if (cfg_.zones != nullptr) {
         std::string serial = cfg_.zones->on_rf_zone_packet(payload, size);
         if (serial.empty()) {
-          note_chksum_failure("RF zone packet");
+          note_chksum_failure_("RF zone packet");
         } else if (cfg_.rf_sensor != nullptr) {
           cfg_.rf_sensor->process(serial);
         }
@@ -127,10 +127,10 @@ void PacketDispatcher::dispatch_one() {
 }
 
 // Count a checksum failure, or log and discard it if the device has not
-// been up long enough for the count to mean anything.  See kChksumSettleUs
+// been up long enough for the count to mean anything.  See K_CHKSUM_SETTLE_US
 // for why the early window is excluded.
-void PacketDispatcher::note_chksum_failure(const char *what) {
-  if (esp_timer_get_time() < kChksumSettleUs) {
+void PacketDispatcher::note_chksum_failure_(const char *what) {
+  if (esp_timer_get_time() < K_CHKSUM_SETTLE_US) {
     ESP_LOGI(TAG,
              "Checksum failure (%s) %llu ms after boot — inside the "
              "settle window, not counted.",
@@ -154,7 +154,7 @@ void PacketDispatcher::note_chksum_failure(const char *what) {
 //   [28..43]— prompt line 2 (16 bytes, extended-char encoded)
 // ---------------------------------------------------------------------------
 
-StatusFlags PacketDispatcher::decode_status_flags(const char *cbuf, int size) {
+StatusFlags PacketDispatcher::decode_status_flags_(const char *cbuf, int size) {
   StatusFlags flags;
 
   // The layout below indexes up to cbuf[43] unconditionally.  Reject
@@ -184,28 +184,28 @@ StatusFlags PacketDispatcher::decode_status_flags(const char *cbuf, int size) {
     }
   }
 
-  flags.zone = static_cast<int>(toDec(cbuf[5]));
-  flags.beeps = cbuf[6] & kBitMaskByte1Beep;
+  flags.zone = static_cast<int>(to_dec(cbuf[5]));
+  flags.beeps = cbuf[6] & K_BIT_MASK_BYTE1_BEEP;
 
-  flags.fire = ((cbuf[7] & kBitMaskByte2Fire) > 0);
-  flags.system_flag = ((cbuf[7] & kBitMaskByte2SystemFlag) > 0);
-  flags.ready = ((cbuf[7] & kBitMaskByte2Ready) > 0);
-  flags.night = ((cbuf[6] & kBitMaskByte1Night) > 0);
-  flags.armed_stay = ((cbuf[7] & kBitMaskByte2ArmedStay) > 0);
-  flags.low_battery = ((cbuf[7] & kBitMaskByte2LowBat) > 0);
-  flags.check = ((cbuf[7] & kBitMaskByte2CheckFlag) > 0);
-  flags.fire_zone = ((cbuf[7] & kBitMaskByte2AlarmZone) > 0);
+  flags.fire = ((cbuf[7] & K_BIT_MASK_BYTE2_FIRE) > 0);
+  flags.system_flag = ((cbuf[7] & K_BIT_MASK_BYTE2_SYSTEM_FLAG) > 0);
+  flags.ready = ((cbuf[7] & K_BIT_MASK_BYTE2_READY) > 0);
+  flags.night = ((cbuf[6] & K_BIT_MASK_BYTE1_NIGHT) > 0);
+  flags.armed_stay = ((cbuf[7] & K_BIT_MASK_BYTE2_ARMED_STAY) > 0);
+  flags.low_battery = ((cbuf[7] & K_BIT_MASK_BYTE2_LOW_BAT) > 0);
+  flags.check = ((cbuf[7] & K_BIT_MASK_BYTE2_CHECK_FLAG) > 0);
+  flags.fire_zone = ((cbuf[7] & K_BIT_MASK_BYTE2_ALARM_ZONE) > 0);
 
-  flags.in_alarm = ((cbuf[8] & kBitMaskByte3InAlarm) > 0);
-  flags.ac_power = ((cbuf[8] & kBitMaskByte3ACPower) > 0);
-  flags.chime = ((cbuf[8] & kBitMaskByte3ChimeMode) > 0);
-  flags.bypass = ((cbuf[8] & kBitMaskByte3Bypass) > 0);
-  flags.program_mode = static_cast<bool>(cbuf[8] & kBitMaskByte3Program);
-  flags.instant = ((cbuf[8] & kBitMaskByte3Instant) > 0);
-  flags.armed_away = ((cbuf[8] & kBitMaskByte3ArmedAway) > 0);
+  flags.in_alarm = ((cbuf[8] & K_BIT_MASK_BYTE3_IN_ALARM) > 0);
+  flags.ac_power = ((cbuf[8] & K_BIT_MASK_BYTE3_AC_POWER) > 0);
+  flags.chime = ((cbuf[8] & K_BIT_MASK_BYTE3_CHIME_MODE) > 0);
+  flags.bypass = ((cbuf[8] & K_BIT_MASK_BYTE3_BYPASS) > 0);
+  flags.program_mode = static_cast<bool>(cbuf[8] & K_BIT_MASK_BYTE3_PROGRAM);
+  flags.instant = ((cbuf[8] & K_BIT_MASK_BYTE3_INSTANT) > 0);
+  flags.armed_away = ((cbuf[8] & K_BIT_MASK_BYTE3_ARMED_AWAY) > 0);
 
   if (!flags.system_flag)
-    flags.alarm = ((cbuf[8] & kBitMaskByte3ZoneAlarm) > 0);
+    flags.alarm = ((cbuf[8] & K_BIT_MASK_BYTE3_ZONE_ALARM) > 0);
 
   flags.promptPos = cbuf[10];
   flags.backlight = ((cbuf[12] & 0x80) > 0);
@@ -235,7 +235,7 @@ void PacketDispatcher::translate_prompt(const char *src, char first_byte, char *
   // expansion.  Here the output is bounded explicitly and the string is
   // terminated at its real length.
   size_t o = 0;
-  const size_t cap = kPromptOutChars;
+  const size_t cap = K_PROMPT_OUT_CHARS;
   for (size_t i = 0; i < 16 && o < cap; i++) {
     const uint8_t c = static_cast<uint8_t>(in[i]);
     if (c == 0)
@@ -269,7 +269,7 @@ void PacketDispatcher::translate_prompt(const char *src, char first_byte, char *
 // frame in legacy_cmd_buffer_ is complete and ready for decode_status_flags().
 // ---------------------------------------------------------------------------
 
-bool PacketDispatcher::assemble_legacy_se(const char *payload, int size) {
+bool PacketDispatcher::assemble_legacy_se_(const char *payload, int size) {
   const uint8_t b0 = static_cast<uint8_t>(payload[0]);
 
   if (b0 != 0xFE && b0 != 0xFF && size == 5) {
@@ -316,7 +316,7 @@ bool PacketDispatcher::assemble_legacy_se(const char *payload, int size) {
 //   [12] — data low nibble (zone/user)
 // ---------------------------------------------------------------------------
 
-void PacketDispatcher::handle_lrr_packet(const char *payload, int size) {
+void PacketDispatcher::handle_lrr_packet_(const char *payload, int size) {
   if (size < 13)
     return;
 
@@ -325,9 +325,9 @@ void PacketDispatcher::handle_lrr_packet(const char *payload, int size) {
 
   // Decode Contact-ID fields.
   const int c_raw = (static_cast<int>(0x0F & payload[8]) << 8) | static_cast<uint8_t>(payload[9]);
-  const int c = toDec(c_raw);
+  const int c = to_dec(c_raw);
   const uint8_t qual = static_cast<uint8_t>(0xF0 & payload[8]) >> 4;
-  const int data = toDec((static_cast<uint8_t>(payload[12]) >> 4) | (static_cast<uint8_t>(payload[11]) << 4));
+  const int data = to_dec((static_cast<uint8_t>(payload[12]) >> 4) | (static_cast<uint8_t>(payload[11]) << 4));
   const uint8_t partition = static_cast<uint8_t>(payload[10]);
 
   if (c == 0)
@@ -368,7 +368,7 @@ void PacketDispatcher::handle_lrr_packet(const char *payload, int size) {
 // payload is truncated to 8 bytes to keep the output readable.
 // ---------------------------------------------------------------------------
 
-void PacketDispatcher::print_packet(const char *cbuf, int type, int src, int len) {
+void PacketDispatcher::print_packet_(const char *cbuf, int type, int src, int len) {
   PacketType source = static_cast<PacketType>(src);
 
   // Checksum failures always log at ERROR.  All other packets log at
@@ -384,36 +384,36 @@ void PacketDispatcher::print_packet(const char *cbuf, int type, int src, int len
   // the compile-time ESPHOME_LOG_LEVEL above.  The IDF runtime level is
   // unrelated and is left at CONFIG_LOG_DEFAULT_LEVEL_ERROR, so testing
   // it here would suppress every packet line in every build.
-  const bool is_chksum_fail = (source == PacketType::ChksumFail);
+  const bool is_chksum_fail = (source == PacketType::CHKSUM_FAIL);
 
   // 8 bytes is the widest tag ("KPDL" plus margin for future additions).
   char device[8];
   switch (source) {
-    case PacketType::Unspecified:
+    case PacketType::UNSPECIFIED:
       snprintf(device, sizeof(device), "EXT");
       break;
-    case PacketType::ChksumFail:
+    case PacketType::CHKSUM_FAIL:
       snprintf(device, sizeof(device), "CHK");
       break;
-    case PacketType::Expander:
+    case PacketType::EXPANDER:
       snprintf(device, sizeof(device), "EXP");
       break;
-    case PacketType::RFReceiver:
+    case PacketType::RF_RECEIVER:
       snprintf(device, sizeof(device), "RFR");
       break;
     case PacketType::AUI:
       snprintf(device, sizeof(device), "AUI");
       break;
-    case PacketType::KeypadAck:
+    case PacketType::KEYPAD_ACK:
       snprintf(device, sizeof(device), "KPA");
       break;
-    case PacketType::Keypad:
+    case PacketType::KEYPAD:
       snprintf(device, sizeof(device), "KPD");
       break;
-    case PacketType::LegacyProtocol:
+    case PacketType::LEGACY_PROTOCOL:
       snprintf(device, sizeof(device), "KPDL");
       break;
-    case PacketType::LongRangeRadio:
+    case PacketType::LONG_RANGE_RADIO:
       snprintf(device, sizeof(device), "LRR");
       break;
     default:

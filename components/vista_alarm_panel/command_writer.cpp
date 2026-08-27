@@ -36,7 +36,7 @@ static bool is_four_digits(const char *p) {
   return true;
 }
 
-bool CommandWriter::resolve_code(const std::string &supplied, char resolved_out[4]) const {
+bool CommandWriter::resolve_code_(const std::string &supplied, char resolved_out[4]) const {
   // keypress() is reachable from two tasks — ESPHome service callbacks
   // on the main loop, and the HITSTAR auto-acknowledge on
   // processReceiveQueue.  The previous function-local
@@ -61,7 +61,7 @@ bool CommandWriter::resolve_code(const std::string &supplied, char resolved_out[
 // Look up keypad address and current sequence for a logical partition id.
 // Logs and returns false if the partition is not found or its keypad
 // address is out of the valid range accepted by VistaBus::write (1–23 or 31).
-bool CommandWriter::resolve_partition(int partition_id, uint8_t &addr_out, uint8_t &seq_out) const {
+bool CommandWriter::resolve_partition_(int partition_id, uint8_t &addr_out, uint8_t &seq_out) const {
   if (partition_id < 1 || partition_id > 8) {
     ESP_LOGE(TAG, "Partition %d is out of range (1–8).", partition_id);
     return false;
@@ -84,7 +84,7 @@ bool CommandWriter::resolve_partition(int partition_id, uint8_t &addr_out, uint8
 
 // Write a key string to the bus and log the result.
 // data must remain valid for the duration of this call (it is not modified).
-bool CommandWriter::send_keys(const char *data, int size, int partition_id, uint8_t addr, uint8_t seq) const {
+bool CommandWriter::send_keys_(const char *data, int size, int partition_id, uint8_t addr, uint8_t seq) const {
   // Build a printable representation of the key bytes for the log.
   // Each byte is shown as its ASCII character if printable, else as hex.
   //
@@ -126,8 +126,8 @@ bool CommandWriter::send_keys(const char *data, int size, int partition_id, uint
 // Build and send a code + suffix sequence,
 // suffix     — the key(s) appended after the 4-digit code, e.g. "3" or "33"
 // suffix_len — byte count of suffix, not including any terminator
-bool CommandWriter::send_code_plus_keys(const char code[4], const char *suffix, int suffix_len, int partition_id,
-                                        uint8_t addr, uint8_t seq) const {
+bool CommandWriter::send_code_plus_keys_(const char code[4], const char *suffix, int suffix_len, int partition_id,
+                                         uint8_t addr, uint8_t seq) const {
   // Maximum payload the bus accepts is 24 bytes; a code+suffix is at most 7.
   char buf[24];
   if (suffix_len < 0 || 4 + suffix_len > static_cast<int>(sizeof(buf))) {
@@ -136,7 +136,7 @@ bool CommandWriter::send_code_plus_keys(const char code[4], const char *suffix, 
   }
   memcpy(buf, code, 4);
   memcpy(buf + 4, suffix, suffix_len);
-  return send_keys(buf, 4 + suffix_len, partition_id, addr, seq);
+  return send_keys_(buf, 4 + suffix_len, partition_id, addr, seq);
 }
 
 // ---------------------------------------------------------------------------
@@ -150,17 +150,17 @@ bool CommandWriter::arm_away(int partition_id, const std::string &code) {
   }
 
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   if (quick_arm_)
-    return send_keys("#2", 2, partition_id, addr, seq);
+    return send_keys_("#2", 2, partition_id, addr, seq);
 
   char resolved[4];
-  if (!resolve_code(code, resolved))
+  if (!resolve_code_(code, resolved))
     return false;
 
-  return send_code_plus_keys(resolved, "2", 1, partition_id, addr, seq);
+  return send_code_plus_keys_(resolved, "2", 1, partition_id, addr, seq);
 }
 
 bool CommandWriter::arm_stay(int partition_id, const std::string &code) {
@@ -170,17 +170,17 @@ bool CommandWriter::arm_stay(int partition_id, const std::string &code) {
   }
 
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   if (quick_arm_)
-    return send_keys("#3", 2, partition_id, addr, seq);
+    return send_keys_("#3", 2, partition_id, addr, seq);
 
   char resolved[4];
-  if (!resolve_code(code, resolved))
+  if (!resolve_code_(code, resolved))
     return false;
 
-  return send_code_plus_keys(resolved, "3", 1, partition_id, addr, seq);
+  return send_code_plus_keys_(resolved, "3", 1, partition_id, addr, seq);
 }
 
 bool CommandWriter::arm_night(int partition_id, const std::string &code) {
@@ -190,17 +190,17 @@ bool CommandWriter::arm_night(int partition_id, const std::string &code) {
   }
 
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   if (quick_arm_)
-    return send_keys("#33", 3, partition_id, addr, seq);
+    return send_keys_("#33", 3, partition_id, addr, seq);
 
   char resolved[4];
-  if (!resolve_code(code, resolved))
+  if (!resolve_code_(code, resolved))
     return false;
 
-  return send_code_plus_keys(resolved, "33", 2, partition_id, addr, seq);
+  return send_code_plus_keys_(resolved, "33", 2, partition_id, addr, seq);
 }
 
 bool CommandWriter::arm_instant(int partition_id, const std::string &code) {
@@ -210,57 +210,57 @@ bool CommandWriter::arm_instant(int partition_id, const std::string &code) {
   }
 
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   if (quick_arm_)
-    return send_keys("#7", 2, partition_id, addr, seq);
+    return send_keys_("#7", 2, partition_id, addr, seq);
 
   char resolved[4];
-  if (!resolve_code(code, resolved))
+  if (!resolve_code_(code, resolved))
     return false;
 
-  return send_code_plus_keys(resolved, "7", 1, partition_id, addr, seq);
+  return send_code_plus_keys_(resolved, "7", 1, partition_id, addr, seq);
 }
 
 bool CommandWriter::disarm(int partition_id, const std::string &code) {
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   // Disarm always requires a real code — quick arm is not applicable.
   char resolved[4];
-  if (!resolve_code(code, resolved))
+  if (!resolve_code_(code, resolved))
     return false;
 
   // Panel command: code + "1"
-  return send_code_plus_keys(resolved, "1", 1, partition_id, addr, seq);
+  return send_code_plus_keys_(resolved, "1", 1, partition_id, addr, seq);
 }
 
 bool CommandWriter::bypass_zone(int partition_id, const std::string &code) {
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   char resolved[4];
-  if (!resolve_code(code, resolved))
+  if (!resolve_code_(code, resolved))
     return false;
 
   // Panel command: code + "6#"
-  return send_code_plus_keys(resolved, "6#", 2, partition_id, addr, seq);
+  return send_code_plus_keys_(resolved, "6#", 2, partition_id, addr, seq);
 }
 
 bool CommandWriter::quick_bypass(int partition_id, const std::string &code) {
   // Panel command: code + "600" — bypasses all open zones at once.
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   char resolved[4];
-  if (!resolve_code(code, resolved))
+  if (!resolve_code_(code, resolved))
     return false;
 
-  return send_code_plus_keys(resolved, "600", 3, partition_id, addr, seq);
+  return send_code_plus_keys_(resolved, "600", 3, partition_id, addr, seq);
 }
 
 bool CommandWriter::trigger_fire(int partition_id, const std::string &code) {
@@ -268,21 +268,21 @@ bool CommandWriter::trigger_fire(int partition_id, const std::string &code) {
   // On the ECP bus this is sent as the key sequence "AF" per the protocol.
   // This implements the standard two-key simultaneous panic sequence.
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   (void) code;  // Fire does not require a code on Vista panels
-  return send_keys("AF", 2, partition_id, addr, seq);
+  return send_keys_("AF", 2, partition_id, addr, seq);
 }
 
 bool CommandWriter::trigger_panic(int partition_id, const std::string &code) {
   // Honeywell Vista panic: hold * and # simultaneously → "AM" on the bus.
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   (void) code;  // Panic does not require a code on Vista panels
-  return send_keys("AM", 2, partition_id, addr, seq);
+  return send_keys_("AM", 2, partition_id, addr, seq);
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +328,7 @@ bool CommandWriter::keypress(const std::string &keys, int partition_id, const st
 
   // Arbitrary key sequence — send verbatim.
   uint8_t addr, seq;
-  if (!resolve_partition(partition_id, addr, seq))
+  if (!resolve_partition_(partition_id, addr, seq))
     return false;
 
   // Clamp to the maximum payload VistaBus::write accepts.
@@ -338,7 +338,7 @@ bool CommandWriter::keypress(const std::string &keys, int partition_id, const st
     return false;
   }
 
-  return send_keys(keys.c_str(), len, partition_id, addr, seq);
+  return send_keys_(keys.c_str(), len, partition_id, addr, seq);
 }
 
 }  // namespace esphome::alarm_panel

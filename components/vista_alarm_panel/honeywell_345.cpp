@@ -11,8 +11,8 @@
 
 // Worst-case decoded-chip count: each RMT symbol yields at most 4 chips
 // (two half-symbols × up to 2 chips each), plus a possible leading and trailing
-// pad chip.  num_symbols is bounded by the RMT capture buffer (kCc1101RmtSymbols).
-static constexpr size_t kMaxChips = kCc1101RmtSymbols * 4 + 2;
+// pad chip.  num_symbols is bounded by the RMT capture buffer (K_CC1101_RMT_SYMBOLS).
+static constexpr size_t kMaxChips = K_CC1101_RMT_SYMBOLS * 4 + 2;
 
 static constexpr const char *TAG = "honeywell345";
 

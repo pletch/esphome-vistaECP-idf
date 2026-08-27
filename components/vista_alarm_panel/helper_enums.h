@@ -12,35 +12,35 @@
 #include <cstdint>
 
 enum class SysState : uint8_t {
-  Offline,
-  ArmedAway,
-  ArmedStay,
-  Bypass,
+  OFFLINE,
+  ARMED_AWAY,
+  ARMED_STAY,
+  BYPASS,
   AC,
-  Chime,
-  Battery,
-  Check,
-  ArmedNight,
-  Disarmed,
-  Triggered,
-  Unavailable,
-  Trouble,
-  Alarm,
-  Fire,
-  Instant,
-  Ready,
-  Armed,
-  Arming
+  CHIME,
+  BATTERY,
+  CHECK,
+  ARMED_NIGHT,
+  DISARMED,
+  TRIGGERED,
+  UNAVAILABLE,
+  TROUBLE,
+  ALARM,
+  FIRE,
+  INSTANT,
+  READY,
+  ARMED,
+  ARMING
 };
 
 enum class PacketType : uint8_t {
-  Unspecified = 0x00,
-  LegacyProtocol = 0xDD,
-  ChksumFail = 0xCF,
+  UNSPECIFIED = 0x00,
+  LEGACY_PROTOCOL = 0xDD,
+  CHKSUM_FAIL = 0xCF,
   AUI = 0xF2,
-  KeypadAck = 0xF6,
-  Keypad = 0xF7,
-  LongRangeRadio = 0xF9,
-  Expander = 0xFA,
-  RFReceiver = 0xFB
+  KEYPAD_ACK = 0xF6,
+  KEYPAD = 0xF7,
+  LONG_RANGE_RADIO = 0xF9,
+  EXPANDER = 0xFA,
+  RF_RECEIVER = 0xFB
 };

@@ -14,7 +14,7 @@
 
 namespace esphome::alarm_panel {
 
-class VistaTextSensor : public text_sensor::TextSensor, public vistaECPTextSensor, public Parented<VistaESPHome> {
+class VistaTextSensor : public text_sensor::TextSensor, public VistaEcpTextSensor, public Parented<VistaESPHome> {
  public:
   void process(const std::string &text) override;
 

@@ -156,22 +156,22 @@ class CommandWriter {
   // Tries supplied first, falls back to access_code_.
   // resolved_out receives exactly 4 chars with NO null terminator.
   // Returns false and logs an error if neither source is valid.
-  bool resolve_code(const std::string &supplied, char resolved_out[4]) const;
+  bool resolve_code_(const std::string &supplied, char resolved_out[4]) const;
 
   // Validate the partition id and look up its keypad address and
   // current sequence counter.  Returns false and logs if the partition
   // is unknown or its address is out of the valid range (1–23, 31).
-  bool resolve_partition(int partition_id, uint8_t &addr_out, uint8_t &seq_out) const;
+  bool resolve_partition_(int partition_id, uint8_t &addr_out, uint8_t &seq_out) const;
 
   // Write raw bytes to the bus and log the outcome.
   // data is not null-terminated; size is the exact byte count.
-  bool send_keys(const char *data, int size, int partition_id, uint8_t addr, uint8_t seq) const;
+  bool send_keys_(const char *data, int size, int partition_id, uint8_t addr, uint8_t seq) const;
 
   // Assemble a 4-byte code + suffix into a single buffer and send it.
   // code[4] has no null terminator.  suffix is suffix_len bytes long.
   // Fixes the strncpy/null-terminator hazard present in the original.
-  bool send_code_plus_keys(const char code[4], const char *suffix, int suffix_len, int partition_id, uint8_t addr,
-                           uint8_t seq) const;
+  bool send_code_plus_keys_(const char code[4], const char *suffix, int suffix_len, int partition_id, uint8_t addr,
+                            uint8_t seq) const;
 
   // -------------------------------------------------------------------
   // Member data

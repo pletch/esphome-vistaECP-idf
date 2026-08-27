@@ -36,18 +36,18 @@ bool valid_chksum_two(const char *cbuf, int start, int len);
 
 // Returns true if string s represents a valid integer in the given base.
 // Rejects empty strings and strings with leading whitespace.
-bool isInt(const std::string &s, int base);
+bool is_int(const std::string &s, int base);
 
 // Convert a 12-bit BCD-encoded integer (stored as a plain int) to decimal.
 // Layout: bits [15:8] → hundreds digit, bits [7:4] → tens digit, bits [3:0] → units digit.
 // Example: 0x0123 → (1*100) + (2*10) + 3 = 123.
-int toDec(int n);
+int to_dec(int n);
 
 // Parse a string as an integer in the given base.
 // Returns 0 for empty or whitespace-only strings; otherwise equivalent to strtol().
-int toInt(const std::string &s, int base);
+int to_int(const std::string &s, int base);
 
 // Return true if the first 'len' bytes of a1 and a2 are identical.
 // Equivalent to memcmp(a1, a2, len) == 0 but avoids a dependency on <string.h>
 // at call sites that only need equality (not ordering).
-bool areEqual(const char *a1, const char *a2, uint8_t len);
+bool are_equal(const char *a1, const char *a2, uint8_t len);

@@ -23,11 +23,11 @@
 // The ESP32 RMT peripheral captures pulse widths from GDO0 and notifies the
 // receive task via on_recv_done callback.  The task decodes the pulse-width
 // stream via honeywell345_parse() and forwards all valid packets — including
-// supervision heartbeats — to VistaBus via sendRFmsg().  The panel requires
+// supervision heartbeats — to VistaBus via send_rf_msg().  The panel requires
 // heartbeat packets to maintain sensor supervision; suppressing them would
 // cause trouble conditions for enrolled sensors.
 //
-// From sendRFmsg() the existing emulated RF receiver flow handles delivery to
+// From send_rf_msg() the existing emulated RF receiver flow handles delivery to
 // the physical panel (F1 poll → ECP bus write → monitor capture →
 // dispatch_extFB → receiveQueue → ZoneManager::on_rf_zone_packet()).
 //
@@ -36,7 +36,7 @@
 // packets can arrive.
 // ---------------------------------------------------------------------------
 
-// kCc1101RmtSymbols is defined in constants.h based on SOC_RMT_SUPPORT_DMA:
+// K_CC1101_RMT_SYMBOLS is defined in constants.h based on SOC_RMT_SUPPORT_DMA:
 //   512 symbols on chips with RMT DMA (ESP32-S3) — buffer in system RAM.
 //   128 symbols on all other chips       — buffer in on-chip RMT SRAM
 //                                          (2 × 64-word hardware blocks on original ESP32;
@@ -44,7 +44,7 @@
 
 class CC1101Receiver {
  public:
-  // bus:      VistaBus reference — used only to call sendRFmsg().
+  // bus:      VistaBus reference — used only to call send_rf_msg().
   // mosi/miso/sck/csn/gdo0: SPI pin numbers for the CC1101 module.
   // spi_host: IDF SPI host to use (SPI2_HOST or SPI3_HOST, default SPI2_HOST).
   CC1101Receiver(VistaBus &bus, int mosi, int miso, int sck, int csn, int gdo0, spi_host_device_t spi_host = SPI2_HOST);
@@ -81,9 +81,9 @@ class CC1101Receiver {
   static void rx_task(void *param);
 
   // Two-tier health watchdog called when the rx_task notification times out
-  // (no RMT activity for kCc1101HealthCheckPeriodMs).  Tier 1: cheap MARCSTATE
+  // (no RMT activity for K_CC1101_HEALTH_CHECK_PERIOD_MS).  Tier 1: cheap MARCSTATE
   // check — if the chip has dropped out of RX, kick_rx().  Tier 2: if no valid
-  // decoded packet has been seen for kCc1101PacketWatchdogUs, do a full
+  // decoded packet has been seen for K_CC1101_PACKET_WATCHDOG_US, do a full
   // begin(); if begin() itself fails (SPI dead) the system reboots as last
   // resort.  Both windows are tunable in constants.h.
   void check_health();
@@ -106,7 +106,7 @@ class CC1101Receiver {
     uint8_t status;
     int64_t timestamp;
   };
-  DedupeEntry dedupe_history_[kDedupeHistorySize]{};
+  DedupeEntry dedupe_history_[K_DEDUPE_HISTORY_SIZE]{};
   uint8_t dedupe_idx_{0};
   int8_t rssi_threshold_{-87};
 

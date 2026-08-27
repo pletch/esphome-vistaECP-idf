@@ -122,13 +122,13 @@ class AUIManager {
   // -------------------------------------------------------------------
 
   // Request the current panel time (send query; response arrives as F2).
-  void request_panel_time(VistaBus &bus, bool in_program_mode);
+  void request_panel_time_(VistaBus &bus, bool in_program_mode);
 
   // Push the current RTC time to the panel.
-  void set_panel_time(VistaBus &bus, bool in_program_mode, time::RealTimeClock *rtc);
+  void set_panel_time_(VistaBus &bus, bool in_program_mode, time::RealTimeClock *rtc);
 
   // Issue a zone-fault list query to the panel.
-  void get_zone_faults(VistaBus &bus);
+  void get_zone_faults_(VistaBus &bus);
 
   // -------------------------------------------------------------------
   // Packet sub-handlers
@@ -138,25 +138,25 @@ class AUIManager {
   // rather than stashed in a member: the sub-handlers below need it to
   // issue their follow-up writes, and a parameter keeps that dependency
   // visible in the signature.
-  void on_f2_packet(const char *payload, int size, ZoneManager &zones, time::RealTimeClock *rtc, VistaBus &bus);
+  void on_f2_packet_(const char *payload, int size, ZoneManager &zones, time::RealTimeClock *rtc, VistaBus &bus);
 
   // Decode a panel-time response from an F2 data string and compare
   // with the RTC.  Calls set_panel_time() if drift > 60 s and
   // auto_sync is enabled.
-  void handle_panel_time_response(const char *f2data, uint8_t data_len, time::RealTimeClock *rtc, VistaBus &bus);
+  void handle_panel_time_response_(const char *f2data, uint8_t data_len, time::RealTimeClock *rtc, VistaBus &bus);
 
   // Parse a space-separated zone-number / range string into bitmasks
   // and update ZoneManager accordingly.
-  void process_zone_faults(const char *list, ZoneManager &zones);
+  void process_zone_faults_(const char *list, ZoneManager &zones);
 
   // Apply four 32-bit zone bitmasks (zones 1-32, 33-64, 65-96, 97-128)
   // to ZoneManager, calling set_zone_open() for each zone whose state
   // has changed.
-  void apply_zone_fault_masks(const uint32_t mask[4], ZoneManager &zones);
+  void apply_zone_fault_masks_(const uint32_t mask[4], ZoneManager &zones);
 
   // Advance the AUI sequence2 counter through its 0x68–0x6F cycle.
   // Called before every bus write to maintain correct packet sequencing.
-  void advance_sequence2();
+  void advance_sequence2_();
 
   // -------------------------------------------------------------------
   // Debug logging (compiled out unless DEBUG_LOG is defined)

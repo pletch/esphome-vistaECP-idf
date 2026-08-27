@@ -4,17 +4,23 @@
 ESPHome's own script/clang-tidy works against the ESPHome source tree, which is
 also the tree it compiles. An external component is different: `esphome compile`
 copies components/ into .esphome/build/<name>/src/esphome/components/, and the
-compile_commands.json that ESP-IDF's CMake writes therefore names those copies,
-not the files under version control.
+compile_commands.json that ESP-IDF's CMake writes therefore names those copies.
 
-Running clang-tidy on the copies would report diagnostics against paths that no
-editor can act on, and would silently analyse a stale snapshot whenever the copy
-is older than the working tree. So this script rewrites the compilation database
-to point back at the real sources, keeping every compile flag untouched, and
-runs clang-tidy against that.
+Analysing the copies directly is the only thing that works -- an include of
+"esphome/components/..." from the generated esphome.h resolves relative to the
+including file, so no -I can redirect it at the working tree -- but the copies
+are not what anyone edits. So this script syncs the working tree into the build
+tree first, which makes the two byte-identical, analyses the copies, and then
+translates every path it reports (and every fix it applies) back to the working
+tree. Byte-identical is what makes that safe: a fix's offsets mean the same
+thing in both files.
+
+The generated main.cpp is analysed too. Without it the protocol class templates
+go unchecked: a member body like Vista20P::handle_UART_events_impl is only
+instantiated where the template is used, and nothing in components/ uses it.
 
 Usage:
-  script/clang-tidy                 # check every .cpp in the component
+  script/clang-tidy                 # check everything
   script/clang-tidy --fix           # apply fixes clang-tidy is confident about
   script/clang-tidy path/to/a.cpp   # check specific files
 """
@@ -32,11 +38,11 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
-COMPONENTS = ROOT / "components"
-# Where esphome stages the copies: .esphome/build/<name>/src/esphome/components/...
-BUILD_SRC_RE = re.compile(r"^(?P<pre>.*/\.esphome/build/[^/]+/src/esphome/)components/")
+COMPONENT = "vista_alarm_panel"
+WORK = ROOT / "components" / COMPONENT
 
 # GCC-only flags the ESP-IDF xtensa build emits that clang rejects outright.
 # Same list ESPHome's script/clang-tidy drops.
@@ -151,23 +157,6 @@ def expand_response_files(args: list[str], base: Path) -> list[str]:
     return out
 
 
-def rewrite_command(command: str, source: str, directory: str) -> str:
-    """Turn a GCC invocation from the IDF build into one clang can run."""
-    parts = expand_response_files(shlex.split(command), Path(directory))
-    cxx, rest = parts[0], parts[1:]
-    kept = [
-        p
-        for p in rest
-        if p not in OMIT_FLAGS
-        and not p.startswith("-Werror")
-        and not p.startswith("-std=")
-        and not p.startswith("-fdiagnostics-color")
-    ]
-    if source not in kept:
-        sys.exit(f"Source {source} vanished from its own compile command")
-    return shlex.join(["clang++", *clang_options(cxx), *kept])
-
-
 def find_compile_db() -> Path:
     candidates = sorted(
         (ROOT / ".esphome" / "build").glob("*/build/compile_commands.json"),
@@ -182,37 +171,48 @@ def find_compile_db() -> Path:
     return candidates[0]
 
 
-def remap(db_path: Path) -> tuple[Path, list[str]]:
-    """Rewrite build-tree source paths to working-tree paths.
+def staged_dir(db_path: Path) -> Path:
+    return db_path.parent.parent / "src" / "esphome" / "components" / COMPONENT
 
-    Returns the directory holding the rewritten database and the list of
-    working-tree files it covers.
-    """
-    entries = json.loads(db_path.read_text(encoding="utf-8"))
-    out, files = [], []
+
+def sync_sources(staged: Path) -> int:
+    """Copy the working tree over the build tree's copy of this component."""
+    n = 0
+    for f in WORK.rglob("*"):
+        if f.suffix in (".h", ".cpp"):
+            target = staged / f.relative_to(WORK)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, target)
+            n += 1
+    return n
+
+
+def build_db(db_path: Path, staged: Path) -> tuple[Path, list[str]]:
+    """Write a clang-parseable database covering this component and main.cpp."""
+    entries, out, files = json.loads(db_path.read_text(encoding="utf-8")), [], []
     for entry in entries:
-        m = BUILD_SRC_RE.match(entry["file"])
-        if not m:
+        path = entry["file"]
+        if not (path.startswith(str(staged)) or path.endswith("/src/main.cpp")):
             continue
-        rel = entry["file"][m.end() :]
-        real = COMPONENTS / rel
-        if not real.is_file():
-            continue
-
-        # The staged copy's directory stays on the include path, so
-        # esphome/core/*.h still resolves; only the source path changes, plus
-        # the GCC-to-clang flag translation.
-        entry = dict(entry)
         command = entry.get("command") or shlex.join(entry["arguments"])
-        command = command.replace(entry["file"], str(real))
+        parts = expand_response_files(shlex.split(command), Path(entry["directory"]))
+        cxx, rest = parts[0], parts[1:]
+        kept = [
+            a
+            for a in rest
+            if a not in OMIT_FLAGS
+            and not a.startswith("-Werror")
+            and not a.startswith("-std=")
+            and not a.startswith("-fdiagnostics-color")
+        ]
+        entry = dict(entry)
         entry.pop("arguments", None)
-        entry["command"] = rewrite_command(command, str(real), entry["directory"])
-        entry["file"] = str(real)
+        entry["command"] = shlex.join(["clang++", *clang_options(cxx), *kept])
         out.append(entry)
-        files.append(str(real))
+        files.append(path)
 
     if not out:
-        sys.exit(f"{db_path} contains no entries for components/ sources.")
+        sys.exit(f"{db_path} has no entries for {COMPONENT} or main.cpp.")
 
     dest = ROOT / ".esphome" / "clang-tidy"
     dest.mkdir(parents=True, exist_ok=True)
@@ -220,6 +220,44 @@ def remap(db_path: Path) -> tuple[Path, list[str]]:
         json.dumps(out, indent=2), encoding="utf-8"
     )
     return dest, files
+
+
+def to_working_tree(text: str, staged: Path) -> str:
+    """Rewrite build-tree paths in clang-tidy output to the files people edit."""
+    return text.replace(f"{staged}/", f"{WORK}/")
+
+
+def apply_fixes(fix_dir: Path, staged: Path, clang_apply: str) -> None:
+    """Point exported fixes at the working tree, then apply them.
+
+    clang-apply-replacements merges the fixes from every translation unit
+    before touching anything, which is what makes a rename in a shared header
+    safe: applying per-file with --fix renames the declaration for one
+    translation unit and leaves the others referring to a name that no longer
+    exists.
+    """
+    kept = 0
+    for yaml_file in fix_dir.glob("*.yaml"):
+        text = yaml_file.read_text(encoding="utf-8")
+        # Only replacements inside this component may be applied; main.cpp and
+        # the esphome core are not ours to rewrite.
+        text = to_working_tree(text, staged)
+        lines, out, drop = text.split("\n"), [], False
+        for line in lines:
+            m = re.match(r"^(\s*)-?\s*FilePath:\s+'?([^'\s]+)'?\s*$", line)
+            if m:
+                drop = not m.group(2).startswith(str(WORK))
+            if not drop:
+                out.append(line)
+            elif re.match(r"^\s*-\s", line) and "FilePath" not in line:
+                drop = False
+                out.append(line)
+        yaml_file.write_text("\n".join(out), encoding="utf-8")
+        kept += 1
+    if kept:
+        subprocess.run(
+            [clang_apply, "--format", "--style=file", str(fix_dir)], check=False
+        )
 
 
 def main() -> int:
@@ -232,6 +270,9 @@ def main() -> int:
         type=int,
         default=multiprocessing.cpu_count(),
         help="parallel clang-tidy processes",
+    )
+    parser.add_argument(
+        "--checks", help="override the check list (passed straight to clang-tidy)"
     )
     parser.add_argument(
         "--clang-tidy",
@@ -247,58 +288,92 @@ def main() -> int:
             "or point at another build with --clang-tidy /path/to/clang-tidy"
         )
 
-    db_dir, files = remap(find_compile_db())
+    db_path = find_compile_db()
+    staged = staged_dir(db_path)
+    synced = sync_sources(staged)
+    db_dir, files = build_db(db_path, staged)
 
     if args.files:
-        wanted = {str(Path(f).resolve()) for f in args.files}
+        wanted = set()
+        for f in args.files:
+            resolved = Path(f).resolve()
+            try:
+                wanted.add(str(staged / resolved.relative_to(WORK)))
+            except ValueError:
+                wanted.add(str(resolved))
         files = [f for f in files if f in wanted]
-        missing = wanted - set(files)
-        if missing:
-            sys.exit(
-                "Not in the compilation database (is it a source esphome compiles?):\n  "
-                + "\n  ".join(sorted(missing))
-            )
+        if not files:
+            sys.exit("None of those files are in the compilation database.")
 
     base = [
         args.clang_tidy,
         "-p",
         str(db_dir),
-        f"--header-filter={COMPONENTS}/.*",
+        f"--header-filter={staged}/.*",
         "--quiet",
     ]
-    if args.fix:
-        base.append("--fix")
-    if sys.stdout.isatty():
+    if args.checks:
+        base.append(f"--checks={args.checks}")
+    if sys.stdout.isatty() and not args.fix:
         base.append("--use-color")
 
     print(
-        f"Checking {len(files)} files with {args.clang_tidy} (-j{args.jobs})\n",
+        f"Synced {synced} files into the build tree; "
+        f"checking {len(files)} translation units (-j{args.jobs})\n",
         flush=True,
     )
 
+    fix_dir = Path(tempfile.mkdtemp(prefix="clang-tidy-fixes-")) if args.fix else None
     failed = []
 
-    def run(path: str) -> None:
+    def run(index_path: tuple[int, str]) -> None:
+        index, path = index_path
+        cmd = list(base)
+        if fix_dir is not None:
+            cmd.append(f"--export-fixes={fix_dir / f'{index}.yaml'}")
         proc = subprocess.run(
-            [*base, path], capture_output=True, encoding="utf-8", check=False
+            [*cmd, path], capture_output=True, encoding="utf-8", check=False
         )
-        out = (proc.stdout or "") + (proc.stderr or "")
-        # clang-tidy repeats this on every invocation; it is not a finding.
-        out = "\n".join(
-            ln for ln in out.splitlines() if "warnings generated" not in ln
-        ).strip()
-        if out:
-            print(f"=== {Path(path).relative_to(ROOT)}\n{out}\n", flush=True)
-        if proc.returncode != 0:
+        text = to_working_tree((proc.stdout or "") + (proc.stderr or ""), staged)
+        # Findings outside this component are not ours to act on. main.cpp is
+        # analysed only so the class templates get instantiated, and it is
+        # generated code full of diagnostics nobody can act on, so keep only
+        # the blocks anchored to a file in components/.
+        blocks, current, keep = [], [], False
+        for line in text.splitlines():
+            m = re.match(r"^(/\S+):\d+:\d+: (?:error|warning|note):", line)
+            if m:
+                if current and keep:
+                    blocks.append("\n".join(current))
+                current, keep = [line], m.group(1).startswith(str(WORK))
+            elif current:
+                current.append(line)
+        if current and keep:
+            blocks.append("\n".join(current))
+        if blocks:
+            print(f"=== {Path(path).name}\n" + "\n".join(blocks) + "\n", flush=True)
+            # Exit status tracks findings in components/ only. A non-zero
+            # return from clang-tidy on its own would mean main.cpp, which is
+            # generated and always has some.
             failed.append(path)
 
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        list(pool.map(run, files))
+        list(pool.map(run, enumerate(files)))
+
+    if fix_dir is not None:
+        apply_fixes(
+            fix_dir,
+            staged,
+            args.clang_tidy.replace("clang-tidy", "clang-apply-replacements"),
+        )
+        shutil.rmtree(fix_dir, ignore_errors=True)
+        print("Applied fixes to the working tree; re-run to check convergence.")
+        return 0
 
     if failed:
         print(f"clang-tidy reported problems in {len(failed)} of {len(files)} files")
         return 1
-    print(f"clang-tidy clean across {len(files)} files")
+    print(f"clang-tidy clean across {len(files)} translation units")
     return 0
 
 

@@ -12,16 +12,16 @@
 #include <string>
 
 namespace esphome::alarm_panel {
-class vistaECPBinarySensor {
+class VistaEcpBinarySensor {
  public:
   virtual void process(bool triggered) = 0;
-  virtual ~vistaECPBinarySensor() = default;
+  virtual ~VistaEcpBinarySensor() = default;
 };
 
-class vistaECPTextSensor {
+class VistaEcpTextSensor {
  public:
   virtual void process(const std::string &text) = 0;
-  virtual ~vistaECPTextSensor() = default;
+  virtual ~VistaEcpTextSensor() = default;
 };
 
 }  // namespace esphome::alarm_panel

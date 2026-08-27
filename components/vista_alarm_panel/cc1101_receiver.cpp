@@ -31,11 +31,11 @@ bool CC1101Receiver::begin() {
   }
 
   // Initialize RMT RX Channel to capture demodulated pulses from GDO0.
-  // Buffer size and DMA flag are selected at compile time via kCc1101RmtSymbols.
+  // Buffer size and DMA flag are selected at compile time via K_CC1101_RMT_SYMBOLS.
   rmt_rx_channel_config_t rx_chan_config = {.gpio_num = static_cast<gpio_num_t>(radio_.gdo0_pin()),
                                             .clk_src = RMT_CLK_SRC_DEFAULT,
                                             .resolution_hz = 1000000,  // 1 µs resolution
-                                            .mem_block_symbols = kCc1101RmtSymbols,
+                                            .mem_block_symbols = K_CC1101_RMT_SYMBOLS,
                                             .intr_priority = 3,
 #ifdef SOC_RMT_SUPPORT_DMA
                                             .flags = {.invert_in = false, .with_dma = true}
@@ -77,7 +77,7 @@ bool CC1101Receiver::begin() {
     return false;
   }
 
-  xTaskCreate(rx_task, "cc1101_rx", kCc1101RxTaskStackSize, static_cast<void *>(this), 5, &task_handle_);
+  xTaskCreate(rx_task, "cc1101_rx", K_CC1101_RX_TASK_STACK_SIZE, static_cast<void *>(this), 5, &task_handle_);
 
   ESP_LOGI(TAG, "CC1101 Direct-Mode RMT receiver task started");
   return true;
@@ -89,7 +89,7 @@ void CC1101Receiver::rx_task(void *param) {
   // The receive buffer must live in internal SRAM — required for DMA-mode chips and
   // safe on all others (internal SRAM is always DMA-capable).  Stack allocation is
   // not used because rmt_receive() rejects non-DMA-capable addresses on DMA channels.
-  const size_t symbols_size_bytes = kCc1101RmtSymbols * sizeof(rmt_symbol_word_t);
+  const size_t symbols_size_bytes = K_CC1101_RMT_SYMBOLS * sizeof(rmt_symbol_word_t);
   rmt_symbol_word_t *symbols =
       static_cast<rmt_symbol_word_t *>(heap_caps_malloc(symbols_size_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
   if (symbols == nullptr) {
@@ -99,8 +99,8 @@ void CC1101Receiver::rx_task(void *param) {
   }
 
   rmt_receive_config_t recv_config = {
-      .signal_range_min_ns = kCc1101RmtSignalMinNs,
-      .signal_range_max_ns = kCc1101RmtSignalMaxNs,
+      .signal_range_min_ns = K_CC1101_RMT_SIGNAL_MIN_NS,
+      .signal_range_max_ns = K_CC1101_RMT_SIGNAL_MAX_NS,
   };
 
   // Initialise the watchdog clock so the first 90-min window starts now,
@@ -123,7 +123,7 @@ void CC1101Receiver::rx_task(void *param) {
 
     // Wait for RMT to finish — finite timeout so the task wakes periodically
     // for the watchdog even if the chip's GDO0 has stopped firing entirely.
-    uint32_t num_symbols = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(kCc1101HealthCheckPeriodMs));
+    uint32_t num_symbols = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(K_CC1101_HEALTH_CHECK_PERIOD_MS));
 
     if (num_symbols == 0) {
       // Notification timeout — no RMT activity.  Run health check and loop;
@@ -165,11 +165,11 @@ void CC1101Receiver::rx_task(void *param) {
         if (entry.serial != pkt.serial)
           continue;
         int64_t age = now - entry.timestamp;
-        if (age < kDedupeBurstWindowUs) {
+        if (age < K_DEDUPE_BURST_WINDOW_US) {
           is_duplicate = true;
           break;
         }
-        if (entry.status == pkt.ecp_status && age < kDedupeLongRangeWindowUs) {
+        if (entry.status == pkt.ecp_status && age < K_DEDUPE_LONG_RANGE_WINDOW_US) {
           is_duplicate = true;
           break;
         }
@@ -184,7 +184,7 @@ void CC1101Receiver::rx_task(void *param) {
 
       // Add to circular history buffer
       self->dedupe_history_[self->dedupe_idx_] = {pkt.serial, pkt.ecp_status, now};
-      self->dedupe_idx_ = (self->dedupe_idx_ + 1) % kDedupeHistorySize;
+      self->dedupe_idx_ = (self->dedupe_idx_ + 1) % K_DEDUPE_HISTORY_SIZE;
 
       // Post all valid packets (including heartbeats) to rf_direct_queue.
       // Non-heartbeat packets: rf_direct_task publishes zone state to HA
@@ -198,7 +198,7 @@ void CC1101Receiver::rx_task(void *param) {
       }
 
       // ECP path: always forward to the panel via the emulated RF receiver.
-      self->bus_.sendRFmsg(pkt.serial, pkt.ecp_status);
+      self->bus_.send_rf_msg(pkt.serial, pkt.ecp_status);
     }
   }
 }
@@ -224,7 +224,7 @@ void CC1101Receiver::check_health() {
   // has either wedged silently or something deeper is wrong.  A full
   // re-init is the right level of intervention.  Skipped entirely when no
   // physical RF sensors are configured (silence is expected then).
-  if (packet_watchdog_enabled_ && silence_us > kCc1101PacketWatchdogUs) {
+  if (packet_watchdog_enabled_ && silence_us > K_CC1101_PACKET_WATCHDOG_US) {
     ESP_LOGE(TAG, "Watchdog: no valid packet in %lld s — re-initialising CC1101", silence_us / 1000000);
     if (!radio_.begin()) {
       ESP_LOGE(TAG, "CC1101 begin() failed during watchdog recovery — rebooting");

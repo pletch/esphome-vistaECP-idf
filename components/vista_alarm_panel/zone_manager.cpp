@@ -21,7 +21,7 @@
 namespace esphome::alarm_panel {
 static constexpr const char *TAG = "vista-zone";
 
-// kDirectSuppressUs is defined centrally in constants.h.
+// K_DIRECT_SUPPRESS_US is defined centrally in constants.h.
 
 #ifdef CC1101_RECEIVER
 void ZoneManager::store_rssi(uint32_t serial, int8_t rssi) {
@@ -31,7 +31,7 @@ void ZoneManager::store_rssi(uint32_t serial, int8_t rssi) {
       return;
     }
   rssi_cache_[rssi_cache_idx_] = {serial, rssi};
-  rssi_cache_idx_ = (rssi_cache_idx_ + 1) % kRssiCacheSize;
+  rssi_cache_idx_ = (rssi_cache_idx_ + 1) % K_RSSI_CACHE_SIZE;
 }
 
 int8_t ZoneManager::fetch_rssi(uint32_t serial) const {
@@ -101,7 +101,7 @@ static uint8_t rfloop_to_mask(uint8_t rfloop) {
 // 2 publishes/second, not the per-zone-per-250 ms rate it may appear to be.
 // Compare PartitionManager's 300 s force_refresh, which exists for the
 // same reason on the partition sensors.
-void ZoneManager::publish_zone(Zone *zt) {
+void ZoneManager::publish_zone_(Zone *zt) {
   if (zt->text_sensor != nullptr) {
     // Fault/open/closed status character
     const char *zs = zt->check ? "T" : zt->open ? "O" : "C";
@@ -119,8 +119,8 @@ void ZoneManager::publish_zone(Zone *zt) {
 }
 
 // Caller must hold zone_mutex_.
-void ZoneManager::publish_zone_status_if_changed() {
-  std::string status_msg = build_zone_status_string_locked();
+void ZoneManager::publish_zone_status_if_changed_() {
+  std::string status_msg = build_zone_status_string_locked_();
   if (status_msg == previous_zone_status_)
     return;
   if (zone_status_sensor_ != nullptr)
@@ -132,7 +132,7 @@ void ZoneManager::publish_zone_status_if_changed() {
 // Registration
 // ---------------------------------------------------------------------------
 
-void ZoneManager::register_zone(vistaECPBinarySensor *sensor, uint8_t partition, uint8_t zone_number,
+void ZoneManager::register_zone(VistaEcpBinarySensor *sensor, uint8_t partition, uint8_t zone_number,
                                 uint32_t rf_serial, uint8_t rf_loop, bool emulated) {
   // If the zone already exists (registered by register_zone_text earlier,
   // or a duplicate call), update the binary sensor and RF fields in place.
@@ -185,7 +185,7 @@ void ZoneManager::register_zone(vistaECPBinarySensor *sensor, uint8_t partition,
   }
 }
 
-void ZoneManager::register_zone_text(vistaECPTextSensor *sensor, uint8_t partition, uint8_t zone_number) {
+void ZoneManager::register_zone_text(VistaEcpTextSensor *sensor, uint8_t partition, uint8_t zone_number) {
   // Update in place if zone already exists.
   for (auto &z : zones_) {
     if (z.zone == zone_number) {
@@ -209,7 +209,7 @@ void ZoneManager::register_zone_text(vistaECPTextSensor *sensor, uint8_t partiti
 // Zone text sensor (separate from per-zone sensors)
 // ---------------------------------------------------------------------------
 
-void ZoneManager::register_zone_status_sensor(vistaECPTextSensor *sensor) { zone_status_sensor_ = sensor; }
+void ZoneManager::register_zone_status_sensor(VistaEcpTextSensor *sensor) { zone_status_sensor_ = sensor; }
 
 ZoneManager::Zone *ZoneManager::get_zone(uint16_t zone_number) {
   for (auto &z : zones_) {
@@ -244,7 +244,7 @@ ZoneManager::Zone *ZoneManager::get_zone_by_rf_serial(uint32_t serial) {
 // zone only if the flag at 'field' needs to change; returns nullptr if
 // the zone is missing, inactive, or already in the requested state.
 // Caller must hold zone_mutex_.
-ZoneManager::Zone *ZoneManager::zone_if_flag_differs(uint8_t zone_number, bool Zone::*field, bool value) {
+ZoneManager::Zone *ZoneManager::zone_if_flag_differs_(uint8_t zone_number, bool Zone::*field, bool value) {
   Zone *z = get_zone(zone_number);
   if (z == nullptr || !z->active)
     return nullptr;
@@ -269,11 +269,11 @@ void ZoneManager::assign_partition(uint8_t zone_number, uint8_t partition) {
 
 void ZoneManager::set_zone_open(uint8_t zone_number, bool open) {
   ZoneMutexGuard guard(zone_mutex_);
-  Zone *z = zone_if_flag_differs(zone_number, &Zone::open, open);
+  Zone *z = zone_if_flag_differs_(zone_number, &Zone::open, open);
   if (z == nullptr)
     return;
   const int64_t now = esp_timer_get_time();
-  if ((now - z->last_direct_time) < kDirectSuppressUs) {
+  if ((now - z->last_direct_time) < K_DIRECT_SUPPRESS_US) {
     // The direct path has recently published authoritative state to HA.
     // A stale F7 (panel display not yet updated by the ECP echo) must not
     // overwrite it — drop the update silently.
@@ -284,32 +284,32 @@ void ZoneManager::set_zone_open(uint8_t zone_number, bool open) {
   z->check = false;   // open and check are mutually exclusive
   z->bypass = false;  // opening clears bypass
   z->time = now;
-  publish_zone(z);
+  publish_zone_(z);
 }
 
 void ZoneManager::set_zone_bypass(uint8_t zone_number, bool bypass) {
   ZoneMutexGuard guard(zone_mutex_);
-  Zone *z = zone_if_flag_differs(zone_number, &Zone::bypass, bypass);
+  Zone *z = zone_if_flag_differs_(zone_number, &Zone::bypass, bypass);
   if (z == nullptr)
     return;
   z->bypass = bypass;
   z->time = esp_timer_get_time();
-  publish_zone(z);
+  publish_zone_(z);
 }
 
 void ZoneManager::set_zone_alarm(uint8_t zone_number, bool alarm) {
   ZoneMutexGuard guard(zone_mutex_);
-  Zone *z = zone_if_flag_differs(zone_number, &Zone::alarm, alarm);
+  Zone *z = zone_if_flag_differs_(zone_number, &Zone::alarm, alarm);
   if (z == nullptr)
     return;
   z->alarm = alarm;
   z->time = esp_timer_get_time();
-  publish_zone(z);
+  publish_zone_(z);
 }
 
 void ZoneManager::set_zone_check(uint8_t zone_number, bool check) {
   ZoneMutexGuard guard(zone_mutex_);
-  Zone *z = zone_if_flag_differs(zone_number, &Zone::check, check);
+  Zone *z = zone_if_flag_differs_(zone_number, &Zone::check, check);
   if (z == nullptr)
     return;
   z->check = check;
@@ -319,16 +319,16 @@ void ZoneManager::set_zone_check(uint8_t zone_number, bool check) {
     z->alarm = false;
   }
   z->time = esp_timer_get_time();
-  publish_zone(z);
+  publish_zone_(z);
 }
 
 void ZoneManager::set_zone_lowbat(uint8_t zone_number, bool low) {
   ZoneMutexGuard guard(zone_mutex_);
-  Zone *z = zone_if_flag_differs(zone_number, &Zone::rflowbat, low);
+  Zone *z = zone_if_flag_differs_(zone_number, &Zone::rflowbat, low);
   if (z == nullptr)
     return;
   z->rflowbat = low;
-  publish_zone(z);
+  publish_zone_(z);
 }
 
 // ---------------------------------------------------------------------------
@@ -389,10 +389,10 @@ void ZoneManager::on_expander_zone_packet(const char *payload, int size) {
 
     // If on_zone_direct() already published this event, suppress the
     // redundant ECP-path publish to prevent HA state flapping.
-    if ((now - zt->last_direct_time) < kDirectSuppressUs) {
+    if ((now - zt->last_direct_time) < K_DIRECT_SUPPRESS_US) {
       ESP_LOGD(TAG, "ECP-path publish suppressed for zone %d (direct path active)", z);
     } else {
-      publish_zone(zt);
+      publish_zone_(zt);
     }
 #ifdef DEBUG_LOG
     ESP_LOGD(TAG, "FA expander zone %d: %s", z, open ? "open" : "closed");
@@ -404,7 +404,7 @@ void ZoneManager::on_expander_zone_packet(const char *payload, int size) {
 // FB RF receiver packet decode
 //
 // Called by PacketDispatcher when a green-wire (type==1) FB packet of
-// kRFZoneMessageLength bytes arrives from the monitor task.  Validates the
+// K_RF_ZONE_MESSAGE_LENGTH bytes arrives from the monitor task.  Validates the
 // two's-complement checksum, extracts the 20-bit device serial (0–0xFFFFF), and updates
 // the matching zone's open/lowbat state.
 //
@@ -434,12 +434,12 @@ void ZoneManager::on_expander_zone_packet(const char *payload, int size) {
 // ---------------------------------------------------------------------------
 
 std::string ZoneManager::on_rf_zone_packet(const char *payload, int size) {
-  if (size != kRFZoneMessageLength)
+  if (size != K_RF_ZONE_MESSAGE_LENGTH)
     return "";
 
   // Validate two's-complement checksum over bytes 0–5.
   uint8_t chksum = 0;
-  for (int i = 0; i < kRFZoneMessageLength - 1; i++)
+  for (int i = 0; i < K_RF_ZONE_MESSAGE_LENGTH - 1; i++)
     chksum += static_cast<uint8_t>(payload[i]);
   chksum = static_cast<uint8_t>(~chksum + 1);
 
@@ -501,7 +501,7 @@ std::string ZoneManager::on_rf_zone_packet(const char *payload, int size) {
     const int64_t now = esp_timer_get_time();
     zt->time = now;
 
-    if ((now - zt->last_direct_time) < kDirectSuppressUs) {
+    if ((now - zt->last_direct_time) < K_DIRECT_SUPPRESS_US) {
       // Direct path has authoritative state; reject the ECP update entirely
       // so stale pre-event panel state cannot overwrite what was already
       // sent to Home Assistant.
@@ -509,7 +509,7 @@ std::string ZoneManager::on_rf_zone_packet(const char *payload, int size) {
     } else {
       zt->open = open;
       zt->rflowbat = lowbat;
-      publish_zone(zt);
+      publish_zone_(zt);
     }
   }
 
@@ -575,12 +575,12 @@ void ZoneManager::on_rf_direct(uint32_t serial, uint8_t ecp_status, int8_t rssi)
 
   ESP_LOGD(TAG, "RF direct: serial=%" PRIu32 "  open=%d  lowbat=%d  rssi=%d dBm", serial, open, lowbat, rssi);
 
-  publish_zone(zt);
+  publish_zone_(zt);
   // Keep the combined ZONE_STATUS sensor in step with the per-zone
   // entities.  Without this it only updates inside refresh() on the
   // next F7, so the two representations of the same state disagree in
   // HA for up to a full poll cycle.  The mutex is already held.
-  publish_zone_status_if_changed();
+  publish_zone_status_if_changed_();
 }
 
 // ---------------------------------------------------------------------------
@@ -618,8 +618,8 @@ void ZoneManager::on_zone_direct(uint8_t zone_number, bool fault) {
 
   ESP_LOGD(TAG, "Zone direct: zone=%d  fault=%d", zone_number, fault);
 
-  publish_zone(z);
-  publish_zone_status_if_changed();  // mutex already held
+  publish_zone_(z);
+  publish_zone_status_if_changed_();  // mutex already held
 }
 
 // ---------------------------------------------------------------------------
@@ -652,10 +652,10 @@ void ZoneManager::send_emulated_fault(uint8_t zone_number, bool fault, VistaBus 
     // fault=false: clear the loop bit (0x80 & mask)
     const uint8_t msg = fault ? static_cast<uint8_t>(0x80 | mask) : static_cast<uint8_t>(0x80 & mask);
     ESP_LOGI(TAG, "Emulated RF zone %d fault:%d  serial:%" PRIu32, zone_number, fault, serial);
-    bus.sendRFmsg(serial, msg);
+    bus.send_rf_msg(serial, msg);
   } else {
     ESP_LOGI(TAG, "Emulated hardwired zone %d fault:%d", zone_number, fault);
-    bus.setZoneStatusBit(zone_number, fault);
+    bus.set_zone_status_bit(zone_number, fault);
   }
 }
 
@@ -678,7 +678,7 @@ void ZoneManager::refresh(const LightStates &partition_lights, int64_t ttl) {
     // skip reconciliation and publish for ALL zone types — not just RF zones.
     // Emulated expander zones (rfserial == 0) are equally vulnerable to a
     // stale F7 cycle arriving before the panel has processed the ECP echo.
-    if ((now - z.last_direct_time) < kDirectSuppressUs)
+    if ((now - z.last_direct_time) < K_DIRECT_SUPPRESS_US)
       continue;
 
     // --- State reconciliation against panel light flags ---
@@ -709,10 +709,10 @@ void ZoneManager::refresh(const LightStates &partition_lights, int64_t ttl) {
     if (!z.bypass && z.check && (now - z.time) > ttl)
       z.check = false;
 
-    publish_zone(&z);
+    publish_zone_(&z);
   }
 
-  publish_zone_status_if_changed();
+  publish_zone_status_if_changed_();
 }
 
 // ---------------------------------------------------------------------------
@@ -729,8 +729,8 @@ void ZoneManager::init_rf_heartbeat_timers() {
   for (auto &z : zones_) {
     if (z.rfnext_hb != 0) {
       // Stagger initial heartbeats across 1–10 minutes.
-      z.rfnext_hb = esp_timer_get_time() + kRfHeartbeatInitialMinMinutes * kUsPerMinute +
-                    static_cast<int64_t>(esp_random() % kRfHeartbeatInitialJitterMinutes) * kUsPerMinute;
+      z.rfnext_hb = esp_timer_get_time() + K_RF_HEARTBEAT_INITIAL_MIN_MINUTES * K_US_PER_MINUTE +
+                    static_cast<int64_t>(esp_random() % K_RF_HEARTBEAT_INITIAL_JITTER_MINUTES) * K_US_PER_MINUTE;
     }
   }
 }
@@ -752,11 +752,11 @@ void ZoneManager::handle_rf_heartbeats(VistaBus &bus) {
     // state so the panel's zone record stays consistent with actual zone state.
     const uint8_t loop_bit = z.open ? rfloop_to_mask(z.rfloop) : 0;
     const uint8_t msg = static_cast<uint8_t>(0x04 | loop_bit);
-    bus.sendRFmsg(z.rfserial, msg);
+    bus.send_rf_msg(z.rfserial, msg);
 
     // Schedule next heartbeat: 70–90 minutes with random jitter.
-    z.rfnext_hb = now + kRfHeartbeatPeriodMinMinutes * kUsPerMinute +
-                  static_cast<int64_t>(esp_random() % kRfHeartbeatPeriodJitterMinutes) * kUsPerMinute;
+    z.rfnext_hb = now + K_RF_HEARTBEAT_PERIOD_MIN_MINUTES * K_US_PER_MINUTE +
+                  static_cast<int64_t>(esp_random() % K_RF_HEARTBEAT_PERIOD_JITTER_MINUTES) * K_US_PER_MINUTE;
   }
 }
 
@@ -774,12 +774,12 @@ void ZoneManager::send_rf_heartbeat(uint8_t zone_number, bool fault, VistaBus &b
   const uint8_t msg = static_cast<uint8_t>(0x04 | loop_bit);
   ESP_LOGI(TAG, "send_rf_heartbeat: zone %d fault:%d serial:%" PRIu32 " msg:0x%02X", zone_number, fault, z->rfserial,
            msg);
-  bus.sendRFmsg(z->rfserial, msg);
+  bus.send_rf_msg(z->rfserial, msg);
 
   // Reset the internal timer so it won't fire spuriously if mode is ever
   // switched back to internal.
-  z->rfnext_hb = esp_timer_get_time() + kRfHeartbeatPeriodMinMinutes * kUsPerMinute +
-                 static_cast<int64_t>(esp_random() % kRfHeartbeatPeriodJitterMinutes) * kUsPerMinute;
+  z->rfnext_hb = esp_timer_get_time() + K_RF_HEARTBEAT_PERIOD_MIN_MINUTES * K_US_PER_MINUTE +
+                 static_cast<int64_t>(esp_random() % K_RF_HEARTBEAT_PERIOD_JITTER_MINUTES) * K_US_PER_MINUTE;
 }
 
 // ---------------------------------------------------------------------------
@@ -788,7 +788,7 @@ void ZoneManager::send_rf_heartbeat(uint8_t zone_number, bool fault, VistaBus &b
 
 void ZoneManager::publish_initial_states() {
   for (auto &z : zones_)
-    publish_zone(&z);
+    publish_zone_(&z);
 
   if (zone_status_sensor_ != nullptr)
     zone_status_sensor_->process("");
@@ -801,11 +801,11 @@ void ZoneManager::publish_initial_states() {
 
 std::string ZoneManager::build_zone_status_string() const {
   ZoneMutexGuard guard(zone_mutex_);
-  return build_zone_status_string_locked();
+  return build_zone_status_string_locked_();
 }
 
 // Caller must hold zone_mutex_.
-std::string ZoneManager::build_zone_status_string_locked() const {
+std::string ZoneManager::build_zone_status_string_locked_() const {
   std::string msg;
   msg.reserve(64);
   char seg[16];

@@ -15,7 +15,7 @@
 namespace esphome::alarm_panel {
 
 class VistaBinarySensor : public binary_sensor::BinarySensor,
-                          public vistaECPBinarySensor,
+                          public VistaEcpBinarySensor,
                           public Parented<VistaESPHome> {
  public:
   void process(bool triggered) override;

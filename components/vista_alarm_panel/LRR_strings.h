@@ -9,7 +9,7 @@
 
 #pragma once
 
-static constexpr const char *const lrr_msg_values[] = {
+static constexpr const char *const LRR_MSG_VALUES[] = {
     /*   0 */ "ZMedical",
     /*   1 */ "ZPersonal Emergency",
     /*   2 */ "ZFail to report in",
@@ -309,7 +309,7 @@ struct LrrEntry {
 
 // Must remain sorted by code for binary search.
 // Verified by static_assert below.
-static constexpr LrrEntry lrr_lookup_table[] = {
+static constexpr LrrEntry LRR_LOOKUP_TABLE[] = {
     {100, 0},    // Medical
     {101, 1},    // Personal Emergency
     {102, 2},    // Fail to report in
@@ -605,20 +605,20 @@ static constexpr LrrEntry lrr_lookup_table[] = {
     {999, 286},                                      // 1 and 1/3 Day No Read Log
 };
 
-static constexpr int LRR_TABLE_SIZE = sizeof(lrr_lookup_table) / sizeof(lrr_lookup_table[0]);
+static constexpr int LRR_TABLE_SIZE = sizeof(LRR_LOOKUP_TABLE) / sizeof(LRR_LOOKUP_TABLE[0]);
 
-inline const char *lrr_msg_lookup(int statusCode) {
+inline const char *lrr_msg_lookup(int status_code) {
   // Binary search over lrr_lookup_table (sorted by code).
   int lo = 0, hi = LRR_TABLE_SIZE - 1;
   while (lo <= hi) {
     int mid = lo + (hi - lo) / 2;
-    if (lrr_lookup_table[mid].code == statusCode) {
-      return lrr_msg_values[lrr_lookup_table[mid].idx];
-    } else if (lrr_lookup_table[mid].code < statusCode) {
+    if (LRR_LOOKUP_TABLE[mid].code == status_code) {
+      return LRR_MSG_VALUES[LRR_LOOKUP_TABLE[mid].idx];
+    } else if (LRR_LOOKUP_TABLE[mid].code < status_code) {
       lo = mid + 1;
     } else {
       hi = mid - 1;
     }
   }
-  return lrr_msg_values[LRR_MSG_UNKNOWN_IDX];
+  return LRR_MSG_VALUES[LRR_MSG_UNKNOWN_IDX];
 }

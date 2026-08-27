@@ -142,7 +142,7 @@ struct LightStates {
 struct PartitionState {
   // Must have an initialiser: add_partition() default-initialises Partition,
   // and process_status_flags() compares against this on the very first F7.
-  SysState previous_system_states{SysState::Unavailable};
+  SysState previous_system_states{SysState::UNAVAILABLE};
   LightStates previous_light_states;
   int last_beeps{0};
   bool refresh_status{false};

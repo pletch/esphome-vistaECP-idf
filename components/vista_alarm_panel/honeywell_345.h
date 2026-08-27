@@ -18,7 +18,7 @@
 // Honeywell 5800-series 345 MHz wireless sensor packet decoder.
 //
 // Takes an array of RMT pulse-width symbols captured from CC1101 GDO0 and
-// decodes them into the fields required by VistaBus::sendRFmsg():
+// decodes them into the fields required by VistaBus::send_rf_msg():
 //   serial  — 20-bit device serial number matching the panel's enrollment
 //   status  — ECP FB status byte (loop bits, lowbat, supervision)
 //

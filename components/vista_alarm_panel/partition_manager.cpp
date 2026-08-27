@@ -38,7 +38,7 @@ void PartitionManager::initialize_sensor_vectors() {
   }
 }
 
-int PartitionManager::index_for_partition(uint8_t partition_id) const {
+int PartitionManager::index_for_partition_(uint8_t partition_id) const {
   for (size_t i = 0; i < partitions_.size(); i++) {
     if (partitions_[i].partition == partition_id)
       return static_cast<int>(i);
@@ -50,9 +50,9 @@ int PartitionManager::index_for_partition(uint8_t partition_id) const {
 // Sensor registration
 // ---------------------------------------------------------------------------
 
-void PartitionManager::register_text_sensor(vistaECPTextSensor *sensor, uint8_t partition_number, const char *type) {
+void PartitionManager::register_text_sensor(VistaEcpTextSensor *sensor, uint8_t partition_number, const char *type) {
   // Resolve to the vector index rather than assuming partition_number - 1.
-  const int found = index_for_partition(partition_number);
+  const int found = index_for_partition_(partition_number);
   if (found < 0) {
     ESP_LOGE(TAG, "No partition %d configured. Aborting %s registration.", partition_number, type);
     return;
@@ -75,9 +75,9 @@ void PartitionManager::register_text_sensor(vistaECPTextSensor *sensor, uint8_t 
   ESP_LOGI(TAG, "Registered text sensor '%s' for partition %d.", type, partition_number);
 }
 
-void PartitionManager::register_status_sensor(vistaECPBinarySensor *sensor, uint8_t partition_number,
+void PartitionManager::register_status_sensor(VistaEcpBinarySensor *sensor, uint8_t partition_number,
                                               const char *type) {
-  const int found = index_for_partition(partition_number);
+  const int found = index_for_partition_(partition_number);
   if (found < 0) {
     ESP_LOGE(TAG, "No partition %d configured. Aborting %s registration.", partition_number, type);
     return;
@@ -121,8 +121,8 @@ void PartitionManager::register_status_sensor(vistaECPBinarySensor *sensor, uint
 void PartitionManager::publish_initial_states() {
   const LightStates zero{};
   for (size_t kpi = 0; kpi < partitions_.size(); kpi++) {
-    publish_system_state(kpi, SysState::Unavailable);
-    publish_light_states(kpi, zero, zero, /*force=*/true, /*include_armed_states=*/true);
+    publish_system_state_(kpi, SysState::UNAVAILABLE);
+    publish_light_states_(kpi, zero, zero, /*force=*/true, /*include_armed_states=*/true);
     if (text_sensors_[kpi].beeps != nullptr)
       text_sensors_[kpi].beeps->process("0");
   }
@@ -208,7 +208,7 @@ int PartitionManager::process_status_flags(const StatusFlags &flags, ZoneManager
   last_program_mode_ = flags.program_mode;
 
   // --- Display lines and beeps ---
-  update_display_lines(kpi, flags);
+  update_display_lines_(kpi, flags);
 
   if (part.partition_state.last_beeps != flags.beeps && text_sensors_[kpi].beeps != nullptr) {
     char buf[4];
@@ -252,8 +252,8 @@ int PartitionManager::process_status_flags(const StatusFlags &flags, ZoneManager
   }
 
   // --- Derive current light and system states ---
-  const LightStates current = decode_light_states(flags);
-  const SysState sys = decode_system_state(flags, current);
+  const LightStates current = decode_light_states_(flags);
+  const SysState sys = decode_system_state_(flags, current);
 
   // Refresh zone sensors (clears stale open/bypass/alarm states)
   zones.refresh(current, ttl);
@@ -267,14 +267,14 @@ int PartitionManager::process_status_flags(const StatusFlags &flags, ZoneManager
   // --- Publish system state if changed ---
   if (flags.system_flag || current.ready || current.armed) {
     if (sys != part.partition_state.previous_system_states)
-      publish_system_state(kpi, sys);
+      publish_system_state_(kpi, sys);
     part.partition_state.previous_system_states = sys;
     part.partition_state.refresh_status = false;
   }
 
   // --- Publish light-state binary sensors ---
   const LightStates &prev = part.partition_state.previous_light_states;
-  publish_light_states(kpi, current, prev, force_refresh, flags.system_flag || current.ready || current.armed);
+  publish_light_states_(kpi, current, prev, force_refresh, flags.system_flag || current.ready || current.armed);
 
   part.partition_state.previous_light_states = current;
 
@@ -285,7 +285,7 @@ int PartitionManager::process_status_flags(const StatusFlags &flags, ZoneManager
 // Private helpers
 // ---------------------------------------------------------------------------
 
-LightStates PartitionManager::decode_light_states(const StatusFlags &flags) const {
+LightStates PartitionManager::decode_light_states_(const StatusFlags &flags) const {
   LightStates s;
 
   // Start from a known baseline each call — nothing carries over from last
@@ -322,47 +322,47 @@ LightStates PartitionManager::decode_light_states(const StatusFlags &flags) cons
   return s;
 }
 
-SysState PartitionManager::decode_system_state(const StatusFlags &flags, const LightStates &lights) const {
+SysState PartitionManager::decode_system_state_(const StatusFlags &flags, const LightStates &lights) const {
   if (flags.fire || flags.in_alarm)
-    return SysState::Triggered;
+    return SysState::TRIGGERED;
 
   if (lights.armed) {
     if (lights.night)
-      return SysState::ArmedNight;
+      return SysState::ARMED_NIGHT;
     if (lights.away)
-      return SysState::ArmedAway;
-    return SysState::ArmedStay;
+      return SysState::ARMED_AWAY;
+    return SysState::ARMED_STAY;
   }
 
   if (flags.ready)
-    return SysState::Disarmed;
+    return SysState::DISARMED;
 
-  return SysState::Unavailable;
+  return SysState::UNAVAILABLE;
 }
 
-void PartitionManager::publish_system_state(size_t kpi, SysState state) {
+void PartitionManager::publish_system_state_(size_t kpi, SysState state) {
   // kpi is already the vector index — see index_for_partition().
   if (kpi >= text_sensors_.size())
     return;
 
-  vistaECPTextSensor *sensor = text_sensors_[kpi].system_status;
+  VistaEcpTextSensor *sensor = text_sensors_[kpi].system_status;
   if (sensor == nullptr)
     return;
 
   switch (state) {
-    case SysState::Triggered:
+    case SysState::TRIGGERED:
       sensor->process(STATUS_TRIGGERED);
       break;
-    case SysState::ArmedAway:
+    case SysState::ARMED_AWAY:
       sensor->process(STATUS_ARMED);
       break;
-    case SysState::ArmedNight:
+    case SysState::ARMED_NIGHT:
       sensor->process(STATUS_NIGHT);
       break;
-    case SysState::ArmedStay:
+    case SysState::ARMED_STAY:
       sensor->process(STATUS_STAY);
       break;
-    case SysState::Disarmed:
+    case SysState::DISARMED:
       sensor->process(STATUS_OFF);
       break;
     default:
@@ -379,8 +379,8 @@ void PartitionManager::publish_system_state(size_t kpi, SysState state) {
       (sensor_ptr)->process(cur_val); \
   } while (0)
 
-void PartitionManager::publish_light_states(size_t kpi, const LightStates &cur, const LightStates &prev, bool force,
-                                            bool include_armed_states) {
+void PartitionManager::publish_light_states_(size_t kpi, const LightStates &cur, const LightStates &prev, bool force,
+                                             bool include_armed_states) {
   if (kpi >= status_sensors_.size())
     return;
   StatusSensors &ss = status_sensors_[kpi];
@@ -410,7 +410,7 @@ void PartitionManager::publish_light_states(size_t kpi, const LightStates &cur, 
 
 #undef PUBLISH_BIN
 
-void PartitionManager::update_display_lines(size_t kpi, const StatusFlags &flags) {
+void PartitionManager::update_display_lines_(size_t kpi, const StatusFlags &flags) {
   // Bounds-check the partition sensor index before use.
   if (kpi >= text_sensors_.size())
     return;
