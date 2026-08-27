@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""Run clang-tidy over this component with ESPHome's .clang-tidy rules.
+
+ESPHome's own script/clang-tidy works against the ESPHome source tree, which is
+also the tree it compiles. An external component is different: `esphome compile`
+copies components/ into .esphome/build/<name>/src/esphome/components/, and the
+compile_commands.json that ESP-IDF's CMake writes therefore names those copies,
+not the files under version control.
+
+Running clang-tidy on the copies would report diagnostics against paths that no
+editor can act on, and would silently analyse a stale snapshot whenever the copy
+is older than the working tree. So this script rewrites the compilation database
+to point back at the real sources, keeping every compile flag untouched, and
+runs clang-tidy against that.
+
+Usage:
+  script/clang-tidy                 # check every .cpp in the component
+  script/clang-tidy --fix           # apply fixes clang-tidy is confident about
+  script/clang-tidy path/to/a.cpp   # check specific files
+"""
+
+from __future__ import annotations
+
+import argparse
+from concurrent.futures import ThreadPoolExecutor
+import functools
+import json
+import multiprocessing
+from pathlib import Path
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+COMPONENTS = ROOT / "components"
+# Where esphome stages the copies: .esphome/build/<name>/src/esphome/components/...
+BUILD_SRC_RE = re.compile(r"^(?P<pre>.*/\.esphome/build/[^/]+/src/esphome/)components/")
+
+# GCC-only flags the ESP-IDF xtensa build emits that clang rejects outright.
+# Same list ESPHome's script/clang-tidy drops.
+OMIT_FLAGS = frozenset(
+    (
+        "-free",
+        "-fipa-pta",
+        "-fstrict-volatile-bitfields",
+        "-mlongcalls",
+        "-mtext-section-literals",
+        "-mdisable-hardware-atomics",
+        "-mfix-esp32-psram-cache-issue",
+        "-mfix-esp32-psram-cache-strategy=memw",
+        "-fno-tree-switch-conversion",
+        "-freorder-blocks",
+        "-fno-jump-tables",
+        "-fno-shrink-wrap",
+        "-mno-target-align",
+    )
+)
+
+
+@functools.cache
+def toolchain_includes(cxx: str) -> tuple[str, ...]:
+    """Ask the real cross-compiler where its headers live.
+
+    We compile with -nostdinc, so clang finds nothing on its own: the xtensa
+    GCC's libstdc++ and newlib directories have to be handed to it explicitly.
+    """
+    proc = subprocess.run(
+        [cxx, "-E", "-x", "c++", "-", "-v"],
+        input="",
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    dirs, collecting = [], False
+    for line in proc.stderr.splitlines():
+        if line.startswith("#include <...> search starts here:"):
+            collecting = True
+        elif line.startswith("End of search list"):
+            break
+        elif collecting:
+            path = Path(line.strip())
+            if path.is_dir():
+                dirs.append(str(path.resolve()))
+    if not dirs:
+        sys.exit(f"Could not read the include search path from {cxx}")
+    return tuple(dirs)
+
+
+@functools.cache
+def clang_options(cxx: str) -> tuple[str, ...]:
+    """Flags that let clang parse an xtensa ESP-IDF translation unit.
+
+    clang has an Xtensa frontend but not the esp32 core configuration the IDF
+    headers need, so ESPHome analyses xtensa targets as 32-bit x86 that claims
+    to be Xtensa. This mirrors that, since the point is to reproduce ESPHome's
+    diagnostics rather than to invent our own setup.
+    """
+    opts = [
+        "-m32",
+        "-U__i386__",
+        "-U__x86_64__",
+        "-D__XTENSA__",
+        "-D__XTENSA_EL__",
+        "-D_LIBC",
+        # xtensa-esp32-elf-g++ reports __CHAR_UNSIGNED__, but the x86 model we
+        # borrow to parse with has signed char. Without this, every comparison
+        # of a char against a byte >= 0x80 -- which a protocol decoder is full
+        # of -- is reported as tautologically false, and those reports are
+        # wrong for the target this actually builds for.
+        "-funsigned-char",
+        # host headers must not leak in; toolchain_includes() replaces them
+        "-nostdinc",
+        "-nostdinc++",
+        # let code condition on the analyser
+        "-DCLANG_TIDY",
+        # fixes __once_callable in some libstdc++ headers under esp-idf
+        "-D_GLIBCXX_HAVE_TLS",
+        # attribute cannot be applied to type; keeps deprecation output stable
+        "-Ddeprecated(x)=",
+        # the real build is gnu++20; the native IDF build defaults to gnu++2b,
+        # and analysing as C++23 flags code that does not compile under gnu++20
+        "-std=gnu++20",
+    ]
+    opts.extend(f"-isystem{d}" for d in toolchain_includes(cxx))
+    return tuple(opts)
+
+
+def expand_response_files(args: list[str], base: Path) -> list[str]:
+    """Inline @file arguments.
+
+    ESP-IDF hands the toolchain flags to the compiler through a response file
+    (build/toolchain/cxxflags) rather than on the command line, so the GCC-only
+    flags are invisible to a filter that only looks at the command string.
+    """
+    out = []
+    for arg in args:
+        if not arg.startswith("@"):
+            out.append(arg)
+            continue
+        path = Path(arg[1:])
+        if not path.is_absolute():
+            path = base / path
+        if not path.is_file():
+            out.append(arg)
+            continue
+        out.extend(
+            expand_response_files(shlex.split(path.read_text(encoding="utf-8")), base)
+        )
+    return out
+
+
+def rewrite_command(command: str, source: str, directory: str) -> str:
+    """Turn a GCC invocation from the IDF build into one clang can run."""
+    parts = expand_response_files(shlex.split(command), Path(directory))
+    cxx, rest = parts[0], parts[1:]
+    kept = [
+        p
+        for p in rest
+        if p not in OMIT_FLAGS
+        and not p.startswith("-Werror")
+        and not p.startswith("-std=")
+        and not p.startswith("-fdiagnostics-color")
+    ]
+    if source not in kept:
+        sys.exit(f"Source {source} vanished from its own compile command")
+    return shlex.join(["clang++", *clang_options(cxx), *kept])
+
+
+def find_compile_db() -> Path:
+    candidates = sorted(
+        (ROOT / ".esphome" / "build").glob("*/build/compile_commands.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        sys.exit(
+            "No compile_commands.json found under .esphome/build/.\n"
+            "Run `esphome compile vista-ecp-idf.yaml` once to generate it."
+        )
+    return candidates[0]
+
+
+def remap(db_path: Path) -> tuple[Path, list[str]]:
+    """Rewrite build-tree source paths to working-tree paths.
+
+    Returns the directory holding the rewritten database and the list of
+    working-tree files it covers.
+    """
+    entries = json.loads(db_path.read_text(encoding="utf-8"))
+    out, files = [], []
+    for entry in entries:
+        m = BUILD_SRC_RE.match(entry["file"])
+        if not m:
+            continue
+        rel = entry["file"][m.end() :]
+        real = COMPONENTS / rel
+        if not real.is_file():
+            continue
+
+        # The staged copy's directory stays on the include path, so
+        # esphome/core/*.h still resolves; only the source path changes, plus
+        # the GCC-to-clang flag translation.
+        entry = dict(entry)
+        command = entry.get("command") or shlex.join(entry["arguments"])
+        command = command.replace(entry["file"], str(real))
+        entry.pop("arguments", None)
+        entry["command"] = rewrite_command(command, str(real), entry["directory"])
+        entry["file"] = str(real)
+        out.append(entry)
+        files.append(str(real))
+
+    if not out:
+        sys.exit(f"{db_path} contains no entries for components/ sources.")
+
+    dest = ROOT / ".esphome" / "clang-tidy"
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "compile_commands.json").write_text(
+        json.dumps(out, indent=2), encoding="utf-8"
+    )
+    return dest, files
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("files", nargs="*", help="limit the run to these sources")
+    parser.add_argument("--fix", action="store_true", help="apply fixes in place")
+    parser.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        default=multiprocessing.cpu_count(),
+        help="parallel clang-tidy processes",
+    )
+    parser.add_argument(
+        "--clang-tidy",
+        default="clang-tidy",
+        help="clang-tidy executable (ESPHome pins 22.1.8)",
+    )
+    args = parser.parse_args()
+
+    if shutil.which(args.clang_tidy) is None:
+        sys.exit(
+            f"{args.clang_tidy} not found. ESPHome pins clang-tidy 22.1.8; install it with:\n"
+            "  pip install clang-tidy==22.1.8\n"
+            "or point at another build with --clang-tidy /path/to/clang-tidy"
+        )
+
+    db_dir, files = remap(find_compile_db())
+
+    if args.files:
+        wanted = {str(Path(f).resolve()) for f in args.files}
+        files = [f for f in files if f in wanted]
+        missing = wanted - set(files)
+        if missing:
+            sys.exit(
+                "Not in the compilation database (is it a source esphome compiles?):\n  "
+                + "\n  ".join(sorted(missing))
+            )
+
+    base = [
+        args.clang_tidy,
+        "-p",
+        str(db_dir),
+        f"--header-filter={COMPONENTS}/.*",
+        "--quiet",
+    ]
+    if args.fix:
+        base.append("--fix")
+    if sys.stdout.isatty():
+        base.append("--use-color")
+
+    print(
+        f"Checking {len(files)} files with {args.clang_tidy} (-j{args.jobs})\n",
+        flush=True,
+    )
+
+    failed = []
+
+    def run(path: str) -> None:
+        proc = subprocess.run(
+            [*base, path], capture_output=True, encoding="utf-8", check=False
+        )
+        out = (proc.stdout or "") + (proc.stderr or "")
+        # clang-tidy repeats this on every invocation; it is not a finding.
+        out = "\n".join(
+            ln for ln in out.splitlines() if "warnings generated" not in ln
+        ).strip()
+        if out:
+            print(f"=== {Path(path).relative_to(ROOT)}\n{out}\n", flush=True)
+        if proc.returncode != 0:
+            failed.append(path)
+
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        list(pool.map(run, files))
+
+    if failed:
+        print(f"clang-tidy reported problems in {len(failed)} of {len(files)} files")
+        return 1
+    print(f"clang-tidy clean across {len(files)} files")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
