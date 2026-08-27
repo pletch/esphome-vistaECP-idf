@@ -733,18 +733,27 @@ void VistaECP::quick_decodeFB(const char * cbuf)
     // 0xF1 - response to request, 0x80 - retry, 0x60 or 0x81 supervision, 0x82 supervision w/ type response
     if (type == 0xF1)
     {
-        // Blocking wait: the panel must be given time to respond within this
-        // exchange.  In normal operation the wait returns immediately — a 0xF1
-        // data request is the panel's grant for a nudge we requested, and
+        // A 0xF1 data request is the panel's grant for a nudge we requested, and
         // rx_tx_task only nudges when the queue is already non-empty (see the
-        // deviceMsgQueue notes in vista_bus.h) — so the timeout is a margin,
-        // not a routine stall.
+        // deviceMsgQueue notes in vista_bus.h), so in normal operation this
+        // dequeue succeeds immediately.  The wait is a margin against the
+        // producer still finishing its enqueue, not a routine stall.
         //
+        // Keep that margin short.  This runs inline on rx_tx_task -- the
+        // highest-priority task -- with the panel's reply window open, so every
+        // millisecond spent blocked here is a millisecond of UART events not
+        // being serviced.  The timeout is insurance against an unanticipated
+        // race, not a wait the design expects to use: if nothing is queued,
+        // waiting longer cannot conjure a message that was never posted.  It was
+        // 100 ms, which made any such race cost 40 byte times of bus blindness.
+        // Matches the expander F1 paths in the protocol headers.
+        constexpr uint32_t kF1GrantQueueWaitMs = 25;
         // Only reply if a message was actually dequeued: on a timeout, DeviceMsg's
         // member initialisers would otherwise produce a well-formed but
         // meaningless serial-0 / no-fault frame to the panel.
         DeviceMsg rfMsg{};
-        if (xQueueReceive(vistabus_.deviceMsgQueue, &rfMsg, pdMS_TO_TICKS(100)) == pdPASS)
+        if (xQueueReceive(vistabus_.deviceMsgQueue, &rfMsg,
+                          pdMS_TO_TICKS(kF1GrantQueueWaitMs)) == pdPASS)
         {
             uint8_t seq = cbuf[2];
             char lcbuf[7];
