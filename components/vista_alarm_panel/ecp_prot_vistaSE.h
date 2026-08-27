@@ -294,7 +294,28 @@ public:
         rcvd_extPkt.type = 1;
         int bytes        = 0;
 
-        xTaskNotifyWait(0xFFFFFFFF, 0xFFFFFFFF, &val, portMAX_DELAY);
+        // Bounded rather than portMAX_DELAY, for two reasons.  monitor_rx_task can
+        // only observe stop_requested between calls, so blocking forever left
+        // shutdown dependent on the panel still generating traffic.  And the
+        // timeout is the one moment at which flushing this port is provably safe:
+        // no poll has been dispatched for half a second, so nothing is in flight
+        // and anything still buffered is orphaned.
+        //
+        // Orphans do occur.  Every dispatcher notifies only once the poll's
+        // checksum validates (dispatchF6 only for a non-zero address), but the
+        // addressed device replies on the green wire regardless -- so a corrupted
+        // poll leaves its reply behind with no context to pair it with.  Since
+        // each notification consumes exactly one message, a single stray offsets
+        // every read after it by one exchange, and nothing else sheds it.
+        //
+        // See kMonitorSyncNotifyWaitMs.  This mirrors the Vista20P path.
+        if (xTaskNotifyWait(0xFFFFFFFF, 0xFFFFFFFF, &val,
+                            pdMS_TO_TICKS(kMonitorSyncNotifyWaitMs)) != pdPASS)
+        {
+            uart_flush(this->vistabus_.ext_uart_num);
+            return 0;
+        }
+
         if (static_cast<uint8_t>(val >> 8) == 0x11) // break detected on main bus
         {
             this->vistabus_.set_baud_fast(this->vistabus_.ext_uart_num, false);
@@ -329,7 +350,8 @@ public:
         }
         else
         {
-            bytes = uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1, pdMS_TO_TICKS(20));
+            bytes = uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1,
+                                    pdMS_TO_TICKS(kMonitorSyncReadWaitMs));
         }
         return bytes;
     }

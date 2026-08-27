@@ -213,20 +213,30 @@ public:
         // Bounded rather than portMAX_DELAY: monitor_rx_task can only observe
         // stop_requested between calls, and VistaBus::stop() can no longer wake
         // this task with a green-wire byte now that it parks on a notification
-        // instead of a read.  On timeout val is left at zero and no byte is
-        // returned, so the caller simply loops.
-        constexpr uint32_t kSyncNotifyWaitMs = 500;
-
-        // Same 20 ms the SE path allows: the reply follows the poll immediately,
-        // and the byte is usually already buffered by the time we are woken.
-        constexpr uint32_t kSyncReadWaitMs = 20;
-
+        // instead of a read.  See kMonitorSyncNotifyWaitMs.
         if (xTaskNotifyWait(0xFFFFFFFF, 0xFFFFFFFF, &val,
-                            pdMS_TO_TICKS(kSyncNotifyWaitMs)) != pdPASS)
+                            pdMS_TO_TICKS(kMonitorSyncNotifyWaitMs)) != pdPASS)
+        {
+            // No poll dispatched for half a second, so nothing is in flight and
+            // anything still buffered here is orphaned -- a green-wire reply whose
+            // yellow-wire poll never produced a notification.  Every dispatcher
+            // notifies only once the poll's checksum validates (and dispatchF6
+            // only for a non-zero address), so a corrupted poll leaves its reply
+            // behind with no context to pair it with.
+            //
+            // That matters because each notification now consumes exactly one
+            // message: an extra one left in the ring offsets every read after it
+            // by one exchange, permanently.  The old read-first order shed such
+            // strays by consuming them blind through dispatchDebug; this is the
+            // equivalent, done at the one moment it is provably safe.  On a busy
+            // bus the timeout never fires, so this costs nothing in normal
+            // operation.
+            uart_flush(this->vistabus_.ext_uart_num);
             return 0;
+        }
 
         return uart_read_bytes(this->vistabus_.ext_uart_num, buf, 1,
-                               pdMS_TO_TICKS(kSyncReadWaitMs));
+                               pdMS_TO_TICKS(kMonitorSyncReadWaitMs));
     }
 
     // Respond to a 0xFA expander poll in-line for timing.

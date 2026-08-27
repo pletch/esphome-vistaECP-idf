@@ -74,6 +74,24 @@ inline constexpr uint8_t kUartEventQueueDepth = 48;
 // INFO, so nothing is hidden -- only kept out of the counter.
 inline constexpr int64_t kChksumSettleUs = 60LL * 1000 * 1000;
 
+// monitor_rx_task pacing, shared by both protocol handlers.
+//
+// The task waits for rx_tx_task to say which poll the panel just dispatched,
+// then reads that device's reply off the green wire.  The notify wait is bounded
+// so the task can observe stop_requested, and so a quiet bus gives it a moment
+// at which flushing orphaned bytes is provably safe: every dispatcher notifies
+// only once the poll's checksum validates, so a corrupted poll leaves its reply
+// buffered with no context, and one stray message offsets every read after it.
+//
+// Half a second is longer than the interval between polls on an active bus, so
+// the timeout does not fire during normal traffic.  It fires readily on an idle
+// one, where the ring is empty and the flush does nothing.
+inline constexpr uint32_t kMonitorSyncNotifyWaitMs = 500;
+
+// The reply follows its poll immediately and is usually buffered before this
+// task is woken, so the read itself needs only a short grace period.
+inline constexpr uint32_t kMonitorSyncReadWaitMs = 20;
+
 inline constexpr uint16_t kPulseCyclePeriod = 550; // maximum period of long low pulse cycle on yellow wire in ms. sets maximum delay of rx_tx_task looping.
                                             // Vista-20p pulse cycle is 330 ms but older panel such as 4140XMPT2 cycle is 525 ms.
 
