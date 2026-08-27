@@ -109,7 +109,7 @@ void VistaBus::begin(int uartnum, int rxpin, int txpin, int extuartnum, int moni
     // interrupt.  Do not "optimise" this without measuring frame failure rate.
     // Capture the register image of each ECP line rate now, while nothing is
     // time-critical, so the preamble handler can switch rates with two stores.
-    cache_baud_registers();
+    cache_baud_clock();
 
     xTaskCreate(rx_tx_task_start, "uart_rx_tx_task", kUartRxTxTaskStackSize,
                 (void *)this, configMAX_PRIORITIES - 1, &this->rx_tx_task_Handle);
@@ -388,26 +388,25 @@ void VistaBus::init_uart(uart_port_t u_n, gpio_num_t rx_pin, gpio_num_t tx_pin)
     }
 }
 
-// Snapshot the UART clock registers for both ECP line rates.
+// Resolve the UART source-clock frequency once, so set_baud_fast() does not have
+// to on every switch.
 //
-// uart_set_baudrate() is called once per rate and the resulting register image
-// read straight back out, so the cache carries whatever clock source and
-// prescaler the driver chose without this code having to reproduce -- or stay
-// in step with -- the divider arithmetic in uart_ll_set_baudrate().
+// That lookup -- esp_clk_tree_src_get_freq_hz() -- is the expensive part of
+// uart_set_baudrate(); the register writes never were.  With the frequency
+// cached, uart_ll_set_baudrate() does the rest, which keeps every per-target
+// detail (where the prescaler lives, whether the divider needs a sync handshake)
+// inside the HAL rather than in this component.
 //
-// Leaves the port at kEcpBaudStandard, which is where init_uart() put it and
-// where the bus rests between FA/FB preambles.
+// Each rate is probed through the driver first: that proves it is achievable on
+// this clock and leaves the port at kEcpBaudStandard, where init_uart() put it
+// and where the bus rests between FA/FB preambles.
 //
-// CAUTION: the cached divider is only valid for the UART source clock in effect
-// when it was captured.  uart_set_baudrate() re-derives the divider from the
-// live clock frequency on every call; set_baud_fast() cannot, because skipping
-// that lookup is the point.  This is safe today only because the build fixes
-// the CPU at 240 MHz with CONFIG_PM_ENABLE off, so APB -- and therefore the
-// UART source clock -- never moves.  If dynamic frequency scaling is ever
-// enabled, re-run this after any clock change or drop back to
-// uart_set_baudrate(), or the 2400-baud preamble will be sampled at the wrong
-// rate.
-void VistaBus::cache_baud_registers()
+// CAUTION: the cached frequency is only valid for the UART source clock in
+// effect when it was resolved.  This is safe today because the build fixes the
+// CPU at 240 MHz with CONFIG_PM_ENABLE off, so the source clock never moves.  If
+// dynamic frequency scaling is ever enabled, re-run this after any clock change
+// or the 2400-baud preamble will be sampled at the wrong rate.
+void VistaBus::cache_baud_clock()
 {
     if (uart_set_baudrate(this->uart_num, kEcpBaudLegacy) != ESP_OK)
     {
@@ -416,31 +415,26 @@ void VistaBus::cache_baud_registers()
         uart_set_baudrate(this->uart_num, kEcpBaudStandard);
         return;
     }
-    this->baud_regs_legacy.clkdiv = REG_READ(UART_CLKDIV_REG(this->uart_num));
-#ifdef UART_CLK_CONF_REG
-    this->baud_regs_legacy.clk_conf = REG_READ(UART_CLK_CONF_REG(this->uart_num));
-#endif
-
     if (uart_set_baudrate(this->uart_num, kEcpBaudStandard) != ESP_OK)
     {
         ESP_LOGW(TAG, "could not restore %u baud; fast rate switching disabled",
                  static_cast<unsigned>(kEcpBaudStandard));
         return;
     }
-    this->baud_regs_standard.clkdiv = REG_READ(UART_CLKDIV_REG(this->uart_num));
-#ifdef UART_CLK_CONF_REG
-    this->baud_regs_standard.clk_conf = REG_READ(UART_CLK_CONF_REG(this->uart_num));
-#endif
 
-    this->baud_regs_valid = true;
-    ESP_LOGD(TAG, "cached ECP baud registers: %u clkdiv=%08lX clk_conf=%08lX / "
-                  "%u clkdiv=%08lX clk_conf=%08lX",
-             static_cast<unsigned>(kEcpBaudLegacy),
-             static_cast<unsigned long>(this->baud_regs_legacy.clkdiv),
-             static_cast<unsigned long>(this->baud_regs_legacy.clk_conf),
-             static_cast<unsigned>(kEcpBaudStandard),
-             static_cast<unsigned long>(this->baud_regs_standard.clkdiv),
-             static_cast<unsigned long>(this->baud_regs_standard.clk_conf));
+    uint32_t sclk_freq = 0;
+    if (esp_clk_tree_src_get_freq_hz(static_cast<soc_module_clk_t>(UART_SCLK_DEFAULT),
+                                     ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED,
+                                     &sclk_freq) != ESP_OK || sclk_freq == 0)
+    {
+        ESP_LOGW(TAG, "could not resolve UART source clock; fast rate switching disabled");
+        return;
+    }
+
+    this->baud_sclk_freq  = sclk_freq;
+    this->baud_fast_valid = true;
+    ESP_LOGD(TAG, "ECP baud switching armed: sclk=%lu Hz",
+             static_cast<unsigned long>(sclk_freq));
 }
 
 

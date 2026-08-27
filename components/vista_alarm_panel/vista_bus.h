@@ -31,7 +31,9 @@ Date: 2-Feb-2025
 #include "driver/gpio.h"
 #include "esp_timer.h"
 #include "hal/uart_ll.h"
-#include "soc/uart_reg.h"
+#include "esp_clk_tree.h"
+#include "esp_private/uart_share_hw_ctrl.h"
+
 #include <vector>
 #include <memory>
 #include "esphome/core/log.h"
@@ -114,6 +116,7 @@ public:
     // byte) to the panel through the emulated RF receiver.
     void sendRFmsg(uint32_t serial, uint8_t msg);
 
+
     // --- FreeRTOS inter-task communication handles ---
     // uartevtQueue  – fed by the ESP-IDF UART ISR; consumed by handle_UART_events().
     // sendQueue     – commands queued by the application for transmission.
@@ -168,26 +171,18 @@ public:
     // receiver mis-qualifies the edge and the byte reads back shifted one bit
     // position -- 0x02 comes out as 0x81 with a parity error but no framing
     // error, which is exactly the corruption seen on the bus.
-    // Raw register images rather than named bit-fields: the divider lives in
-    // UART_CLKDIV_REG on every ESP32 variant, while the prescaler that some
-    // variants add sits in UART_CLK_CONF_REG and the struct field names for
-    // both differ between SoCs (clk_div on the original ESP32, clkdiv on the
-    // S3).  Copying whole registers sidesteps all of it.
-    struct BaudRegs
-    {
-        uint32_t clkdiv   {0};
-        uint32_t clk_conf {0};
-    };
-    BaudRegs baud_regs_legacy   {};   // kEcpBaudLegacy   (2400)
-    BaudRegs baud_regs_standard {};   // kEcpBaudStandard (4800)
-    bool     baud_regs_valid    {false};
+    // Resolved once by cache_baud_clock() and reused on every switch.  Skipping
+    // that lookup is the entire optimisation: the register writes were never the
+    // expensive part of uart_set_baudrate() -- esp_clk_tree_src_get_freq_hz() is.
+    uint32_t baud_sclk_freq {0};
 
-    // One image serves both UARTs.  The divider is a pure function of the target
-    // baud rate and the UART source clock, and init_uart() configures every port
-    // from the same uart_config_t with source_clk = UART_SCLK_DEFAULT -- so the
-    // register value captured on the primary port is byte-for-byte the value
-    // uart_set_baudrate() would compute for the monitor port.  If a port is ever
-    // given a different source_clk, this needs to become a per-port cache.
+    // Arms the fast path.  False leaves set_baud_fast() on the driver call, which
+    // is correct on every target and merely slower.
+    bool     baud_fast_valid {false};
+
+    // One frequency serves both UARTs: init_uart() configures every port from the
+    // same uart_config_t with source_clk = UART_SCLK_DEFAULT.  If a port is ever
+    // given a different source_clk this needs to become a per-port cache.
 
     // Guards the register replay below.  The task already runs at
     // configMAX_PRIORITIES - 1, so no other task can preempt it; interrupts are
@@ -195,9 +190,10 @@ public:
     // thing that masks those.
     portMUX_TYPE baud_mux = portMUX_INITIALIZER_UNLOCKED;
 
-    // Capture the register image of each ECP line rate.  Called once from
-    // begin(), when nothing is time-critical.
-    void cache_baud_registers();
+    // Resolve the UART source-clock frequency.  Called once from begin(), when
+    // nothing is time-critical.
+    void cache_baud_clock();
+
 
     // Switch the primary UART between the two ECP line rates by replaying a
     // cached register image: a pair of stores, short enough to sit inside a
@@ -210,21 +206,23 @@ public:
     // assumption about field layout that an IDF bump could invalidate.
     inline void set_baud_fast(uart_port_t port, bool standard)
     {
-        if (!baud_regs_valid)
+        if (!baud_fast_valid)
         {
-            // Cache never populated (begin() not reached, or an unachievable
-            // rate).  Correctness first: fall back to the driver call.
+            // Clock never resolved.  Correctness first: fall back to the driver.
             uart_set_baudrate(port, standard ? kEcpBaudStandard : kEcpBaudLegacy);
             return;
         }
 
-        const BaudRegs &r = standard ? baud_regs_standard : baud_regs_legacy;
+        const uint32_t baud = standard ? kEcpBaudStandard : kEcpBaudLegacy;
 
         portENTER_CRITICAL(&baud_mux);
-        REG_WRITE(UART_CLKDIV_REG(port), r.clkdiv);
-#ifdef UART_CLK_CONF_REG
-        REG_WRITE(UART_CLK_CONF_REG(port), r.clk_conf);
-#endif
+        // HP_UART_SRC_CLK_ATOMIC() guards the shared clock controller on parts
+        // that have one (the C6 family's PCR) and compiles to nothing on the
+        // rest.  Nesting it inside baud_mux is safe: nothing else ever takes
+        // baud_mux, so there is no lock-ordering pair to invert.
+        HP_UART_SRC_CLK_ATOMIC() {
+            uart_ll_set_baudrate(UART_LL_GET_HW(port), baud, baud_sclk_freq);
+        }
         portEXIT_CRITICAL(&baud_mux);
     }
 
