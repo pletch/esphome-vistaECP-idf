@@ -95,6 +95,31 @@ def toolchain_includes(cxx: str) -> tuple[str, ...]:
 
 
 @functools.cache
+def char_signedness_flag(cxx: str) -> str:
+    """Ask the cross-compiler whether plain char is signed on this target.
+
+    The x86 model we borrow to parse with has signed char. xtensa-esp32-elf
+    does not: it defines __CHAR_UNSIGNED__. Left unstated, every comparison of
+    a char against a byte >= 0x80 -- which a protocol decoder is full of -- is
+    reported as tautologically false, pointing at correct code and calling it
+    dead. Derive it rather than hardcode it, so this stays right if the
+    component is ever built for a target whose default differs.
+    """
+    proc = subprocess.run(
+        [cxx, "-dM", "-E", "-x", "c++", "-"],
+        input="",
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    unsigned = any(
+        line.startswith("#define __CHAR_UNSIGNED__")
+        for line in proc.stdout.splitlines()
+    )
+    return "-funsigned-char" if unsigned else "-fsigned-char"
+
+
+@functools.cache
 def clang_options(cxx: str) -> tuple[str, ...]:
     """Flags that let clang parse an xtensa ESP-IDF translation unit.
 
@@ -110,12 +135,8 @@ def clang_options(cxx: str) -> tuple[str, ...]:
         "-D__XTENSA__",
         "-D__XTENSA_EL__",
         "-D_LIBC",
-        # xtensa-esp32-elf-g++ reports __CHAR_UNSIGNED__, but the x86 model we
-        # borrow to parse with has signed char. Without this, every comparison
-        # of a char against a byte >= 0x80 -- which a protocol decoder is full
-        # of -- is reported as tautologically false, and those reports are
-        # wrong for the target this actually builds for.
-        "-funsigned-char",
+        # plain char signedness, read back from the target compiler
+        char_signedness_flag(cxx),
         # host headers must not leak in; toolchain_includes() replaces them
         "-nostdinc",
         "-nostdinc++",

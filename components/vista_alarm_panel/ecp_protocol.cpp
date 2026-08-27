@@ -366,6 +366,11 @@ void VistaECP::dispatch_f2() {
   // Read the length byte (second byte of the frame).
   int rx_bytes =
       this->uart_read_bytes_event(vistabus_.uart_num, data, 1, pdMS_TO_TICKS(K_UART_DELAY), vistabus_.uartevtQueue);
+  if (rx_bytes != 1)
+    return;  // Length byte never arrived, so data[0] is still uninitialised.
+             // Using it as the body length would make the next read consume an
+             // arbitrary number of bytes and desynchronise the following frame.
+             // Same shape as dispatch_f9(): no length, no packet.
   received_packet.payload[1] = data[0];
 
   // Read 'length' body bytes into the payload starting at offset 2.
@@ -853,6 +858,9 @@ void VistaECP::dispatch_ext_f6(uint32_t val, uint8_t header) {
 
   // Read the length byte, then the body.
   rx_bytes = uart_read_bytes(vistabus_.ext_uart_num, data, 1, pdMS_TO_TICKS(150));
+  if (rx_bytes != 1)
+    return;                           // On a short read data[0] still holds the address byte read above,
+                                      // which would then be used as the body length.
   rcvd_ext_pkt.payload[1] = data[0];  // body length
 
   this->get_packet(&rcvd_ext_pkt, data, 2, static_cast<int>(static_cast<uint8_t>(rcvd_ext_pkt.payload[1])),
