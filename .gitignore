@@ -3,3 +3,4 @@
 .esphome/
 __pycache__/
 *.pyc
+.claude/
