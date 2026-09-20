@@ -7,6 +7,9 @@
 # Licensed under the GNU Lesser General Public License v2.1.
 # See COPYING.LESSER in the project root for details.
 
+from pathlib import Path
+import re
+
 import esphome.codegen as cg
 from esphome.components import binary_sensor
 import esphome.config_validation as cv
@@ -45,6 +48,56 @@ CONF_RFLOOP = "rf_loop"
 CONF_STATUS_SENSOR = "status_indicator"
 CONF_EMULATED_ZONE = "emulated"
 
+RF_SERIAL_MIN = 1
+RF_SERIAL_MAX = 1048575
+_RF_SERIAL_RE = re.compile(r"[0-9]{1,7}$")
+
+
+def _source_text(value):
+    """Return the literal YAML text that produced value, if it can be recovered."""
+    rng = getattr(value, "esp_range", None)
+    if rng is None or rng.start_mark.line != rng.end_mark.line:
+        return None
+    try:
+        line = (
+            Path(rng.start_mark.document)
+            .read_text(encoding="utf-8")
+            .splitlines()[rng.start_mark.line]
+        )
+    except (OSError, IndexError, TypeError):
+        return None
+    return line[rng.start_mark.column : rng.end_mark.column].strip()
+
+
+def rf_serial(value):
+    """Validate a 20-bit RF serial number as printed on the sensor label.
+
+    Honeywell labels the serial with a leading zero (e.g. 0231357). ESPHome loads
+    YAML 1.1, where a leading zero means octal, so 0231357 would otherwise be read
+    as 78575. Recover the digits as they were typed and parse them as decimal.
+    """
+    if isinstance(value, bool):
+        raise cv.Invalid(f"Expected an RF serial number, got {value}")
+    if isinstance(value, int):
+        text = _source_text(value)
+        if text is None or not _RF_SERIAL_RE.match(text):
+            text = str(value)
+    elif isinstance(value, str):
+        text = value.strip()
+    else:
+        raise cv.Invalid(f"Expected an RF serial number, got {value}")
+    if not _RF_SERIAL_RE.match(text):
+        raise cv.Invalid(
+            f"'{text}' is not a valid RF serial number. Expected 1 to 7 digits, "
+            "optionally with the leading zero shown on the sensor label."
+        )
+    serial = int(text, 10)
+    if not RF_SERIAL_MIN <= serial <= RF_SERIAL_MAX:
+        raise cv.Invalid(
+            f"RF serial {serial} is out of range ({RF_SERIAL_MIN}-{RF_SERIAL_MAX})"
+        )
+    return serial
+
 
 def _validate(value):
     if CONF_ZONE in value and (
@@ -81,7 +134,7 @@ CONFIG_SCHEMA = cv.All(
             cv.GenerateID(CONF_ALARM_ID): cv.use_id(AlarmComponent),
             cv.Optional(CONF_PARTITION): cv.int_range(min=1, max=8),
             cv.Optional(CONF_ZONE): cv.int_range(min=1, max=128),
-            cv.Optional(CONF_RFSERIAL): cv.int_range(min=1, max=1048575),
+            cv.Optional(CONF_RFSERIAL): rf_serial,
             cv.Optional(CONF_EMULATED_ZONE): cv.boolean,
             cv.Optional(CONF_RFLOOP): cv.int_range(min=1, max=4),
             cv.Optional(CONF_STATUS_SENSOR): cv.one_of(*STATUS_SENSORS, upper=True),

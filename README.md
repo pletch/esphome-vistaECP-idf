@@ -261,13 +261,14 @@ binary_sensor:
     device_class: moisture
 
   # Physical Honeywell 5800-series RF zone (received via CC1101 hardware, or via monitor_pin
-  # from a physical 5881ENH receiver). rf_serial matches the 20-bit serial printed on the device.
+  # from a physical 5881ENH receiver). rf_serial matches the 20-bit serial printed on the device,
+  # with or without the leading zero shown on the label.
   - platform: vista_alarm_panel
     id: z9
     name: "Front Door"
     partition: 1
     zone: 9
-    rf_serial: 231357
+    rf_serial: 0231357
     rf_loop: 2
     device_class: door
 
@@ -297,7 +298,7 @@ binary_sensor:
 |---|---|---|
 | `zone` | Required (for zone sensors) | Panel zone number (1–128). |
 | `partition` | Optional | Partition number the zone belongs to. |
-| `rf_serial` | Optional | 20-bit RF device serial number (1–1048575, no leading zeros). Printed on the sensor label. Required with `rf_loop` for both physical and emulated RF zones. |
+| `rf_serial` | Optional | 20-bit RF device serial number (1–1048575), printed on the sensor label. Honeywell labels show a leading zero (e.g. `0231357`); write it either way — `0231357` and `231357` are equivalent. Required with `rf_loop` for both physical and emulated RF zones. |
 | `rf_loop` | Optional | RF device loop number (1–4). Required with `rf_serial`. Most devices use loop 1 (e.g. 5800PIR); 5816 uses loop 2. See the [5800 device list](https://advancedsecurityllc.com/wp-content/uploads/5800%20Wireless%20Device%20List.pdf). |
 | `emulated` | Optional | Enable zone emulation. Without RF options: emulates a hardwired zone via automatic expander board emulation (zone must be > 8). With RF options and `rf_receiver_emulation: true`: emulates a software-only RF zone driven by `set_zone_fault()`. Omit `emulated` for zones backed by a physical Honeywell sensor received via CC1101 or a monitored 5881ENH. |
 

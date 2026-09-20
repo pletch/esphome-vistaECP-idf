@@ -120,7 +120,8 @@ api:
 # Examples are provided for both hardwired and RF zones.
 #
 # RF zone configuration uses the rf_serial and rf_loop parameters.
-# rf_serial is the 20-bit serial number printed on the sensor label (1-1048575, no leading zeros).
+# rf_serial is the 20-bit serial number printed on the sensor label (1-1048575).
+# Honeywell labels show a leading zero (e.g. 0231357); include it or omit it, either is accepted.
 # For most devices loop 1 is used (e.g. 5800PIR); other devices such as the 5816 use loop 2.
 # Please refer to your RF device programming (*56 program) to see what loop and zones are
 # assigned to your RF devices.
@@ -164,13 +165,13 @@ binary_sensor:
 
   # Physical RF zone: backed by a real Honeywell 5800-series sensor.
   # Received via CC1101 hardware receiver or a monitored physical 5881ENH.
-  # rf_serial matches the 20-bit serial printed on the sensor (no leading zeros).
+  # rf_serial matches the 20-bit serial printed on the sensor, with or without its leading zero.
   #  - platform: vista_alarm_panel
   #    id: z9
   #    name: "Front Door"
   #    partition: 1
   #    zone: 9
-  #    rf_serial: 231357
+  #    rf_serial: 0231357
   #    rf_loop: 2
   #    device_class: door
 
