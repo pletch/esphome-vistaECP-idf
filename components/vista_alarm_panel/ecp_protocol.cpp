@@ -203,6 +203,34 @@ void VistaECP::mark_pulse_(int uart_num, uint8_t address) {
   uart_wait_tx_done(port, pdMS_TO_TICKS(30));
 
   uart_set_parity(port, UART_PARITY_EVEN);
+
+  // Discard the pulse from the monitor's view of the green wire.
+  //
+  // tx_pin and monitor_pin share that wire, so the monitor UART receives every
+  // byte written here.  It reads at 8E2 while the pulse went out with parity
+  // disabled, and -- more to the point -- the pulse carries no dispatcher
+  // notification behind it.  monitor_task_sync_impl() consumes exactly one byte
+  // per notification, so an unaccounted byte offsets every read after it until
+  // the quiet-bus flush happens to fire.
+  //
+  // In principle that offset could fail the checksum on the FB reply
+  // quick_decode_fb_() is about to send as the emulated receiver: the monitor
+  // would read the stray pulse byte where the reply's first byte should be,
+  // dispatch_ext_fb_() would assemble from the wrong offset, and
+  // on_rf_zone_packet() would reject it.  In practice checksum failures are
+  // now rare, so the quiet-bus flush evidently clears most strays first; this
+  // is hygiene, not a fix for an observed fault.  The panel is unaffected --
+  // it takes the pulse as an electrical marking, which is why parity is
+  // disabled for it in the first place.
+  //
+  // Safe here specifically: this is the panel's addressing window, where
+  // devices mark addresses rather than send data, so nothing else should be in
+  // flight.  It must follow the uart_wait_tx_done() above -- only then have the
+  // pulse bytes finished clocking out and therefore finished arriving.  A flush
+  // is all-or-nothing, so a monitor that is already behind loses its backlog
+  // too; that is the desynced state anyway, and this resets it to a known one.
+  if (vistabus_.monitor_rx_task_Handle != nullptr)
+    uart_flush(vistabus_.ext_uart_num);
 }
 
 // Copy rx_bytes of rxbuf into received_packet->payload at offset 'start', clamped
