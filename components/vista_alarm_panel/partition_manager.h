@@ -178,8 +178,7 @@ class PartitionManager {
 
   // Publish all binary light-state sensors that have changed.
   void publish_light_states_(size_t kpi, const LightStates &current, const LightStates &previous,
-                             PublishedArmedStates &previous_published_armed_states, bool force,
-                             bool allow_armed_refresh);
+                             LightStates &published_armed, bool force, bool include_armed_states);
 
   // Format and publish the two keypad display lines, inserting a
   // cursor-position bracket if promptPos > 0.
