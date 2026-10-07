@@ -139,11 +139,25 @@ struct LightStates {
   bool armed{false};
 };
 
+// Last values sent to Home Assistant for the armed-mode binary sensors.
+// This is deliberately separate from LightStates, which tracks the latest
+// decoded panel frame and is also used by command/current-state logic.
+struct PublishedArmedStates {
+  bool away{false};
+  bool stay{false};
+  bool night{false};
+  bool instant{false};
+  bool armed{false};
+};
+
 struct PartitionState {
   // Must have an initialiser: add_partition() default-initialises Partition,
   // and process_status_flags() compares against this on the very first F7.
   SysState previous_system_states{SysState::UNAVAILABLE};
+  // Latest decoded frame; keep separate because is_armed() reads this cache.
   LightStates previous_light_states;
+  // Last armed-mode sensor values actually published to Home Assistant.
+  PublishedArmedStates previous_published_armed_states;
   int last_beeps{0};
   bool refresh_status{false};
 };
