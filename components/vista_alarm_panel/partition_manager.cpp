@@ -122,7 +122,8 @@ void PartitionManager::publish_initial_states() {
   const LightStates zero{};
   for (size_t kpi = 0; kpi < partitions_.size(); kpi++) {
     publish_system_state_(kpi, SysState::UNAVAILABLE);
-    publish_light_states_(kpi, zero, zero, /*force=*/true, /*include_armed_states=*/true);
+    publish_light_states_(kpi, zero, zero, partitions_[kpi].partition_state.published_armed_states,
+                          /*force=*/true, /*include_armed_states=*/true);
     if (text_sensors_[kpi].beeps != nullptr)
       text_sensors_[kpi].beeps->process("0");
   }
@@ -274,7 +275,8 @@ int PartitionManager::process_status_flags(const StatusFlags &flags, ZoneManager
 
   // --- Publish light-state binary sensors ---
   const LightStates &prev = part.partition_state.previous_light_states;
-  publish_light_states_(kpi, current, prev, force_refresh, flags.system_flag || current.ready || current.armed);
+  publish_light_states_(kpi, current, prev, part.partition_state.published_armed_states, force_refresh,
+                        flags.system_flag || current.ready || current.armed);
 
   part.partition_state.previous_light_states = current;
 
@@ -379,8 +381,8 @@ void PartitionManager::publish_system_state_(size_t kpi, SysState state) {
       (sensor_ptr)->process(cur_val); \
   } while (0)
 
-void PartitionManager::publish_light_states_(size_t kpi, const LightStates &cur, const LightStates &prev, bool force,
-                                             bool include_armed_states) {
+void PartitionManager::publish_light_states_(size_t kpi, const LightStates &cur, const LightStates &prev,
+                                             LightStates &published_armed, bool force, bool include_armed_states) {
   if (kpi >= status_sensors_.size())
     return;
   StatusSensors &ss = status_sensors_[kpi];
@@ -392,13 +394,15 @@ void PartitionManager::publish_light_states_(size_t kpi, const LightStates &cur,
   PUBLISH_BIN(ss.byp, cur.bypass, prev.bypass, force);
   PUBLISH_BIN(ss.rdy, cur.ready, prev.ready, force);
 
-  // Armed-state sensors only update when we have system_flag or a state change
+  // Armed-state sensors only update when we have system_flag or a state
+  // change, and compare against what was last published, not last decoded.
   if (include_armed_states) {
-    PUBLISH_BIN(ss.arma, cur.away, prev.away, force);
-    PUBLISH_BIN(ss.arms, cur.stay, prev.stay, force);
-    PUBLISH_BIN(ss.armn, cur.night, prev.night, force);
-    PUBLISH_BIN(ss.armi, cur.instant, prev.instant, force);
-    PUBLISH_BIN(ss.arm, cur.armed, prev.armed, force);
+    PUBLISH_BIN(ss.arma, cur.away, published_armed.away, force);
+    PUBLISH_BIN(ss.arms, cur.stay, published_armed.stay, force);
+    PUBLISH_BIN(ss.armn, cur.night, published_armed.night, force);
+    PUBLISH_BIN(ss.armi, cur.instant, published_armed.instant, force);
+    PUBLISH_BIN(ss.arm, cur.armed, published_armed.armed, force);
+    published_armed = cur;
   }
 
   // Bug fix from original: ac_sensor fires on AC change, not bat change.

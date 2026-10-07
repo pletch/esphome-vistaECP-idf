@@ -120,7 +120,7 @@ class PartitionManager {
   // Returns false if the partition is not known.
   bool get_partition_info(int partition_id, uint8_t &keypad_addr, uint8_t &sequence) const;
 
-  // Returns true if the most recently published state for the given
+  // Returns true if the most recently decoded panel state for the given
   // partition has the armed flag set.
   bool is_armed(int partition_id) const;
 
@@ -177,8 +177,8 @@ class PartitionManager {
   void publish_system_state_(size_t kpi, SysState state);
 
   // Publish all binary light-state sensors that have changed.
-  void publish_light_states_(size_t kpi, const LightStates &current, const LightStates &previous, bool force,
-                             bool include_armed_states);
+  void publish_light_states_(size_t kpi, const LightStates &current, const LightStates &previous,
+                             LightStates &published_armed, bool force, bool include_armed_states);
 
   // Format and publish the two keypad display lines, inserting a
   // cursor-position bracket if promptPos > 0.
