@@ -136,7 +136,7 @@ void VistaECP::mark_pulse_(int uart_num, uint8_t address) {
     snd_data[0] = ~(0x01 << (address & 0x07));  // active-low bit for this address
     snd_data[1] = 0;
     snd_data[2] = 0;
-  } else if (address < 17) {
+  } else if (address < 16) {
     // Address falls in the second byte range; first byte is 0xFF (all clear).
     snd_data[0] = 0xFF;
     snd_data[1] = ~(0x01 << (address & 0x07));
