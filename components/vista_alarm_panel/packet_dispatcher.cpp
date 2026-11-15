@@ -375,7 +375,7 @@ void PacketDispatcher::print_packet_(const char *cbuf, int type, int src, int le
   // DEBUG, so skip the expensive string/time formatting when the build
   // is compiled below DEBUG — this runs for every received packet.
 #if ESPHOME_LOG_LEVEL < ESPHOME_LOG_LEVEL_DEBUG
-  if (source != PacketType::ChksumFail)
+  if (source != PacketType::CHKSUM_FAIL)
     return;
 #endif
 
